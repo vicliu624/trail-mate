@@ -4,6 +4,7 @@
  */
 
 #include "platform/esp/arduino_common/chat/infra/lxmf/lxmf_adapter.h"
+#include "geocaching/protocol/sign_record.h"
 
 #include "platform/esp/arduino_common/voice/vmp_pager_session.h"
 
@@ -1069,9 +1070,11 @@ bool computeLinkIdFromLinkRequest(const uint8_t* raw_packet, size_t raw_len,
 } // namespace
 
 LxmfAdapter::LxmfAdapter(LoraBoard& board,
-                         IMeshPeerDirectory* peer_directory)
-    : interfaces_(board),
-      peer_directory_service_(peer_directory)
+                         IMeshPeerDirectory* peer_directory,
+                         bool owns_integrated_radio)
+    : interfaces_(board, owns_integrated_radio),
+      peer_directory_service_(peer_directory),
+      geocaching_only_(!owns_integrated_radio)
 {
     uint8_t seed[sizeof(next_app_packet_id_)] = {};
     fillRandomBytes(seed, sizeof(seed));
@@ -1142,9 +1145,10 @@ bool LxmfAdapter::dispatchLxmfPayload(PeerInfo& peer,
                                       const uint8_t* packed_payload,
                                       size_t packed_payload_len,
                                       bool track_user_message,
-                                      OutboundLxmfDispatch* out_dispatch)
+                                      OutboundLxmfDispatch* out_dispatch,
+                                      bool allow_propagation)
 {
-    if (!packed_payload || packed_payload_len == 0 || !out_dispatch)
+    if (!packed_payload || packed_payload_len == 0 || packed_payload_len > 8448 || !out_dispatch)
     {
         return false;
     }
@@ -1155,7 +1159,7 @@ bool LxmfAdapter::dispatchLxmfPayload(PeerInfo& peer,
         (void)sendPathRequest(peer);
     }
 
-    runtime::RuntimeByteBuffer signed_part(kSignedPartMaxLen, 0);
+    runtime::RuntimeByteBuffer signed_part(packed_payload_len + 64, 0);
     size_t signed_part_len = signed_part.size();
     if (!buildSignedPart(peer.destination_hash,
                          identity_.destinationHash(),
@@ -1170,7 +1174,7 @@ bool LxmfAdapter::dispatchLxmfPayload(PeerInfo& peer,
     }
 
     uint8_t signature[reticulum::kSignatureSize] = {};
-    runtime::RuntimeByteBuffer lxmf_message(kMaxLxmfMessageLen, 0);
+    runtime::RuntimeByteBuffer lxmf_message(packed_payload_len + 96, 0);
     size_t lxmf_message_len = lxmf_message.size();
     if (!identity_.sign(signed_part.data(), signed_part_len, signature) ||
         !packMessage(peer.destination_hash,
@@ -1189,10 +1193,11 @@ bool LxmfAdapter::dispatchLxmfPayload(PeerInfo& peer,
     LinkSession* active_link =
         findActiveLinkSessionByDestination(peer.destination_hash,
                                            LocalDestinationKind::Delivery);
-    const bool use_opportunistic = !active_link && peerHasUsableRatchet(peer);
+    const bool use_opportunistic = !active_link && packed_payload_len <= 256 && peerHasUsableRatchet(peer);
     const auto& propagation_config = rtnet::active().propagation;
+    const bool propagation_enabled = allow_propagation && propagation_config.enabled;
     bool propagation_peer_available = false;
-    if (propagation_config.enabled &&
+    if (propagation_enabled &&
         propagation_config.delivery ==
             chat::reticulum::LxmfDeliveryPreference::Automatic &&
         !active_link && !use_opportunistic)
@@ -1204,7 +1209,7 @@ bool LxmfAdapter::dispatchLxmfPayload(PeerInfo& peer,
             runtime::OutboundDeliveryPlanInput{
                 active_link != nullptr,
                 use_opportunistic,
-                propagation_config.enabled,
+                propagation_enabled,
                 propagation_config.delivery,
                 propagation_peer_available});
     if (plan.propagation_first)
@@ -1268,6 +1273,9 @@ bool LxmfAdapter::dispatchLxmfPayload(PeerInfo& peer,
                 out_dispatch->message_id,
                 millis(),
                 kMaxPendingDeliveryReceipts);
+            // Transport accepted the packet. A peer proof may later advance
+            // this to Delivered; waiting for that proof is not queueing.
+            delivery_notifier_.sent(out_dispatch->message_id);
         }
     }
 
@@ -1664,6 +1672,7 @@ void LxmfAdapter::processPropagationClient()
                 {
                     propagation_client_.markUploadFailed(upload);
                 }
+#if defined(TRAIL_MATE_VERBOSE_RUNTIME_LOGS) && TRAIL_MATE_VERBOSE_RUNTIME_LOGS
                 else if (stamp_state ==
                              runtime::PropagationStampRuntime::State::Expanding &&
                          propagation_client_.stamp().expandedRounds() != 0U &&
@@ -1688,6 +1697,7 @@ void LxmfAdapter::processPropagationClient()
                                   static_cast<unsigned long>(
                                       propagation_client_.stamp().searchRounds()));
                 }
+#endif
             }
 
             if (upload.state == runtime::PropagationUploadState::Ready &&
@@ -2103,6 +2113,56 @@ bool LxmfAdapter::respondToSidebandTelemetryRequest(
                   static_cast<unsigned long>(request.timebase),
                   request.collector_request ? 1U : 0U);
     return sent;
+}
+
+bool LxmfAdapter::getGeocachingAuthorKey(uint8_t out[64]) const
+{
+    if (!out) return false;
+    std::memset(out, 0, 64);
+    if (!identity_.isReady()) return false;
+    identity_.combinedPublicKey(out);
+    return true;
+}
+
+bool LxmfAdapter::signGeocachingRecord(ByteSpan record, uint8_t* workspace, size_t workspace_capacity,
+                                       uint8_t* output, size_t output_capacity, size_t& written)
+{
+    return ::geocaching::protocol::signGeocacheRecord({record.data, record.size}, identity_,
+                                                      workspace, workspace_capacity, output, output_capacity, written);
+}
+
+MeshSendResult LxmfAdapter::sendCustomDataToDestination(const uint8_t destination_hash[16],
+                                                        const char* custom_type, ByteSpan data,
+                                                        bool response, std::array<uint8_t, 32>* accepted_lxmf_hash)
+{
+    if (accepted_lxmf_hash) accepted_lxmf_hash->fill(0);
+    if (!destination_hash || !custom_type || !custom_type[0] || strlen(custom_type) > 96 ||
+        !data.data || data.size == 0 || data.size > 8192)
+        return MeshSendResult::fail(MeshOperationFailure::InvalidInput);
+    if (!isReady()) return MeshSendResult::fail(MeshOperationFailure::NotReady);
+    PeerInfo* peer = findOrLoadPeerByDestinationHash(destination_hash);
+    if (!peer) return MeshSendResult::fail(MeshOperationFailure::PeerKeyMissing);
+    runtime::RuntimeByteBuffer payload(data.size + 256, 0);
+    size_t size = payload.size();
+    if (!encodeCustomDataPayload(static_cast<double>(currentTimestampSeconds()),
+                                 "Trail Mate Geocache v1",
+                                 response ? "Geocache response" : "Geocache request",
+                                 custom_type, data, payload.data(), &size))
+        return MeshSendResult::fail(MeshOperationFailure::EncodeFailed);
+    OutboundLxmfDispatch dispatch{};
+    // Geocaching exchanges require a live response. Store-and-forward delivery
+    // can finish postage work without ever reaching the active directory.
+    const bool ok = dispatchLxmfPayload(*peer, payload.data(), size, false, &dispatch, false);
+    if (ok)
+    {
+        gateway_custom_activity_ms_ = millis();
+        gateway_custom_activity_seen_ = true;
+    }
+    if (ok && accepted_lxmf_hash) std::memcpy(accepted_lxmf_hash->data(), dispatch.message_hash, accepted_lxmf_hash->size());
+    MeshSendResult result = ok ? MeshSendResult::success(dispatch.message_id)
+                               : MeshSendResult::fail(dispatch.failure, dispatch.message_id);
+    result.reticulum_identity = runtime::reticulumIdentityForPeer(*peer);
+    return result;
 }
 
 MeshSendResult LxmfAdapter::sendTextDetailed(ChannelId channel,
@@ -3375,6 +3435,33 @@ LxmfAdapter::RuntimeBudget LxmfAdapter::makeRuntimeBudget() const
     return runtime::makeRuntimeBudget(input);
 }
 
+void LxmfAdapter::maintainGatewayDiscovery()
+{
+    const uint32_t now_ms = millis();
+    bool busy = delivery_attempt_ledger_.size() != 0 || !network_page_client_.empty() ||
+                propagation_client_.hasPendingUploads() || propagation_client_.pendingDeliveryCount() != 0 ||
+                (gateway_custom_activity_seen_ && uint32_t(now_ms - gateway_custom_activity_ms_) < 120000);
+    link_manager_.forEachSession([&](const LinkSession& session)
+                                 {
+                                    if (session.state == LinkState::Closed) return;
+                                    busy |= session.state == LinkState::Pending || !session.pending_requests.empty() ||
+                                            !session.deferred_payloads.empty() || !session.incoming_resource_assemblies.empty();
+                                    for (const auto& resource : session.incoming_resources) busy |= !resource.complete;
+                                    for (const auto& resource : session.outgoing_resources) busy |= !resource.complete || resource.waiting_for_proof; });
+    const auto previous = interfaces_.activeTcpInterfaceId();
+    interfaces_.maintain(!busy);
+    const auto current = interfaces_.activeTcpInterfaceId();
+    if (previous == reticulum::interfaces::kInvalidInterfaceId || previous == current) return;
+    // A stopped carrier cannot serve the paths or idle links learned through it.
+    // Retire them before subsequent sends select the newly active uplink.
+    link_manager_.forEachSession([this, previous](LinkSession& session)
+                                 {
+                                    if (session.interface_id == previous && session.state != LinkState::Closed)
+                                        closeLinkSession(session, LinkCloseReason::Error); });
+    path_manager_.retireInterface(previous);
+    deferred_discovery_.clear();
+}
+
 void LxmfAdapter::processRuntime()
 {
     rtnet::poll(config_);
@@ -3392,6 +3479,10 @@ void LxmfAdapter::processRuntime()
         link_manager_.clear();
         path_manager_.clear();
         deferred_discovery_.clear();
+        geocaching_discovery_probe_.reset();
+        gateway_discovery_.reset();
+        gateway_candidates_.reset();
+        gateway_persistence_.clearInstalled();
 
         propagation_client_.resetForNetworkConfig(
             rtnet::active().propagation.sync_on_start);
@@ -3406,6 +3497,45 @@ void LxmfAdapter::processRuntime()
 
     const RuntimeBudget budget = makeRuntimeBudget();
     processRadioPackets(budget);
+    if ((budget.allow_propagation_client || budget.allow_public_discovery) && gateway_discovery_.poll())
+    {
+        const auto& endpoint = gateway_discovery_.latest();
+        gateway_candidates_.observe(endpoint, millis());
+        Serial.printf("[Reticulum][Discovery] verified host=%s port=%u\n", endpoint.host, endpoint.port);
+    }
+    if (budget.allow_propagation_client || budget.allow_public_discovery)
+        gateway_persistence_.poll(millis(), interfaces_.discoveredGatewayStable());
+    const auto* restored_gateway = gateway_persistence_.restored();
+    if (restored_gateway) gateway_candidates_.observe(*restored_gateway, millis(), true);
+    gateway_candidates_.sync(interfaces_.discoveredGatewayRetry());
+    const int candidate = (budget.allow_propagation_client || budget.allow_public_discovery)
+                              ? gateway_candidates_.select(millis(), [this](const auto& endpoint)
+                                                           { return interfaces_.canReplaceDiscoveredGateway(endpoint.host, endpoint.port); })
+                              : -1;
+    if (candidate >= 0)
+    {
+        const auto& selected = gateway_candidates_.entry(candidate);
+        const auto& discovered = selected.endpoint;
+        constexpr auto interface_id = reticulum::interfaces::kDiscoveredTcpInterfaceId;
+        link_manager_.forEachSession([this](LinkSession& session)
+                                     {
+                                        if (session.interface_id == reticulum::interfaces::kDiscoveredTcpInterfaceId &&
+                                            session.state != LinkState::Closed)
+                                            closeLinkSession(session, LinkCloseReason::Error); });
+        path_manager_.retireInterface(interface_id);
+        deferred_discovery_.clear();
+        interfaces_.replaceDiscoveredGateway(discovered.host, discovered.port, selected.preferred);
+        interfaces_.restoreDiscoveredGatewayRetry(selected.retry);
+        gateway_candidates_.installed(candidate);
+        gateway_persistence_.installed(discovered);
+    }
+    maintainGatewayDiscovery();
+    if (geocaching_discovery_probe_.take(millis(), geocaching_announcement_handler_ != nullptr,
+                                         identity_.isReady() && interfaces_.hasReadyWifiGateway(), budget))
+    {
+        const bool requested = sendPathRequestForDestination(runtime::kGeocachingDiscoverySeed.data());
+        Serial.printf("[Geocaching][Discovery] path_request requested=%u retry_ms=60000\n", requested ? 1U : 0U);
+    }
     pumpPendingPingRequests();
     pumpReticulumAudioCall();
     cullTransportState();
@@ -3542,7 +3672,11 @@ bool LxmfAdapter::processOneRadioPacket(
             return false;
         }
     }
-    if (budget.drop_public_discovery &&
+    const bool geocaching_discovery = runtime::GeocachingDiscoveryBudget::matches(
+        parsed, geocaching_announcement_handler_ != nullptr, budget);
+    const bool gateway_discovery = (budget.allow_propagation_client || budget.allow_public_discovery) &&
+                                   reticulum::NativeGatewayDiscovery::matches(parsed);
+    if (budget.drop_public_discovery && !geocaching_discovery && !gateway_discovery &&
         isPublicDiscoveryPacket(parsed) &&
         !isForegroundDiscoveryDestination(parsed.destination_hash))
     {
@@ -3590,7 +3724,12 @@ bool LxmfAdapter::processOneRadioPacket(
 
     uint8_t packet_hash[reticulum::kFullHashSize] = {};
     reticulum::computePacketHash(packet, packet_len, packet_hash);
-    if (path_manager_.isDuplicatePacket(packet_hash))
+    // A requested path response may contain exactly the cached announcement
+    // seen before this Geocaching session opened. Re-run normal verification
+    // under the discovery budget; other duplicate traffic remains rejected.
+    const bool geocaching_path_response = geocaching_discovery &&
+                                          parsed.context == static_cast<uint8_t>(reticulum::PacketContext::PathResponse);
+    if (path_manager_.isDuplicatePacket(packet_hash) && !geocaching_path_response)
     {
         noteRxSummary(false, true, false);
         if (!ingress_wifi && !deferred_replay)
@@ -3600,7 +3739,17 @@ bool LxmfAdapter::processOneRadioPacket(
         return false;
     }
 
-    if (shouldDeferDiscoveryPacket(parsed, ingress_interface, budget))
+    if (geocaching_discovery && !geocaching_discovery_budget_.consume(millis()))
+    {
+        noteRxSummary(false, false, false, false, false, true);
+        return false;
+    }
+    if (gateway_discovery && !gateway_discovery_.consume(millis()))
+    {
+        noteRxSummary(false, false, false, false, false, true);
+        return false;
+    }
+    if (!geocaching_discovery && !gateway_discovery && shouldDeferDiscoveryPacket(parsed, ingress_interface, budget))
     {
         if (deferred_replay)
         {
@@ -3617,7 +3766,7 @@ bool LxmfAdapter::processOneRadioPacket(
         return false;
     }
 
-    if (!deferred_replay && ingress_wifi && !shouldProcessWifiIngressPacket(parsed, budget))
+    if (!geocaching_discovery && !gateway_discovery && !deferred_replay && ingress_wifi && !shouldProcessWifiIngressPacket(parsed, budget))
     {
         if (budget.phase && std::strcmp(budget.phase, "nomad") == 0 &&
             (packet_len >= 256U ||
@@ -4008,6 +4157,48 @@ bool LxmfAdapter::handleAnnouncePacket(const uint8_t* raw_packet, size_t raw_len
         return false;
     }
 
+    // The ingestor has verified the signature and destination binding before
+    // reporting path_rejected. An identical cached path response can refresh
+    // application discovery without replacing a route or accepting stale paths.
+    const bool cached_discovery = packet.context == static_cast<uint8_t>(reticulum::PacketContext::PathResponse) &&
+                                  ingest.status == runtime::AnnounceIngestResult::Status::Ignored &&
+                                  ingest.path_decision == runtime::PathAnnounceDecision::RejectReplay &&
+                                  ingest.reason && std::strcmp(ingest.reason, "path_rejected") == 0;
+    if ((ingest.status == runtime::AnnounceIngestResult::Status::Accepted || cached_discovery) &&
+        !ingest.local_destination && reticulum::NativeGatewayDiscovery::matches(packet))
+    {
+        gateway_discovery_.offerVerified(ingest.announce.app_data, ingest.announce.app_data_len, ingest.identity_hash);
+        // Discovery metadata belongs to the network manager, not the contact
+        // directory or generic raw-announce archive (which could retain keys).
+        return true;
+    }
+    if ((ingest.status == runtime::AnnounceIngestResult::Status::Accepted || cached_discovery) &&
+        geocaching_announcement_handler_ && !ingest.local_destination && ingest.announce.name_hash &&
+        ingest.announce.public_key && ingest.announce.app_data && ingest.announce.app_data_len <= 96)
+    {
+        uint8_t name_hash[reticulum::kNameHashSize] = {};
+        reticulum::computeNameHash("trailmate", "geocache.directory", name_hash);
+        if (hashesEqual(name_hash, ingest.announce.name_hash, sizeof(name_hash)))
+        {
+            // The verified service announcement authenticates the same identity
+            // used by lxmf.delivery. Retain its encryption key without adding a
+            // service announcement to the user's contact presentation.
+            rememberPeerIdentity(ingest.announce.public_key, nullptr, false);
+            uint8_t delivery_hash[reticulum::kTruncatedHashSize] = {};
+            reticulum::computeNameHash("lxmf", "delivery", name_hash);
+            reticulum::computeDestinationHash(name_hash, ingest.identity_hash, delivery_hash);
+            const GeocachingAnnouncementView view{
+                {packet.destination_hash, reticulum::kTruncatedHashSize},
+                {delivery_hash, sizeof(delivery_hash)},
+                {ingest.announce.public_key, reticulum::kCombinedPublicKeySize},
+                {ingest.announce.app_data, ingest.announce.app_data_len}};
+            // Borrowed only for this callback; consumers copy bounded metadata.
+            geocaching_announcement_handler_(view, geocaching_announcement_context_);
+            Serial.printf("[Geocaching][Discovery] verified_announce bytes=%u\n",
+                          static_cast<unsigned>(ingest.announce.app_data_len));
+        }
+    }
+
     if (ingest.status == runtime::AnnounceIngestResult::Status::Ignored)
     {
         if (ingest.local_destination)
@@ -4023,11 +4214,7 @@ bool LxmfAdapter::handleAnnouncePacket(const uint8_t* raw_packet, size_t raw_len
         }
         return true;
     }
-    if (ingest.status != runtime::AnnounceIngestResult::Status::Accepted ||
-        !ingest.path)
-    {
-        return false;
-    }
+    if (ingest.status != runtime::AnnounceIngestResult::Status::Accepted || !ingest.path) return false;
 
     PathEntry& path = *ingest.path;
     link_manager_.forEachSession(
@@ -7765,7 +7952,7 @@ void LxmfAdapter::cullTransportState()
         });
 
     delivery_attempt_ledger_.forEachReceipt(
-        [now_ms](const runtime::DeliveryAttemptReceipt& receipt)
+        [this, now_ms](const runtime::DeliveryAttemptReceipt& receipt)
         {
             if (receipt.kind != runtime::DeliveryAttemptKind::DirectPacket)
             {
@@ -7786,6 +7973,9 @@ void LxmfAdapter::cullTransportState()
                           destination_hash,
                           static_cast<unsigned long>(now_ms -
                                                      receipt.created_ms));
+            // Reconcile the sent state before retiring proof tracking, even
+            // if the original notification was lost while the bus was full.
+            delivery_notifier_.sent(receipt.message_id);
         });
     delivery_attempt_ledger_.cull(runtime::DeliveryAttemptKind::DirectPacket,
                                   now_ms,
@@ -9299,7 +9489,7 @@ void LxmfAdapter::cullLinkSessions()
 
 LxmfAdapter::PeerInfo* LxmfAdapter::rememberPeerIdentity(
     const uint8_t combined_pub[reticulum::kCombinedPublicKeySize],
-    const char* display_name)
+    const char* display_name, bool publish_contact)
 {
     if (!combined_pub)
     {
@@ -9324,6 +9514,10 @@ LxmfAdapter::PeerInfo* LxmfAdapter::rememberPeerIdentity(
     if (display_name && display_name[0] != '\0')
     {
         copyCString(peer.display_name, sizeof(peer.display_name), display_name);
+    }
+    if (!publish_contact)
+    {
+        return &peer;
     }
     const bool allow_persistence =
         screen_runtime::is_sleeping() && !screen_runtime::is_saver_active();
@@ -9602,6 +9796,11 @@ bool LxmfAdapter::acceptVerifiedEnvelopeForDestination(
                       source_hash);
     }
 
+    if (geocaching_only_ && delivery.kind != runtime::LxmfDeliveryKind::Text)
+    {
+        release_packet_for_retry();
+        return false;
+    }
     if (delivery.kind == runtime::LxmfDeliveryKind::AppData)
     {
         if (delivery.app_data.incoming.portnum ==
@@ -9664,6 +9863,40 @@ bool LxmfAdapter::acceptVerifiedEnvelopeForDestination(
         return false;
     }
 
+    ByteSpan custom_type, custom_data;
+    const auto custom_result = extractCustomData(delivery.text.payload, &custom_type, &custom_data);
+    if (custom_result == CustomDataResult::Invalid)
+    {
+        release_packet_for_retry();
+        return false;
+    }
+    constexpr char geocaching_type[] = "trailmate.geocache";
+    if (custom_result == CustomDataResult::Valid && custom_type.size == sizeof(geocaching_type) - 1 &&
+        std::memcmp(custom_type.data, geocaching_type, custom_type.size) == 0)
+    {
+        if (delivery_context.source_unverified || destination_is_group || !geocaching_handler_)
+        {
+            release_packet_for_retry();
+            return false;
+        }
+        const CustomDeliveryView view{
+            {envelope.source_hash, sizeof(envelope.source_hash)},
+            {expected_destination_hash, reticulum::kTruncatedHashSize},
+            {delivery_context.message_hash, sizeof(delivery_context.message_hash)},
+            custom_data};
+        if (!geocaching_handler_(view, geocaching_handler_context_))
+        {
+            release_packet_for_retry();
+            return false;
+        }
+        return true;
+    }
+
+    if (geocaching_only_)
+    {
+        release_packet_for_retry();
+        return false;
+    }
     if (!delivery_context.source_unverified)
     {
         SidebandTelemetryLocation location{};

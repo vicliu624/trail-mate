@@ -1,0 +1,9 @@
+**
+!tools/
+!tools/geocaching/
+!tools/geocaching/interop-requirements.txt
+!tools/geocaching/bridge-requirements.txt
+!tools/geocaching/directory_service.py
+!tools/geocaching/directory_store.py
+!tools/geocaching/directory_sync.py
+!tools/geocaching/packet_bridge.py

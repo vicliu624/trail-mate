@@ -8,6 +8,59 @@ on:
   pull_request:
 
 jobs:
+  geocaching_web:
+    name: Geocaching Live Web Map
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: Verify live map startup, discovery, protocol and regions
+        working-directory: site
+        run: |
+          npm ci --ignore-scripts
+          node --test ../tests/site/geocaching-*.test.mjs
+          npm run build:geocaching
+
+  reticulum_gateway:
+    name: Reticulum Gateway and IFAC
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify gateway selection, persistence and IFAC codec
+        run: |
+          cmake -S tests/reticulum_gateway -B .codex-build/reticulum-gateway -DCMAKE_BUILD_TYPE=Debug
+          cmake --build .codex-build/reticulum-gateway --parallel 2
+          ctest --test-dir .codex-build/reticulum-gateway --output-on-failure
+
+      - name: Verify IFAC and resource vectors against Python Reticulum
+        run: |
+          python3 -m venv .codex-build/rns-reference
+          .codex-build/rns-reference/bin/python -m pip install rns==1.5.4
+          .codex-build/rns-reference/bin/python tests/reticulum_gateway/ifac_reference.py --check
+          .codex-build/rns-reference/bin/python tests/reticulum_conformance/test_resource_interop.py
+
+  geocaching:
+    name: Geocaching Core and Device Session
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify protocol, storage and device session
+        run: |
+          cmake -S modules/core_geocaching/tests -B .codex-build/geocaching-native -DCMAKE_BUILD_TYPE=Debug
+          cmake --build .codex-build/geocaching-native --parallel 2
+          ctest --test-dir .codex-build/geocaching-native --output-on-failure --parallel 2
+
+      - name: Verify device session memory safety
+        run: sh modules/core_geocaching/tests/run_browse_runtime_asan.sh
+
   boundary:
     name: Boundary Check
     runs-on: ubuntu-latest
@@ -62,6 +115,9 @@ jobs:
       - name: Verify Settings navigation contract
         run: python3 tests/settings_navigation/test_contract.py
 
+      - name: Verify shared storage retry ownership and fairness
+        run: python3 platform/esp/common/tests/run_storage_adapter_retry.py
+
       - name: Verify ESP stack hygiene
         run: python3 scripts/check_esp_stack_hygiene.py
 
@@ -78,7 +134,9 @@ jobs:
         run: python3 scripts/check_reticulum_runtime_budget_policy.py
 
       - name: Verify track file streaming
-        run: python3 scripts/check_track_file_streaming.py
+        run: |
+          python3 tests/test_track_file_streaming_guard.py
+          python3 scripts/check_track_file_streaming.py
 
       - name: Verify repository root has no build artifacts
         run: python3 scripts/check_root_build_artifacts.py
@@ -384,7 +442,9 @@ jobs:
           node-version: "22"
 
       - name: Verify locale packs
-        run: python tools/validate_locale_packs.py --pack-root packs
+        run: |
+          python tools/validate_locale_packs.py --pack-root packs
+          python tests/test_prepare_pages_site.py
 
       - name: Generate Pages release metadata and package repository
         env:
@@ -489,6 +549,9 @@ jobs:
     needs:
       - boundary
       - format
+      - geocaching_web
+      - reticulum_gateway
+      - geocaching
       - build
       - p4_contract
       - build_c6

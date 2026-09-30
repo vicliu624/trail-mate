@@ -15,7 +15,89 @@
 
 > An edge-first decentralized communication and situational-awareness system where identity, data, and connectivity choices remain with the user
 
-[English](README.md) | [Join Discord](https://discord.gg/shkueG4zfc)
+**Trail Mate is a multi-target open-source platform for phone-independent outdoor navigation, off-grid messaging, and team situational awareness. Its shared architecture spans ESP32, nRF52, and Linux, with selectable Meshtastic, MeshCore, and Reticulum/LXMF networking paths.**
+
+[English](README.md) | [Documentation](https://github.com/vicliu624/trail-mate/wiki) | [Releases](https://github.com/vicliu624/trail-mate/releases) | [Join Discord](https://discord.gg/shkueG4zfc)
+
+---
+
+## ⚙️ Engineering Snapshot
+
+- **Platforms:** ESP32 and nRF52 firmware, Linux device applications, and a Linux simulator
+- **Networking:** Meshtastic · MeshCore · Reticulum/LXMF, with support depending on the target
+- **Hardware:** keyboard handhelds, touch navigation terminals, and low-power message devices
+- **Toolchains:** PlatformIO / Arduino · ESP-IDF · CMake for Linux
+- **Validation:** multi-target CI builds, native regression tests, LVGL integration tests, architecture boundary checks, stack and runtime-budget checks, and OTA-size validation
+- **Releases:** automated firmware packaging, web-flasher images for selected targets, nRF52 UF2 images, and tagged-release debug symbols
+- **Core capabilities:** GNSS · offline maps · LoRa messaging · local storage · on-device team awareness
+- **License:** [AGPL-3.0](LICENSE)
+
+Capabilities vary with memory, peripherals, input hardware, and port maturity. The simplified nRF52 targets currently provide Meshtastic / MeshCore messaging rather than the full feature set. See the device table below for current status.
+
+Engineering evidence: [CI and release workflow](.github/workflows/ci.yml) · [shared protocol tests](modules/core_chat/tests) · [repository architecture](docs/specification/REPOSITORY_LAYOUT_ARCHITECTURE_SPEC.md) · [version history](CHANGELOG.md).
+
+## 🚀 Try Trail Mate
+
+### Decentralized Geocaching
+
+Create and publish signed caches over Reticulum, browse independently operated directories, and download cache details for offline maps. The [live web map](https://vicliu624.github.io/trail-mate/geocaching/) queries the network directly, so new publications do not require a website update. Publishers keep their own identities; the protocol supports independent directory operators rather than requiring one central service.
+
+Configure network access under **Settings > Reticulum** without changing the chat protocol. Manually configured TCP interfaces support IFAC through the SD configuration; RNode/LoRa and AutoInterface IFAC are still pending. See the [Reticulum settings guide](https://github.com/vicliu624/trail-mate/wiki/4.1.1-Reticulum-Settings) and [Geocaching developer guide](https://github.com/vicliu624/trail-mate/wiki/20.-Geocaching-Developer-Guide).
+
+1. **Choose a device** from the support table below. T-LoRa-Pager SX1262 and T-Deck are the primary validation targets.
+2. **Install a matching image** from [Releases](https://github.com/vicliu624/trail-mate/releases), or use the [website and web flasher](https://vicliu624.github.io/trail-mate/) for supported targets. For source builds, see [Build Methods](#build-methods).
+3. **Prepare for offline use** with the [Wiki](https://github.com/vicliu624/trail-mate/wiki): configure the selected protocol and radio region, and prepare maps and local storage for your device.
+
+Review the [responsible-use and safety guidance](#responsible-use) before field use.
+
+---
+
+## 🧩 Current Device Support & Development Status
+
+The table below records the **real build targets currently present in the repository and their maturity**.
+
+| Device / Target | Build Target | Stack | Current Status |
+| --- | --- | --- | --- |
+| **LILYGO T-LoRa-Pager (SX1262)** | `tlora_pager_sx1262` | PlatformIO / Arduino | Current default environment and still the most complete day-to-day validation target |
+| **LILYGO T-Deck** | `tdeck` | PlatformIO / Arduino | Primary validation target; keyboard, chat, maps, and shared UI paths are actively used |
+| **Seeed Wio Tracker L2 Pro (touchscreen)** | `wio_tracker_l2` | PlatformIO / Arduino (ESP32-S3) | Integrated shared-product port with CI build and LVGL touch regression coverage; see the [target contract](docs/targets/wio_tracker_l2.md) for capabilities and separate on-device acceptance checks |
+| **GAT562 Mesh EVB Pro** | `gat562_mesh_evb_pro` | PlatformIO / Arduino (nRF52) | Simplified nRF52 firmware target with monochrome UI, Meshtastic / MeshCore LoRa paths, and persistent on-device radio settings |
+| **LILYGO T-Echo-Lite-KeyShield** | `t-echo-lite` | PlatformIO / Arduino (nRF52) | Simplified nRF52 firmware target with 192x176 e-paper UI, 4x5 physical keypad input, Meshtastic / MeshCore LoRa paths, and local device settings |
+| **LILYGO T-LoRa-Pager (LR1121)** | `tlora_pager_lr1121` | PlatformIO / Arduino | Supported Pager RF variant with LR1121 RF switch and TCXO bring-up |
+| **LILYGO T-Deck Pro** | `tdeck_pro_a7682e` / `tdeck_pro_pcm512a` | PlatformIO / Arduino | Separate environments exist, but this line is still in active bring-up / adaptation work |
+| **LILYGO T-Watch S3** | `lilygo_twatch_s3` | PlatformIO / Arduino | Experimental target used more for system and UI validation than for full feature coverage |
+| **M5Stack Tab5** | `TRAIL_MATE_IDF_TARGET=tab5` | ESP-IDF | Main large-screen IDF bring-up target; the shared shell runs and hardware-specific work is still being filled in |
+| **LILYGO T-Display P4 TFT** | `TRAIL_MATE_IDF_TARGET=t_display_p4_tft` | ESP-IDF | Explicit TFT / HI8561 bring-up target for the shared IDF shell |
+| **LILYGO T-Display P4 AMOLED** | `TRAIL_MATE_IDF_TARGET=t_display_p4_amoled` | ESP-IDF | Explicit AMOLED / RM69A10 + GT9895 bring-up target for the shared IDF shell |
+
+Linux development also includes the [Cardputer Zero device app](apps/linux_cardputer_zero/README.md) and [Linux simulator](apps/linux_sim_shell/README.md). These have their own build and validation paths; embedded CI coverage does not establish Linux hardware readiness.
+
+### How To Choose A Target Today
+
+- If you want the most stable daily development path right now, start with **`tlora_pager_sx1262`** or **`tdeck`**
+- If you are debugging a resource-constrained simplified nRF52 target, start with **`gat562_mesh_evb_pro`** or **`t-echo-lite`**
+- If you are working on the newer large-screen ESP-IDF path, start with **`tab5`**
+- **`tdeck_pro_*`**, **`lilygo_twatch_s3`**, **`t_display_p4_tft`**, and **`t_display_p4_amoled`** are better treated as bring-up, layout, or device-adaptation targets than as the highest-maturity feature-validation path
+- A build target establishes that the device is present in the repository; the table's status column records page and capability maturity. Features may be enabled or hidden dynamically according to capabilities, RAM budget, and input hardware
+- [GitHub Actions](.github/workflows/ci.yml) builds **`wio_tracker_l2`**, **`tlora_pager_sx1262`**, **`tlora_pager_lr1121`**, **`tdeck`**, **`lilygo_twatch_s3`**, **`gat562_mesh_evb_pro`**, and the nRF52 wrapper target **`t-echo-lite`**, plus the ESP-IDF **P4 TFT**, **P4 AMOLED**, and **C6 companion** targets; GAT562 and T-Echo-Lite release artifacts include UF2 files for manual flashing, verified with the nRF52840 UF2 family ID `0xADA52840`
+
+---
+
+## 🏗️ Shared Architecture & Protocol Interoperability
+
+Trail Mate carries shared messaging, storage, navigation, and UI/business capabilities across device families. The repository separates reusable [modules](modules), [platform adapters](platform), [board definitions](boards), and [application shells](apps), with responsibilities documented in the [architecture specification](docs/specification/REPOSITORY_LAYOUT_ARCHITECTURE_SPEC.md).
+
+Meshtastic, MeshCore, and Reticulum/LXMF are selectable network paths within that product model. A device runs one explicit product protocol path at a time; this does not imply automatic bridging between the three networks or complete upstream feature parity. On-device TAK means Trail Mate's own team-awareness capabilities; ATAK, WinTAK, and CoT interoperability are outside the current claim.
+
+Maintaining this shared product involves protocol compatibility, different radio and display drivers, constrained RAM and task stacks, storage ownership, UI behavior, and release images across targets. The [CI workflow](.github/workflows/ci.yml) makes these concerns visible through build matrices and targeted regression and contract checks.
+
+## 🔒 Security & Reliability
+
+Trail Mate handles input from radio, network, Bluetooth, serial, USB, and removable storage. Protocol parsing, identity and key handling, persistence, and shared hardware access are security-sensitive boundaries.
+
+The repository includes tests for [control-frame authentication and corruption rejection](modules/core_chat/tests/test_vmp_control_auth.cpp), [media-frame integrity](modules/core_chat/tests/test_vmp_media_frames.cpp), [duplicate and malformed shard rejection](modules/core_chat/tests/test_vmp_receive_block.cpp), and [voice-inbox persistence](modules/core_chat/tests/test_vmp_voice_inbox.cpp). CI also checks storage transactions, bounded map delivery, ESP stack hygiene, Wi-Fi access policy, and Reticulum runtime budgets. These checks provide specific regression evidence, not a claim of a completed security audit.
+
+See [SECURITY.md](SECURITY.md) to report a suspected vulnerability privately.
 
 ---
 
@@ -45,6 +127,8 @@ Trail Mate is organized around four defining capabilities:
 * **TAK capability**: the device provides member, position, waypoint, track, status, and team-message awareness. Trail Mate's current TAK claim covers its own on-device team-awareness capability. ATAK, WinTAK, and CoT interoperability sit outside the present claim.
 
 The system models public discovery position, contact position, Team position, and local tracks as four distinct data relationships. Users should be able to confirm the shared content, its recipients, and the network path used.
+
+<a id="responsible-use"></a>
 
 ## ⚖️ Responsible Use, Legal Compliance, and Scope
 
@@ -337,7 +421,7 @@ then all team operations run over LoRa.
 
 ## 📱 Hardware-Carriage Strategy
 
-Trail Mate's hardware work focuses on devices suited to carrying the established product capabilities. This section describes the **hardware-selection direction**. The build-target table below records current implementation maturity. New hardware continues to carry the defined product domains.
+Trail Mate's hardware work focuses on devices suited to carrying the established product capabilities. This section describes the **hardware-selection direction**. The [build-target table above](#-current-device-support--development-status) records current implementation maturity. New hardware continues to carry the defined product domains.
 
 Current priority device categories include:
 
@@ -356,33 +440,7 @@ The project stays as **hardware-agnostic** as practical. Protocol logic, storage
 
 ---
 
-## 🧩 Current Device Support & Development Status
-
-The table below records the **real build targets currently present in the repository and their maturity**.
-
-| Device / Target | Build Target | Stack | Current Status |
-| --- | --- | --- | --- |
-| **LILYGO T-LoRa-Pager (SX1262)** | `tlora_pager_sx1262` | PlatformIO / Arduino | Current default environment and still the most complete day-to-day validation target |
-| **LILYGO T-Deck** | `tdeck` | PlatformIO / Arduino | Primary validation target; keyboard, chat, maps, and shared UI paths are actively used |
-| **GAT562 Mesh EVB Pro** | `gat562_mesh_evb_pro` | PlatformIO / Arduino (nRF52) | Simplified nRF52 firmware target with monochrome UI, Meshtastic / MeshCore LoRa paths, and persistent on-device radio settings |
-| **LILYGO T-Echo-Lite-KeyShield** | `t-echo-lite` | PlatformIO / Arduino (nRF52) | Simplified nRF52 firmware target with 192x176 e-paper UI, 4x5 physical keypad input, Meshtastic / MeshCore LoRa paths, and local device settings |
-| **LILYGO T-LoRa-Pager (LR1121)** | `tlora_pager_lr1121` | PlatformIO / Arduino | Supported Pager RF variant with LR1121 RF switch and TCXO bring-up |
-| **LILYGO T-Deck Pro** | `tdeck_pro_a7682e` / `tdeck_pro_pcm512a` | PlatformIO / Arduino | Separate environments exist, but this line is still in active bring-up / adaptation work |
-| **LILYGO T-Watch S3** | `lilygo_twatch_s3` | PlatformIO / Arduino | Experimental target used more for system and UI validation than for full feature coverage |
-| **M5Stack Tab5** | `TRAIL_MATE_IDF_TARGET=tab5` | ESP-IDF | Main large-screen IDF bring-up target; the shared shell runs and hardware-specific work is still being filled in |
-| **LILYGO T-Display P4 TFT** | `TRAIL_MATE_IDF_TARGET=t_display_p4_tft` | ESP-IDF | Explicit TFT / HI8561 bring-up target for the shared IDF shell |
-| **LILYGO T-Display P4 AMOLED** | `TRAIL_MATE_IDF_TARGET=t_display_p4_amoled` | ESP-IDF | Explicit AMOLED / RM69A10 + GT9895 bring-up target for the shared IDF shell |
-
-### How To Choose A Target Today
-
-- If you want the most stable daily development path right now, start with **`tlora_pager_sx1262`** or **`tdeck`**
-- If you are debugging a resource-constrained simplified nRF52 target, start with **`gat562_mesh_evb_pro`** or **`t-echo-lite`**
-- If you are working on the newer large-screen ESP-IDF path, start with **`tab5`**
-- **`tdeck_pro_*`**, **`lilygo_twatch_s3`**, **`t_display_p4_tft`**, and **`t_display_p4_amoled`** are better treated as bring-up, layout, or device-adaptation targets than as the highest-maturity feature-validation path
-- A build target establishes that the device is present in the repository; the table's status column records page and capability maturity. Features may be enabled or hidden dynamically according to capabilities, RAM budget, and input hardware
-- GitHub Actions currently keeps building the main path through **`tlora_pager_sx1262`**, **`tlora_pager_lr1121`**, **`tdeck`**, **`lilygo_twatch_s3`**, **`gat562_mesh_evb_pro`**, and the nRF52 wrapper target **`t-echo-lite`**; GAT562 and T-Echo-Lite release artifacts include UF2 files for manual flashing, verified with the nRF52840 UF2 family ID `0xADA52840`
-
----
+<a id="build-methods"></a>
 
 ## 🛠️ Build Methods
 
@@ -390,7 +448,7 @@ Trail Mate currently uses two main toolchain paths: **PlatformIO** and **ESP-IDF
 
 ### PlatformIO
 
-PlatformIO covers both the ESP32 Arduino targets and the current nRF52 Arduino target. The root [platformio.ini](platformio.ini) keeps only shared configuration, while the actual target environments live under `variants/*/envs/*.ini`.
+PlatformIO covers both the ESP32 Arduino targets and the current nRF52 Arduino targets. The root [platformio.ini](platformio.ini) keeps only shared configuration, while the actual target environments live under `variants/*/envs/*.ini`.
 
 Common build commands:
 
@@ -405,6 +463,7 @@ platformio run -e gat562_mesh_evb_pro
 platformio run -d builds/pio_nrf52 -e t-echo-lite
 
 # Other integrated targets
+platformio run -e wio_tracker_l2
 platformio run -e tdeck_pro_a7682e
 platformio run -e tdeck_pro_pcm512a
 platformio run -e lilygo_twatch_s3
@@ -540,6 +599,7 @@ For commercial collaboration or deep involvement, please contact the author dire
 
 The most useful contributions include:
 
+* Private vulnerability reports through [SECURITY.md](SECURITY.md)
 * Reproducible defect reports with device, firmware, protocol, network conditions, and exact steps
 * Real test results from off-grid, weak-link, low-power, and harsh environments
 * Interoperability verification against upstream Meshtastic, MeshCore, and Reticulum/LXMF implementations

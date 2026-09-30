@@ -464,6 +464,7 @@ set(TRAIL_MATE_LINUX_UI_SHELL_SOURCES
     # gps
     "${TRAIL_MATE_UI_GPS_RUNTIME_SRC_ROOT}/gps_page_runtime_pump.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/gps/gps_page_runtime.cpp"
+    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/geocaching/geocaching_page_shell.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/gps/gps_page_shell.cpp"
     # node info
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/node_info/node_info_page_components.cpp"

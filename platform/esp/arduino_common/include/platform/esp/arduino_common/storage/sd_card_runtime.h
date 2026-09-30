@@ -171,11 +171,25 @@ class SdRuntimeFile
     bool seek(uint64_t offset);
     uint64_t position() const;
     uint64_t size() const;
+    // Only describes the most recent open/read/seek/size call. Busy leaves
+    // the requested operation incomplete; callers may yield and try again.
+    bool read_busy() const { return read_busy_; }
     bool flush();
 
   private:
     class Impl;
     Impl* impl_;
+    mutable bool read_busy_ = false;
+};
+
+enum class SdDirReadStatus : uint8_t
+{
+    Entry,
+    End,
+    Busy,
+    Unavailable,
+    Invalid,
+    IoError
 };
 
 class SdRuntimeDir
@@ -191,6 +205,7 @@ class SdRuntimeDir
     void close();
     bool is_open() const;
     bool read_next(char* name, std::size_t name_size, bool* is_dir);
+    SdDirReadStatus read_next_status(char* name, std::size_t name_size, bool* is_dir);
 
   private:
     class Impl;

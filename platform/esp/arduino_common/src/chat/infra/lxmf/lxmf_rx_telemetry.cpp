@@ -135,14 +135,17 @@ void RawRxTelemetry::noteSummary(bool wifi_skipped,
         return;
     }
 
-    LXMF_RAW_RX_LOG("[LXMF][RawRX] stats packets=%u wifi_skipped=%u duplicate=%u parse_failed=%u deferred=%u deferred_drop=%u throttled_discovery=%u\n",
-                    static_cast<unsigned>(packets_),
-                    static_cast<unsigned>(wifi_skipped_),
-                    static_cast<unsigned>(duplicates_),
-                    static_cast<unsigned>(parse_failed_),
-                    static_cast<unsigned>(deferred_),
-                    static_cast<unsigned>(deferred_dropped_),
-                    static_cast<unsigned>(throttled_discovery_));
+#if !defined(TRAIL_MATE_VERBOSE_RUNTIME_LOGS) || !TRAIL_MATE_VERBOSE_RUNTIME_LOGS
+    if (parse_failed_ != 0)
+#endif
+        LXMF_RAW_RX_LOG("[LXMF][RawRX] stats packets=%u wifi_skipped=%u duplicate=%u parse_failed=%u deferred=%u deferred_drop=%u throttled_discovery=%u\n",
+                        static_cast<unsigned>(packets_),
+                        static_cast<unsigned>(wifi_skipped_),
+                        static_cast<unsigned>(duplicates_),
+                        static_cast<unsigned>(parse_failed_),
+                        static_cast<unsigned>(deferred_),
+                        static_cast<unsigned>(deferred_dropped_),
+                        static_cast<unsigned>(throttled_discovery_));
     packets_ = 0;
     wifi_skipped_ = 0;
     duplicates_ = 0;

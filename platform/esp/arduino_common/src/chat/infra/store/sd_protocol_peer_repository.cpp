@@ -639,6 +639,7 @@ SdProtocolPeerRepository::stepPersistence(
     }
     if (!persistencePending())
     {
+        maintenance_.phase = MaintenancePhase::Complete;
         return storage_contracts::StorageOperationResult::completedResult(
             maintenance_.operation,
             maintenance_.generation);

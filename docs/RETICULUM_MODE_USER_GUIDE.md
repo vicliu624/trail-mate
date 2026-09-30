@@ -29,6 +29,13 @@ open Settings > Network while the active protocol is `Reticulum` and set:
 - `Wi-Fi Gateway`: enable the TCP gateway carrier.
 - `Gateway Host`: the hostname or IP address of a Reticulum TCP server or
   backbone node.
+- `TCP Entry`: choose one of the three TCP slots before editing its host or
+  port. Fresh configurations use `sydney.reticulum.au`, `node.reticulumnet.nl`
+  and `rmap.world`, all on port 4242. Existing custom configurations are kept.
+  Clear a host to remove an entry; later entries shift forward. Changes are
+  saved through the device's TMS configuration flow. See
+  [network configuration](reticulum_network_config.md) for selection evidence
+  and board-specific limits.
 - `Gateway Port`: usually `4242`.
 - `Auto Wi-Fi`: when enabled, Reticulum will ask the Wi-Fi runtime to connect
   before opening the gateway socket.

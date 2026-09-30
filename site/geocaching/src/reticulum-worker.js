@@ -20,7 +20,7 @@ self.onmessage = async ({data}) => {
       await client?.close(); client = null;
     } else {
       if (!client || !liveReady) throw Error('Live directory connection unavailable');
-      if (command === 'query') await client.query(args.bounds, args.stateMask, args.region, args.queryToken);
+      if (command === 'query') await client.query(args.bounds, args.stateMask, args.region, args.queryToken, {refresh:args.refresh===true});
       else if (command === 'more') await client.more();
       else if (command === 'get') result = await client.get(args.cacheId);
       else if (command === 'download') {

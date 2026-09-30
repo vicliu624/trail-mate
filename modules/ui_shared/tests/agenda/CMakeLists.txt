@@ -118,6 +118,7 @@ add_executable(agenda_catalog_test test_catalog.cpp test_support.cpp
     "${REPO_ROOT}/modules/ui_shared/src/ui/page/page_profile.cpp"
     "${REPO_ROOT}/modules/ui_shared/src/ui/app_catalog_builder.cpp")
 target_include_directories(agenda_catalog_test PRIVATE catalog_stubs
+    "${REPO_ROOT}/modules/ui_presentation/include"
     "${REPO_ROOT}/modules/ui_lvgl_ux_packs/include"
     "${REPO_ROOT}/modules/ui_shared/include")
 target_compile_definitions(agenda_catalog_test PRIVATE ESP_PLATFORM=1 ARDUINO_T_LORA_PAGER=1)

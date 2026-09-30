@@ -111,10 +111,17 @@ constexpr const char* kLinkResponseNil =
     "92c40472657132c0";
 
 constexpr const char* kResourceAdvertisement =
-    "8bc40174cd0102c40164ccf0c4016e03c40168c420404142434445464748494a4b4c4d4e4f"
-    "505152535455565758595a5b5c5d5e5fc40172c40401020304c4016fc420606162636465"
-    "666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7fc4016901c4016c02"
-    "c40171c4025251c4016605c4016dc402f00f";
+    "8ba174cd0102a164ccf0a16e03a168c420404142434445464748494a4b4c4d4e4f"
+    "505152535455565758595a5b5c5d5e5fa172c40401020304a16fc420606162636465"
+    "666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7fa16901a16c02"
+    "a171c4025251a16605a16dc402f00f";
+// RNS 1.5.4 ResourceAdvertisement.pack(): an ordinary encrypted LXMF resource
+// has no Reticulum request ID. A publication uses this same representation.
+constexpr const char* kLxmfResourceAdvertisement =
+    "8ba174cd0102a164ccf0a16e03a168c420404142434445464748494a4b4c4d4e4f"
+    "505152535455565758595a5b5c5d5e5fa172c40401020304a16fc420606162636465"
+    "666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7fa16901a16c01"
+    "a171c0a16601a16dc40c000102030405060708090a0b";
 constexpr const char* kResourceHashmapUpdate =
     "9202c403aabbcc";
 
@@ -815,6 +822,20 @@ void expectResourceVectors()
     assert(decoded_advertisement.request_id == std::vector<uint8_t>({'R', 'Q'}));
     assert(decoded_advertisement.flags == 0x05);
     assert(decoded_advertisement.hashmap == std::vector<uint8_t>({0xF0, 0x0F}));
+
+    const uint8_t lxmf_hashmap[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
+    advertisement_len = advertisement.capacity();
+    advertisement.resize(advertisement_len);
+    assert(lxmf::encodeResourceAdvertisement(258, 240, 3, resource_hash.data(), random_hash,
+                                             original_hash.data(), 1, 1, nullptr, 0, 0x01,
+                                             lxmf_hashmap, sizeof(lxmf_hashmap), advertisement.data(), &advertisement_len));
+    advertisement.resize(advertisement_len);
+    expectBytes(advertisement.data(), advertisement.size(), kLxmfResourceAdvertisement);
+    assert(lxmf::decodeResourceAdvertisement(advertisement.data(), advertisement.size(), &decoded_advertisement));
+    assert(decoded_advertisement.request_id.empty());
+    assert(decoded_advertisement.flags == 0x01);
+    assert(decoded_advertisement.total_segments == 1);
+    assert(decoded_advertisement.hashmap == std::vector<uint8_t>(lxmf_hashmap, lxmf_hashmap + sizeof(lxmf_hashmap)));
 
     const uint8_t update_map[] = {0xAA, 0xBB, 0xCC};
     std::vector<uint8_t> hashmap_update = encodeBuffer(64);

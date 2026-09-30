@@ -38,6 +38,7 @@
                             ]
               },
     "dependencies":  [
+                         { "name": "core_geocaching" },
                          {
                              "name":  "esp_common"
                          },

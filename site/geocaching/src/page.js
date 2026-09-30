@@ -3,6 +3,7 @@ import cacheIconUrl from '../../assets/geocaching.svg';
 import {mountIslandShell} from './island-shell.jsx';
 import {countryBounds, countryMatches, regionDisplayGeometry} from './country-boundaries.js';
 import {requestNearbyPosition} from './nearby-location.js';
+import {createLiveRefresh} from './live-refresh.js';
 import './page.css';
 import './theme.css';
 
@@ -26,8 +27,8 @@ const labels = {
 document.documentElement.lang = chinese ? 'zh-Hans' : 'en';
 for (const node of document.querySelectorAll('[data-label]')) node.textContent = labels[node.dataset.label];
 const $ = id => document.getElementById(id);
-const worker = new Worker(new URL('./reticulum-worker.js', import.meta.url), {type:'module'});
-let nextId = 0, ready = false, rows = [], detailId = null, detailGeneration = 0, partial = null;
+let worker = new Worker(new URL('./reticulum-worker.js', import.meta.url), {type:'module'});
+let nextId = 0, ready = false, rows = [], detailId = null, detailRevision = null, detailHash = null, detailGeneration = 0, partial = null;
 const pending = new Map(), selected = new Set();
 const map = L.map('map', {worldCopyJump:true, minZoom:0}).fitWorld();
 const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, updateWhenIdle:true,
@@ -36,6 +37,10 @@ const markers = L.layerGroup().addTo(map);
 const boundaryLayer = L.geoJSON(null, {style:{color:'#0c8d81',weight:2,fillOpacity:0.07},interactive:false}).addTo(map);
 const regionData = new Map();
 let regionFeature = null, regionLoad = 0, querySerial = 0, manualArea = false;
+let lastQuery = null;
+const liveRefresh = createLiveRefresh({refresh:()=>search({automatic:true}),
+  canRefresh:()=>ready && pending.size===0 && lastQuery!==null && navigator.onLine,
+  isVisible:()=>!document.hidden && navigator.onLine});
 const regionName = feature => chinese ? (feature.properties.zh || feature.properties.name) : feature.properties.name;
 
 function populateRegions() {
@@ -53,6 +58,7 @@ function populateRegions() {
 
 async function changeRegionKind() {
   manualArea=true; ++querySerial;
+  lastQuery=null;
   const kind=$('region-kind').value, generation=++regionLoad;
   regionFeature=null; boundaryLayer.clearLayers(); $('region-search').value='';
   $('search').querySelector('[data-label]').textContent=labels.search;
@@ -80,6 +86,7 @@ async function changeRegionKind() {
 
 function selectRegion() {
   manualArea=true; ++querySerial;
+  lastQuery=null;
   regionFeature=(regionData.get($('region-kind').value)||[]).find(feature=>feature.id===$('region-select').value)||null;
   boundaryLayer.clearLayers();
   if (regionFeature) {
@@ -96,22 +103,35 @@ tiles.on('tileerror', () => { $('map-state').textContent = tr('Some map tiles ar
 function rpc(command, args = {}) {
   if (pending.size >= 8) return Promise.reject(Error(tr('Please wait for the current requests.','请等待当前请求完成。')));
   const id = ++nextId;
-  return new Promise((resolve, reject) => { pending.set(id, {resolve,reject}); worker.postMessage({id,command,args}); });
+  return new Promise((resolve, reject) => {
+    pending.set(id, {resolve,reject});
+    try { worker.postMessage({id,command,args}); }
+    catch (error) { pending.delete(id); reject(error); }
+  });
+}
+function rejectPending(message) {
+  const actions = [...pending.values()]; pending.clear();
+  for (const action of actions) action.reject(Error(message));
 }
 const notice = message => { $('notice').textContent = message; };
 const bounds = () => { const b = map.getBounds(); return [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()]; };
 const stateMask = () => [...document.querySelectorAll('input[name=state]:checked')].reduce((mask,input) => mask | Number(input.value), 0);
 
-async function search() {
-  const mask = stateMask();
+async function search({automatic=false} = {}) {
+  if (automatic && !lastQuery) return;
+  const mask = automatic ? lastQuery.stateMask : stateMask();
   if (!mask) { notice(tr('Choose at least one cache state.','请至少选择一种状态。')); return; }
-  if ($('region-kind').value!=='map' && !regionFeature) { notice(labels.chooseRegion); return; }
-  rows=[]; renderRows(); $('more').hidden=true;
+  if (!automatic && $('region-kind').value!=='map' && !regionFeature) { notice(labels.chooseRegion); return; }
+  if (!automatic) {
+    lastQuery={bounds:regionFeature?countryBounds(regionFeature):bounds(),stateMask:mask,region:regionFeature};
+    rows=[]; renderRows(); $('more').hidden=true;
+    selected.clear(); updateSelection();
+  }
   const queryToken=++querySerial;
-  selected.clear(); updateSelection();
-  notice(tr('Querying public directories…','正在查询公共目录…'));
-  try { await rpc('query', {bounds:regionFeature?countryBounds(regionFeature):bounds(),stateMask:mask,region:regionFeature,queryToken}); }
+  if (!automatic) notice(tr('Querying public directories…','正在查询公共目录…'));
+  try { await rpc('query', {...lastQuery,queryToken,refresh:automatic}); }
   catch (error) { if(queryToken===querySerial) notice(error.message); }
+  finally { liveRefresh.touch(); }
 }
 
 function updateSelection() {
@@ -168,7 +188,7 @@ function renderMarkers() {
 }
 
 async function openDetail(row) {
-  const generation = ++detailGeneration; detailId = row.id;
+  const generation = ++detailGeneration; detailId = row.id; detailRevision=row.summary[1]; detailHash=row.summary[2];
   $('detail').hidden = false; $('detail-name').textContent = row.summary[6];
   $('detail-coordinates').textContent = `${(row.summary[4]/1e7).toFixed(7)}, ${(row.summary[5]/1e7).toFixed(7)}`;
   $('detail-content').replaceChildren(); $('download-one').disabled = true;
@@ -209,7 +229,7 @@ async function download(cacheIds) {
   } catch (error) { notice(error.message); }
 }
 
-worker.onmessage = ({data}) => {
+function receiveWorkerMessage({data}) {
   if (data.id) {
     const action=pending.get(data.id); if (!action) return; pending.delete(data.id);
     if (data.error) action.reject(Error(data.error)); else action.resolve(data.result);
@@ -220,6 +240,7 @@ worker.onmessage = ({data}) => {
     $('connection-state').textContent = event.state==='disconnected'?tr('Disconnected','连接已断开'):tr('Discovering directories…','正在发现目录…');
     if (event.state==='disconnected') {
       ready=false; ++querySerial; ++detailGeneration; rows=[]; selected.clear(); partial=null; detailId=null;
+      liveRefresh.setReady(false);
       $('detail').hidden=true; $('more').hidden=true; $('download-partial').hidden=true;
       $('search').disabled=true; $('region-apply').disabled=true; $('connection-state').classList.remove('ready');
       renderRows(); updateSelection();
@@ -227,30 +248,73 @@ worker.onmessage = ({data}) => {
     }
   } else if (event.type==='directory') {
     const first = !ready; ready=true; $('search').disabled=false; $('region-apply').disabled=false;
+    liveRefresh.setReady(true);
     $('connection-state').textContent=tr('Ready to explore','可以开始探索'); $('connection-state').classList.add('ready');
     $('directory-status').textContent=tr(`${event.count} verified public directories`, `已验证 ${event.count} 个公共目录`);
     if (first) initialLocation.finally(()=>{if(ready)search();});
   } else if (event.type==='results') {
     if (!ready || event.queryToken!==querySerial) return;
-    rows=event.rows; $('more').hidden=!event.more; renderRows();
+    rows=event.rows; $('more').hidden=!event.more;
+    const available=new Map(rows.map(row=>[row.id,row]));
+    for (const id of selected) if (!available.has(id) || available.get(id).conflict) selected.delete(id);
+    if (detailId && !available.has(detailId)) {
+      ++detailGeneration; detailId=null; $('detail').hidden=true;
+    } else if (detailId && (available.get(detailId).conflict || available.get(detailId).summary[1]!==detailRevision ||
+      available.get(detailId).summary[2].some((byte,index)=>byte!==detailHash[index]))) {
+      ++detailGeneration;
+      $('detail-state').textContent=tr('Cache updated. Open it again for current details.','藏宝点已更新，请重新打开以查看最新详情。');
+      $('download-one').disabled=true;
+    }
+    renderRows(); updateSelection();
     notice(event.limited?tr('500-item display limit reached. Narrow the area to explore more.','已达到 500 项显示上限，请缩小区域继续探索。'):
       !rows.length && event.more?tr('No matches in these pages yet. Load more to continue searching this region.','当前批次暂无匹配点，可加载更多继续检索此区域。'):
       tr('Loaded from live directory responses. Open a cache to verify its details.','已加载目录实时响应。打开藏宝点以验证完整详情。'));
   } else if (event.type==='source-error') notice(`${event.name}: ${event.message}`);
-};
-worker.onerror = () => { notice(tr('The map service stopped. Refresh the page to try again.','地图服务已停止，请刷新页面重试。')); ready=false; $('search').disabled=true; $('region-apply').disabled=true; };
+}
+function recoverWorker() {
+  if (serviceStopped) return;
+  serviceStopped=true;
+  receiveWorkerMessage({data:{event:{type:'status',state:'disconnected'}}});
+  clearTimeout(serviceRetry); worker.terminate();
+  rejectPending(tr('Map service interrupted. Reconnecting…','地图服务中断，正在重新连接…'));
+  $('search').disabled=true; $('region-apply').disabled=true; updateSelection();
+  notice(tr('Map service interrupted. Reconnecting…','地图服务中断，正在重新连接…'));
+  const restart=()=>{
+    try {
+      worker=new Worker(new URL('./reticulum-worker.js',import.meta.url),{type:'module'});
+    } catch {
+      serviceRetry=setTimeout(restart,5000);
+      return;
+    }
+    worker.onmessage=receiveWorkerMessage; worker.onerror=recoverWorker;
+    serviceStopped=false; startService();
+  };
+  serviceRetry=setTimeout(restart,5000);
+}
+worker.onmessage=receiveWorkerMessage; worker.onerror=recoverWorker;
+let serviceRetry = null, serviceStarting = false, serviceStopped = false, serviceRetryDelay = 5000;
 async function startService() {
+  if (serviceStarting || serviceStopped) return;
+  serviceStarting = true;
+  clearTimeout(serviceRetry); serviceRetry = null;
   try {
-    const response = await fetch(new URL('../network.json', import.meta.url), {cache:'no-store'});
+    const response = await fetch(new URL('../network.json', import.meta.url), {cache:'no-store',signal:AbortSignal.timeout(15000)});
     if (!response.ok) throw Error('Missing deployment configuration');
     const config = await response.json();
     const url = new URL(config.endpoint);
     if (url.protocol !== 'wss:' && !(url.protocol === 'ws:' && ['localhost','127.0.0.1','[::1]'].includes(url.hostname))) throw Error('Invalid deployment endpoint');
+    if (serviceStopped) return;
     await rpc('connect',{url:url.href,discoverySeeds:config.discoverySeeds});
+    serviceRetryDelay = 5000;
   } catch {
+    if (serviceStopped) return;
     $('connection-state').textContent = tr('Service unavailable','服务暂不可用');
     $('directory-status').textContent = tr('Please try again later.','请稍后再试。');
-    notice(tr('The map service is temporarily unavailable. No setup is needed on your side.','寻宝地图服务暂时不可用，你无需进行任何网络设置。'));
+    notice(tr('The map service is temporarily unavailable. Retrying automatically…','寻宝地图服务暂时不可用，正在自动重试…'));
+    serviceRetry = setTimeout(startService, serviceRetryDelay);
+    serviceRetryDelay = Math.min(60000, serviceRetryDelay * 2);
+  } finally {
+    serviceStarting = false;
   }
 }
 $('search').onclick=()=>{manualArea=true;return search();};
@@ -284,5 +348,10 @@ map.getContainer().addEventListener('wheel',()=>{manualArea=true;},{passive:true
 const initialLocation=locateNearby();
 startService();
 map.on('moveend',renderMarkers);
-window.addEventListener('pagehide',()=>worker.terminate());
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)liveRefresh.resume();});
+window.addEventListener('online',()=>liveRefresh.resume());
+window.addEventListener('pagehide',()=>{liveRefresh.stop();serviceStopped=true;clearTimeout(serviceRetry);worker.terminate();rejectPending('Page closed');});
+// Back/forward cache restores the document but cannot revive a terminated
+// worker. Reconnect through normal startup instead of leaving dead RPCs.
+window.addEventListener('pageshow',event=>{if(event.persisted)window.location.reload();});
 window.addEventListener('keydown',event=>{if(event.key==='Escape')$('close-detail').click();});

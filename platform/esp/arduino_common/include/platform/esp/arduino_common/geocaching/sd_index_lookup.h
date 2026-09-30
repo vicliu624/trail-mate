@@ -1,0 +1,182 @@
+#pragma once
+#include "platform/esp/arduino_common/geocaching/sd_index_path.h"
+#include "platform/esp/arduino_common/geocaching/sd_volume_read_session.h"
+#include "platform/esp/arduino_common/geocaching/storage_diagnostics.h"
+
+namespace platform::esp::arduino_common::geocaching
+{
+enum class IndexLookupStep : uint8_t
+{
+    Idle,
+    Working,
+    Found,
+    NotFound,
+    Invalid,
+    IoError,
+    VolumeChanged
+};
+
+// Owner supplies the sequence/length of the selected, validated IndexShardHead,
+// not the global journal watermark. Missing
+// expected shards are invalid, not proof of absence. Returned locations remain
+// hints and must pass SdIndexedValueReader before a value is trusted.
+class SdIndexLookup
+{
+  public:
+    SdIndexLookup(const ::geocaching::storage::VolumeInstance& volume, char slot, uint64_t committed_sequence, uint64_t committed_length, SdVolumeReadSession* session = nullptr, bool current_only = false)
+        : volume_(volume), visible_(committed_sequence), position_(committed_length), length_(committed_length), slot_(slot), session_(session), current_only_(current_only) {}
+    bool begin(uint8_t table, ::geocaching::ByteView key)
+    {
+        if (result_ != IndexLookupStep::Idle || (slot_ != 'a' && slot_ != 'b') || table < 1 || table > 13 ||
+            !key.data || !key.size || key.size > key_.size() || length_ % ::geocaching::storage::kIndexEntrySize ||
+            (current_only_ ? visible_ == 0 : ((visible_ == 0) != (length_ == 0)))) return false;
+        table_ = table;
+        key_size_ = key.size;
+        std::memcpy(key_.data(), key.data, key_size_);
+        result_ = IndexLookupStep::Working;
+        return true;
+    }
+    bool result(::geocaching::storage::IndexedMutation& out) const
+    {
+        out = {};
+        if (result_ != IndexLookupStep::Found) return false;
+        out = {table_, {key_.data(), key_size_}, location_, erased_};
+        return true;
+    }
+    uint64_t entryOffset() const { return result_ == IndexLookupStep::Found ? position_ : UINT64_MAX; }
+    IndexLookupStep step()
+    {
+        using namespace ::geocaching::storage;
+        if (result_ != IndexLookupStep::Working) return result_;
+        if (phase_ == Phase::Volume || phase_ == Phase::VerifyVolume)
+        {
+            VolumeInstance current;
+            const auto status = session_ ? session_->inspect(current) : inspectSdVolume(current);
+            if (status == SdVolumeResult::Busy) return result_;
+            if (status != SdVolumeResult::Ready) return fail(IndexLookupStep::IoError);
+            if (current != volume_) return fail(IndexLookupStep::VolumeChanged);
+            if (phase_ == Phase::VerifyVolume) return result_ = completion_;
+            phase_ = length_ ? Phase::Open : Phase::VerifyVolume;
+            return result_;
+        }
+        if (phase_ == Phase::Probe || phase_ == Phase::Open)
+        {
+            char path[96];
+            const IndexShardHead head{1, visible_, length_, table_, static_cast<uint8_t>(::sys::crc32(key_.data(), key_size_)), current_only_};
+            if (!indexShardDataPath(slot_, head, path, sizeof(path))) return fail(IndexLookupStep::Invalid);
+            if (phase_ == Phase::Probe)
+            {
+                const auto probe = storage::sd_read_file(path, bytes_.data(), 1);
+                if (probe.status == storage::SdFileReadStatus::Missing) return fail(IndexLookupStep::Invalid);
+                // Only classify an unsuccessful open. A present file that
+                // could not be opened is an I/O error, never an empty index.
+                return fail(IndexLookupStep::IoError);
+            }
+            // Avoid the old one-byte whole-file probe: normal shards always
+            // exceeded it, logged Invalid, then had to be opened a second time.
+            const bool opened = file_.open(path, "r");
+            if (file_.read_busy()) return result_;
+            phase_ = opened ? Phase::CheckLength : Phase::Probe;
+            return result_;
+        }
+        if (phase_ == Phase::CheckLength)
+        {
+            const auto size = file_.size();
+            if (file_.read_busy()) return result_;
+            if (size < length_ || (current_only_ && size != length_)) return fail(IndexLookupStep::Invalid);
+            phase_ = Phase::Seek;
+            return result_;
+        }
+        if (phase_ == Phase::Seek)
+        {
+            if (!position_)
+            {
+                completion_ = IndexLookupStep::NotFound;
+                phase_ = Phase::CheckSize;
+                return result_;
+            }
+            if (!file_.seek(position_ - kIndexEntrySize)) return file_.read_busy() ? result_ : fail(IndexLookupStep::IoError);
+            position_ -= kIndexEntrySize;
+            read_ = 0;
+            phase_ = Phase::Read;
+            return result_;
+        }
+        if (phase_ == Phase::Read)
+        {
+            const int count = file_.read(bytes_.data() + read_, bytes_.size() - read_);
+            if (file_.read_busy()) return result_;
+            if (count < 0) return fail(IndexLookupStep::IoError);
+            if (!count || static_cast<size_t>(count) > bytes_.size() - read_) return fail(IndexLookupStep::Invalid);
+            read_ += static_cast<uint16_t>(count);
+            if (read_ != bytes_.size()) return result_;
+            IndexedMutation entry;
+            if (!decodeIndexEntry({bytes_.data(), bytes_.size()}, volume_, entry) || entry.location.record_sequence > newer_sequence_ ||
+                entry.location.record_sequence > visible_ || (current_only_ && entry.erase) ||
+                (!current_only_ && first_entry_ && entry.location.record_sequence != visible_) ||
+                entry.table != table_ || (::sys::crc32(entry.key.data, entry.key.size) & 0xff) != (::sys::crc32(key_.data(), key_size_) & 0xff))
+                return fail(IndexLookupStep::Invalid);
+            newer_sequence_ = entry.location.record_sequence;
+            first_entry_ = false;
+            if (entry.location.record_sequence <= visible_ && entry.table == table_ && entry.key.size == key_size_ &&
+                !std::memcmp(entry.key.data, key_.data(), key_size_))
+            {
+                location_ = entry.location;
+                erased_ = entry.erase;
+                completion_ = IndexLookupStep::Found;
+                phase_ = Phase::CheckSize;
+            }
+            else phase_ = Phase::Seek;
+            return result_;
+        }
+        if (phase_ == Phase::CheckSize)
+        {
+            const auto size = file_.size();
+            if (file_.read_busy()) return result_;
+            if (size < length_ || (current_only_ && size != length_)) return fail(IndexLookupStep::Invalid);
+            phase_ = Phase::Close;
+            return result_;
+        }
+        file_.close();
+        phase_ = Phase::VerifyVolume;
+        return result_;
+    }
+
+  private:
+    enum class Phase : uint8_t
+    {
+        Volume,
+        Probe,
+        Open,
+        CheckLength,
+        Seek,
+        Read,
+        CheckSize,
+        Close,
+        VerifyVolume
+    };
+    IndexLookupStep fail(IndexLookupStep value)
+    {
+        if (value == IndexLookupStep::Invalid || value == IndexLookupStep::IoError || value == IndexLookupStep::VolumeChanged)
+            reportIndexReadFailure("lookup", static_cast<unsigned>(phase_), static_cast<unsigned>(value), table_, position_);
+        file_.close();
+        return result_ = value;
+    }
+    ::geocaching::storage::VolumeInstance volume_;
+    ::geocaching::storage::IndexEntryBytes bytes_{};
+    std::array<uint8_t, 96> key_{};
+    ::geocaching::storage::JournalValueLocation location_;
+    uint64_t visible_, position_ = 0, length_ = 0, newer_sequence_ = UINT64_MAX;
+    storage::SdRuntimeFile file_;
+    size_t key_size_ = 0;
+    uint16_t read_ = 0;
+    char slot_;
+    SdVolumeReadSession* session_ = nullptr;
+    uint8_t table_ = 0;
+    bool erased_ = false;
+    bool first_entry_ = true;
+    bool current_only_ = false;
+    Phase phase_ = Phase::Volume;
+    IndexLookupStep result_ = IndexLookupStep::Idle, completion_ = IndexLookupStep::NotFound;
+};
+static_assert(sizeof(SdIndexLookup) <= 384, "Index lookup must not load a whole shard");
+} // namespace platform::esp::arduino_common::geocaching

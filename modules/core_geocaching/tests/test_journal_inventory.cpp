@@ -1,0 +1,120 @@
+#include "platform/esp/arduino_common/geocaching/sd_journal_inventory.h"
+#include <algorithm>
+#include <string>
+#include <vector>
+
+std::vector<std::string> names;
+bool busy_once = false;
+bool fail_after_first = false;
+unsigned volume_busy = 0;
+unsigned volume_reads = 0;
+uint32_t media_session = 1;
+namespace platform::esp::arduino_common::storage
+{
+bool sd_card_ready() { return true; }
+bool sd_external_block_owner_active() { return false; }
+uint32_t sd_media_session() { return media_session; }
+class SdRuntimeDir::Impl
+{
+  public:
+    bool open = false;
+    size_t index = 0;
+};
+SdRuntimeDir::SdRuntimeDir() : impl_(new Impl) {}
+SdRuntimeDir::~SdRuntimeDir() { delete impl_; }
+bool SdRuntimeDir::open(const char*)
+{
+    impl_->open = true;
+    impl_->index = 0;
+    return true;
+}
+void SdRuntimeDir::close() { impl_->open = false; }
+bool SdRuntimeDir::is_open() const { return impl_->open; }
+SdDirReadStatus SdRuntimeDir::read_next_status(char* name, size_t capacity, bool* is_dir)
+{
+    if (busy_once)
+    {
+        busy_once = false;
+        return SdDirReadStatus::Busy;
+    }
+    if (fail_after_first && impl_->index == 1)
+    {
+        fail_after_first = false;
+        ++impl_->index; // A failed read may leave the device cursor uncertain.
+        return SdDirReadStatus::IoError;
+    }
+    if (impl_->index == names.size()) return SdDirReadStatus::End;
+    std::snprintf(name, capacity, "%s", names[impl_->index++].c_str());
+    *is_dir = false;
+    return SdDirReadStatus::Entry;
+}
+SdFileReadResult sd_read_file(const char*, uint8_t* buffer, size_t capacity)
+{
+    ++volume_reads;
+    const auto header = ::geocaching::storage::encodeVolumeHeader({});
+    SdFileReadResult result;
+    if (volume_busy)
+    {
+        --volume_busy;
+        result.status = SdFileReadStatus::Busy;
+        return result;
+    }
+    result.status = SdFileReadStatus::Ready;
+    result.file_size = header.size();
+    result.bytes_read = std::min(capacity, header.size());
+    std::memcpy(buffer, header.data(), result.bytes_read);
+    return result;
+}
+} // namespace platform::esp::arduino_common::storage
+int main()
+{
+    using namespace platform::esp::arduino_common::geocaching;
+    names = {"0000000000000002.gcj", "0000000000000001.gcj"};
+    SdJournalInventory valid({}, 0);
+    if (valid.step() != InventoryStep::Scanning || valid.range().complete ||
+        valid.step() != InventoryStep::Scanning || valid.step() != InventoryStep::Complete || valid.range().last_start != 2) return 1;
+    names = {"0000000000000002.gcj"};
+    SdJournalInventory gap({}, 0);
+    if (gap.step() != InventoryStep::Scanning || gap.step() != InventoryStep::Complete || gap.range().first_start != 1) return 2;
+    SdJournalInventory checkpoint({}, 1);
+    if (checkpoint.step() != InventoryStep::Scanning || checkpoint.step() != InventoryStep::Complete || checkpoint.range().first_start != 2) return 3;
+    names = {"000000000000000A.gcj"};
+    SdJournalInventory invalid({}, 0);
+    if (invalid.step() != InventoryStep::Corrupt) return 4;
+    names = {"0000000000000001.gcj", "0000000000000002.gcj"};
+    SdJournalInventory interrupted({}, 0);
+    busy_once = true;
+    if (interrupted.step() != InventoryStep::Scanning || interrupted.range().complete ||
+        interrupted.step() != InventoryStep::Scanning) return 5;
+    fail_after_first = true;
+    if (interrupted.step() != InventoryStep::RetryLater || interrupted.range().complete) return 6;
+    if (interrupted.step() != InventoryStep::Scanning || interrupted.step() != InventoryStep::Scanning ||
+        interrupted.step() != InventoryStep::Complete || interrupted.range().last_start != 2) return 7;
+    names = {"0000000000000001.gcj", "0000000000000008.gcj"};
+    SdJournalInventory spanning({}, 4);
+    if (spanning.step() != InventoryStep::Scanning || spanning.step() != InventoryStep::Scanning ||
+        spanning.step() != InventoryStep::Complete || spanning.range().first_start != 1 || spanning.range().last_start != 8) return 8;
+    names = {"0000000000000001.gcj", "0000000000000008.gcj"};
+    SdJournalInventory contended({}, 4);
+    volume_busy = 12;
+    for (unsigned i = 0; i < 12; ++i)
+        if (contended.step() != InventoryStep::Scanning || contended.range().complete) return 9;
+    if (contended.step() != InventoryStep::Scanning) return 10;
+    // Once verified, the immutable volume header is not reread per entry.
+    const auto verified_reads = volume_reads;
+    volume_busy = 12;
+    for (unsigned i = 0; i < 12; ++i)
+    {
+        busy_once = true;
+        if (contended.step() != InventoryStep::Scanning || contended.range().complete) return 12;
+    }
+    if (contended.step() != InventoryStep::Scanning || contended.step() != InventoryStep::Complete ||
+        contended.range().first_start != 1 || contended.range().last_start != 8) return 13;
+    if (volume_reads != verified_reads || volume_busy != 12) return 14;
+    volume_busy = 0;
+    SdJournalInventory remounted({}, 0);
+    if (remounted.step() != InventoryStep::Scanning) return 15;
+    ++media_session;
+    if (remounted.step() != InventoryStep::RetryLater || remounted.range().complete) return 16;
+    return 0;
+}

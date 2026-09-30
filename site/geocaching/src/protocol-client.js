@@ -4,6 +4,7 @@ import {LXMessage, LXMRouter} from '@reticulum/lxmf';
 import {APP_TYPE, bytes, decode, encode, equal, integer, validText, validateSummary, verifySigned, viewportBoxes} from './protocol.js';
 import {compressionProvider, MAX_LXMF_BYTES} from './compression.js';
 import {countryContains} from './country-boundaries.js';
+import {createLiveRefresh} from './live-refresh.js';
 
 // These limits apply to the dedicated worker's stack instance, before links
 // are accepted. Large LXMF messages still use normal RNS Resource transport.
@@ -67,12 +68,22 @@ export class DirectoryClient {
     // A long-lived map must recover after a NAS restart or prolonged outage.
     // The interface owns one cancellable retry loop; keep its rate bounded.
     this.interface = new WebSocketClientInterface({url: endpoint.href, framing: 'raw', maxReconnectTries: null, reconnectWait: 15});
+    this.discoveryRefresh=createLiveRefresh({isVisible:()=>true,
+      canRefresh:()=>!this.closed && this.interface.online && !this.pending,
+      refresh:()=>this.enqueue(async()=>{
+        if (this.closed || !this.interface.online || [...this.directories.values()].some(entry=>entry.ready)) return;
+        for (const seed of discoverySeeds) {
+          await this.rns.transport.requestPathAuto(Uint8Array.from(seed.match(/../g),pair=>parseInt(pair,16)));
+        }
+      })});
     this.interface.addEventListener('disconnected', () => {
+      this.discoveryRefresh.setReady(false);
       this.generation++;
       this.pending?.reject(Error('Map connection interrupted'));
       this.notify({type: 'status', state: 'disconnected'});
     });
     this.interface.addEventListener('connected', () => {
+      this.discoveryRefresh.setReady(discoverySeeds.length>0);
       this.notify({type: 'status', state: 'discovering'});
       this.enqueue(async () => {
         await this.router.announce('Trail Mate web visitor');
@@ -144,6 +155,7 @@ export class DirectoryClient {
         ![0,1,2,3,4].every(op => caps[2].includes(op)) || caps[3] !== 8192 || caps[4] !== 4096 ||
         !integer(caps[5], 1, 64) || caps[8] !== 2 || caps[10] !== 1) throw Error('Directory is not compatible');
     entry.ready = true;
+    this.discoveryRefresh?.setReady(false);
     entry.limit = Math.min(20, caps[5]);
     this.notify({type: 'directory', name: entry.name, key: entry.key, count: [...this.directories.values()].filter(d => d.ready).length});
   }
@@ -208,22 +220,44 @@ export class DirectoryClient {
     }
   }
 
-  query(bounds, stateMask = 3, region = null, queryToken = 0) {
+  query(bounds, stateMask = 3, region = null, queryToken = 0, {refresh = false} = {}) {
     if (!integer(stateMask, 1, 7)) return Promise.reject(Error('Invalid state filter'));
     const generation = ++this.generation;
     return this.enqueue(async () => {
-      this.rows.clear(); this.pages = [];
+      const previousPages=refresh ? this.queryPages || [] : [];
+      const nextRows=new Map();
+      if (!refresh) this.rows=nextRows;
+      this.pages = [];
       this.queryToken=queryToken;
       const sources = [...this.directories.values()].filter(d => d.ready).slice(0, 3);
       if (!sources.length) throw Error('No verified public directory is available');
+      const queryPages=[];
       let succeeded = 0;
       for (const directory of sources) for (const bbox of viewportBoxes(bounds)) {
         if (generation !== this.generation) return;
-        const page = {directory, bbox, stateMask, region, cursor: null, snapshot: null, last: null};
-        try { await this.readRegionPage(page, generation); succeeded++; }
+        const page = {directory, bbox, stateMask, region, cursor: null, snapshot: null, last: null,
+          rows:nextRows, background:refresh, reads:0};
+        queryPages.push(page);
+        const previous=previousPages.find(item=>item.directory.key===directory.key &&
+          item.bbox.every((value,index)=>value===bbox[index]));
+        try {
+          await this.readRegionPage(page, generation);
+          // Refresh the number of pages the visitor already opened. Preserve
+          // pagination without automatically crawling the whole directory.
+          while (refresh && generation===this.generation && page.cursor && nextRows.size<500 &&
+            page.reads<(previous?.reads || 1)) {
+            const queued=this.pages.indexOf(page);
+            if(queued>=0)this.pages.splice(queued,1);
+            await this.readPage(page,generation);
+          }
+          succeeded++;
+        }
         catch (error) { this.notify({type: 'source-error', name: directory.name, message: error.message}); }
       }
       if (!succeeded) throw Error('All directory queries failed. Results are not live.');
+      if (generation!==this.generation) return;
+      this.rows=nextRows; this.queryPages=queryPages;
+      for (const page of queryPages) page.background=false;
       this.emitRows(generation);
     });
   }
@@ -235,32 +269,33 @@ export class DirectoryClient {
         result[1].length > page.directory.limit || !(result[2] === null || (result[2] instanceof Uint8Array && result[2].length >= 1 && result[2].length <= 64)) ||
         !integer(result[3], 0, 604800) || (result[2] !== null && !result[1].length) ||
         (page.snapshot && !equal(page.snapshot, result[0]))) throw Error('Invalid query page');
+    const rows=page.rows || this.rows;
     for (const summary of result[1]) {
       validateSummary(summary);
       const id = toHex(summary[0]);
       if (page.last && id <= page.last) throw Error('Directory page order changed');
       page.last = id;
       if (page.region && !countryContains(page.region,summary[4]/1e7,summary[5]/1e7)) continue;
-      const previous = this.rows.get(id);
-      if (!previous && this.rows.size >= 500) break;
+      const previous = rows.get(id);
+      if (!previous && rows.size >= 500) break;
       if (previous && previous.summary[1] === summary[1] && !equal(previous.summary[2], summary[2])) {
         previous.conflict = true; continue;
       }
-      if (!previous || previous.summary[1] < summary[1]) this.rows.set(id, {id, summary, source: page.directory.key,
+      if (!previous || previous.summary[1] < summary[1]) rows.set(id, {id, summary, source: page.directory.key,
         sourceName: page.directory.name, checkedAt: Date.now(), conflict: false});
     }
-    page.snapshot = result[0]; page.cursor = result[2];
-    if (page.cursor && this.rows.size < 500) this.pages.push(page);
-    this.emitRows(generation);
+    page.snapshot = result[0]; page.cursor = result[2]; page.reads=(page.reads || 0)+1;
+    if (page.cursor && rows.size < 500) this.pages.push(page);
+    if (!page.background) this.emitRows(generation);
   }
 
   async readRegionPage(page, generation) {
-    const before=this.rows.size;
+    const rows=page.rows || this.rows, before=rows.size;
     // A rectangular query may start with neighbors or land outside a sea.
     // Advance a bounded batch automatically rather than showing a false end.
     for(let scanned=0;scanned<5;scanned++) {
       await this.readPage(page,generation);
-      if(generation!==this.generation || !page.region || !page.cursor || this.rows.size>before || scanned===4) return;
+      if(generation!==this.generation || !page.region || !page.cursor || rows.size>before || scanned===4) return;
       const queued=this.pages.indexOf(page);
       if(queued>=0)this.pages.splice(queued,1);
     }
@@ -297,6 +332,7 @@ export class DirectoryClient {
 
   async close() {
     this.closed = true; this.generation++;
+    this.discoveryRefresh?.stop();
     this.pending?.reject(Error('Disconnected'));
     await this.interface?.disconnect();
     await this.rns?.stop();

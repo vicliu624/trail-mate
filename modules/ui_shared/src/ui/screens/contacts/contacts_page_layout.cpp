@@ -280,6 +280,8 @@ lv_obj_t* create_list_item(lv_obj_t* parent,
 
         ::ui::i18n::set_label_text(slots.body_main_label, status_text);
         style::apply_label_muted(slots.body_main_label);
+        lv_obj_set_style_text_align(slots.body_main_label, LV_TEXT_ALIGN_RIGHT, 0);
+        lv_obj_set_style_text_font(slots.body_main_label, ::ui::page_profile::resolve_caption_font(), 0);
     }
     else
     {
@@ -310,15 +312,28 @@ lv_obj_t* create_list_item(lv_obj_t* parent,
         }
         else
         {
+            lv_obj_set_height(item, LV_SIZE_CONTENT);
+            lv_obj_set_style_min_height(item, 46, 0);
+            lv_obj_set_flex_flow(item, LV_FLEX_FLOW_COLUMN);
+            lv_obj_set_flex_align(item, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+            lv_obj_set_style_pad_left(item, 8, 0);
+            lv_obj_set_style_pad_right(item, 8, 0);
+            lv_obj_set_style_pad_top(item, 4, 0);
+            lv_obj_set_style_pad_bottom(item, 4, 0);
+            lv_obj_set_style_pad_row(item, 2, 0);
             lv_obj_t* name_label = lv_label_create(item);
             ::ui::i18n::set_content_label_text_raw(name_label, display_name.c_str());
-            lv_obj_align(name_label, LV_ALIGN_LEFT_MID, 10, 0);
             style::apply_label_primary(name_label);
+            lv_obj_set_width(name_label, LV_PCT(100));
+            apply_single_line(name_label);
 
             lv_obj_t* status_label = lv_label_create(item);
             ::ui::i18n::set_label_text(status_label, status_text);
-            lv_obj_align(status_label, LV_ALIGN_RIGHT_MID, -10, 0);
             style::apply_label_muted(status_label);
+            lv_obj_set_width(status_label, LV_PCT(100));
+            lv_obj_set_style_text_align(status_label, LV_TEXT_ALIGN_RIGHT, 0);
+            apply_single_line(status_label);
+            lv_obj_set_style_text_font(status_label, ::ui::page_profile::resolve_caption_font(), 0);
         }
     }
 

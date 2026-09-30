@@ -9,6 +9,8 @@
 #include "chat/domain/chat_types.h"
 #include "chat/domain/reticulum_network_config.h"
 #include "chat/infra/reticulum/reticulum_wire.h"
+#include "chat/infra/reticulum/tcp_retry.h"
+#include "platform/esp/arduino_common/chat/infra/reticulum/interface_access.h"
 #include "platform/esp/arduino_common/chat/infra/rnode/rnode_adapter.h"
 #include "sys/ringbuf.h"
 
@@ -48,6 +50,7 @@ constexpr InterfaceId kInvalidInterfaceId = 0;
 constexpr InterfaceId kLoRaInterfaceId = 1;
 constexpr InterfaceId kAutoInterfaceIdBase = 16;
 constexpr InterfaceId kTcpClientInterfaceIdBase = 32;
+constexpr InterfaceId kDiscoveredTcpInterfaceId = kTcpClientInterfaceIdBase + reticulum::kMaxTcpClientInterfaces;
 
 struct RxPacket
 {
@@ -107,6 +110,15 @@ class WifiGatewayReticulumInterface
                      bool auto_connect_wifi,
                      InterfaceId interface_id);
     void setTransportEnabled(bool enabled);
+    void setSelected(bool selected);
+    bool canAttempt() const;
+    bool stableConnection() const;
+    const reticulum::TcpRetry& retryState() const { return reconnect_; }
+    void restoreRetryState(const reticulum::TcpRetry& retry)
+    {
+        if (!isReady() && !isConnecting()) reconnect_ = retry;
+    }
+    bool isConnecting() const { return socket_open_pending_; }
     void maintain();
     bool isReady() const;
     bool isConfigured() const;
@@ -132,11 +144,11 @@ class WifiGatewayReticulumInterface
     static constexpr uint8_t kHdlcFlag = 0x7E;
     static constexpr uint8_t kHdlcEscape = 0x7D;
     static constexpr uint8_t kHdlcEscapeMask = 0x20;
-    static constexpr uint32_t kReconnectIntervalMs = 10000;
     static constexpr uint32_t kRxStatsLogIntervalMs = 5000;
     static constexpr int32_t kSocketConnectTimeoutMs = 5000;
 
     bool enabled_ = false;
+    bool selected_ = false;
     bool transport_enabled_ = true;
     bool auto_connect_wifi_ = true;
     InterfaceId interface_id_ = kInvalidInterfaceId;
@@ -144,7 +156,7 @@ class WifiGatewayReticulumInterface
     uint16_t port_ = 4242;
     bool socket_online_ = false;
     bool socket_open_pending_ = false;
-    uint32_t last_reconnect_ms_ = 0;
+    reticulum::TcpRetry reconnect_;
     uint32_t last_socket_read_ms_ = 0;
     bool hdlc_in_frame_ = false;
     bool hdlc_escape_ = false;
@@ -155,8 +167,10 @@ class WifiGatewayReticulumInterface
     uint32_t rx_stats_drops_ = 0;
     uint32_t rx_stats_bytes_ = 0;
     uint32_t rx_stats_read_skips_ = 0;
-    uint8_t hdlc_frame_[reticulum::kReticulumMtu] = {};
-    uint8_t tx_frame_[(reticulum::kReticulumMtu * 2U) + 2U] = {};
+    static constexpr size_t kMaxWirePacketSize = reticulum::kReticulumMtu + reticulum::IfacCodec::kMaxTagSize;
+    reticulum::InterfaceAccess access_;
+    uint8_t hdlc_frame_[kMaxWirePacketSize] = {};
+    uint8_t tx_frame_[(kMaxWirePacketSize * 2U) + 2U] = {};
     uint8_t socket_rx_scratch_[256] = {};
     QueuedPacket poll_scratch_{};
     QueuedPacket enqueue_scratch_{};
@@ -258,12 +272,25 @@ class AutoReticulumInterface
 class ReticulumInterfaceSet
 {
   public:
-    explicit ReticulumInterfaceSet(LoraBoard& board);
+    explicit ReticulumInterfaceSet(LoraBoard& board, bool owns_integrated_radio = true);
 
     void applyConfig(const MeshConfig& config,
                      const reticulum::ReticulumNetworkConfig& network_config);
     void setWifiTransportEnabled(bool enabled);
-    void maintain();
+    void maintain(bool allow_bootstrap_handoff = false);
+    InterfaceId activeTcpInterfaceId() const
+    {
+        return active_tcp_ < tcp_count_ ? tcp_[active_tcp_].interfaceId() : kInvalidInterfaceId;
+    }
+    bool canReplaceDiscoveredGateway(const char* host, uint16_t port) const;
+    bool discoveredGatewayStable() const { return tcp_[reticulum::kMaxTcpClientInterfaces].stableConnection(); }
+    const reticulum::TcpRetry& discoveredGatewayRetry() const { return tcp_[reticulum::kMaxTcpClientInterfaces].retryState(); }
+    void restoreDiscoveredGatewayRetry(const reticulum::TcpRetry& retry)
+    {
+        tcp_[reticulum::kMaxTcpClientInterfaces].restoreRetryState(retry);
+    }
+    // Caller retires routes/links for kDiscoveredTcpInterfaceId before replacing.
+    void replaceDiscoveredGateway(const char* host, uint16_t port, bool previously_stable = false);
     bool hasReadyInterface() const;
     bool hasReadyWifiGateway() const;
     bool wifiGatewayConfigured() const;
@@ -290,16 +317,22 @@ class ReticulumInterfaceSet
 
   private:
     LoRaReticulumInterface lora_;
+    const bool owns_integrated_radio_;
     AutoReticulumInterface auto_;
     std::array<WifiGatewayReticulumInterface,
-               reticulum::kMaxTcpClientInterfaces>
+               reticulum::kMaxTcpClientInterfaces + 1>
         tcp_{};
+    reticulum::NetworkInterfaceConfig discovered_config_{};
+    bool bootstrap_trial_started_ = false;
+    bool prefer_discovered_ = false;
     MeshConfig config_{};
     reticulum::ReticulumNetworkConfig network_config_{};
     RxMeta last_rx_meta_{};
     TxResult last_tx_result_{};
     bool has_last_rx_meta_ = false;
     uint8_t tcp_count_ = 0;
+    uint8_t active_tcp_ = UINT8_MAX;
+    uint8_t next_tcp_ = 0;
     uint8_t next_poll_index_ = 0;
     bool shared_lora_rx_suppressed_ = false;
 

@@ -70,7 +70,8 @@ int main()
     // A tap must not generate a drag or leave the loader's pressed gate set.
     feed(100, 100, LV_INDEV_STATE_PRESSED);
     feed(100, 100, LV_INDEV_STATE_RELEASED);
-    assert(events.size() == 1 && events[0].phase == GesturePhase::Pressed);
+    assert(events.size() == 2 && events[0].phase == GesturePhase::Pressed && events[1].phase == GesturePhase::Tapped);
+    assert(events[1].point.x == 100 && events[1].point.y == 100);
     assert(!runtime.gesture_pressed && !runtime.gesture_dragging);
 
     // Real LVGL pointer dispatch, including repeated drags and moving outside
@@ -84,7 +85,10 @@ int main()
         feed(cycle % 2 ? 400 : 180, 140, LV_INDEV_STATE_RELEASED);
         unsigned ended = 0;
         for (const auto& event : events)
+        {
+            assert(event.phase != GesturePhase::Tapped);
             ended += event.phase == GesturePhase::DragEnd || event.phase == GesturePhase::Cancel;
+        }
         if (runtime.gesture_pressed || runtime.gesture_dragging || ended != 1)
         {
             std::fprintf(stderr, "release lost: cycle=%d pressed=%d dragging=%d ended=%u\n",

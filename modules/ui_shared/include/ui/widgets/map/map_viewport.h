@@ -85,6 +85,7 @@ enum class GesturePhase : uint8_t
     DragUpdate,
     DragEnd,
     Cancel,
+    Tapped,
 };
 
 struct GestureEvent

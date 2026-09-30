@@ -1,4 +1,5 @@
 #include "platform/esp/arduino_common/storage/storage_runtime.h"
+#include "platform/esp/arduino_common/geocaching/browse_runtime.h"
 
 #include "platform/esp/arduino_common/chat/infra/store/sd_protocol_peer_repository.h"
 #include "platform/esp/arduino_common/chat/infra/store/sd_store.h"
@@ -70,7 +71,26 @@ class SdMaintenanceAdapter final : public Adapter
 
     Result begin(Operation operation, OperationGeneration generation) override
     {
+        // A retry keeps the backend's logical cursor and lease. Fairness may
+        // choose another service only for a new owner generation; otherwise a
+        // Geocaching slice could complete a generation still held by chat/peers.
+        const bool retry = operation == previous_operation_ && generation == previous_generation_;
+        previous_operation_ = operation;
+        previous_generation_ = generation;
         next_step_ = Step::None;
+        if (!retry && operation == Operation::Persist && geocaching::browse_runtime::workPending())
+        {
+            const bool other_pending = (context_.chat_store && context_.chat_store->persistencePending()) ||
+                                       (context_.peer_directory && context_.peer_directory->persistencePending());
+            if (geocaching_turn_ || !other_pending)
+            {
+                geocaching_turn_ = false;
+                geocaching_steps_ = 8;
+                next_step_ = Step::Geocaching;
+                return Result::inProgressResult(operation, generation);
+            }
+        }
+        geocaching_turn_ = true;
         if (operation == Operation::Hydrate)
         {
             const Result chat_result = hydrateChat(generation);
@@ -144,6 +164,20 @@ class SdMaintenanceAdapter final : public Adapter
                     budget) override
     {
         const Step step = next_step_;
+        if (step == Step::Geocaching)
+        {
+            if (budget.max_work_items == 0) return Result::inProgressResult(operation, generation);
+            if (geocaching::browse_runtime::workPending()) geocaching::browse_runtime::step();
+            // Finish the bounded batch even when contacts keep becoming dirty.
+            // Otherwise one tiny index read alternates with a full persistence
+            // operation. begin() gives chat/peers the next turn after this batch.
+            // Each slice still returns to the owner and obeys its work budget.
+            if (geocaching_steps_) --geocaching_steps_;
+            if (geocaching_steps_ && geocaching::browse_runtime::workPending())
+                return Result::inProgressResult(operation, generation);
+            next_step_ = Step::None;
+            return Result::completedResult(operation, generation);
+        }
         if (step == Step::Chat)
         {
             if (!context_.chat_store)
@@ -248,6 +282,7 @@ class SdMaintenanceAdapter final : public Adapter
         HydratePeer,
         PersistPeer,
         CompactPeer,
+        Geocaching,
     };
 
     Result hydrateChat(OperationGeneration generation)
@@ -287,7 +322,11 @@ class SdMaintenanceAdapter final : public Adapter
     }
 
     WorkerContext& context_;
+    Operation previous_operation_ = Operation::None;
+    OperationGeneration previous_generation_ = 0;
     Step next_step_ = Step::None;
+    bool geocaching_turn_ = true;
+    uint8_t geocaching_steps_ = 0;
 };
 
 SdMaintenanceAdapter s_adapter(s_context);
@@ -324,6 +363,7 @@ void ownerStarted(void*,
                   Operation operation,
                   OperationGeneration generation)
 {
+    if (operation == Operation::Persist) return;
     Serial.printf("[Storage] owner begin mode=%s generation=%lu active_protocol=%u\n",
                   operationName(operation),
                   static_cast<unsigned long>(generation),
@@ -337,6 +377,10 @@ void ownerFinished(void*,
                    uint32_t elapsed_ms,
                    uint32_t stack_free_bytes)
 {
+    // Geocaching schedules small persistence steps continuously. Keep errors
+    // and stalls visible without printing two lines for every successful step.
+    if (operation == Operation::Persist && elapsed_ms < 1000 &&
+        (result == ResultKind::Completed || result == ResultKind::InProgress)) return;
     Serial.printf("[Storage] owner end mode=%s generation=%lu ok=%u result=%u "
                   "elapsed_ms=%lu stack_free_bytes=%lu\n",
                   operationName(operation),
@@ -407,6 +451,7 @@ void tick_deferred_storage()
 
     Demand demand{};
     demand.persistence_pending =
+        geocaching::browse_runtime::workPending() ||
         (s_context.chat_store &&
          s_context.chat_store->persistencePending()) ||
         (s_context.peer_directory &&

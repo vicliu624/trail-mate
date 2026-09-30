@@ -11,6 +11,7 @@
 namespace chat
 {
 class IIncomingDeliveryCommitPort;
+class IGeocachingTransport;
 
 namespace meshcore
 {
@@ -63,6 +64,7 @@ struct ReticulumLocalIdentityInfo
 class IMeshAdapter
 {
   public:
+    virtual IGeocachingTransport* geocachingTransport() { return nullptr; }
     virtual ~IMeshAdapter() = default;
 
     /**

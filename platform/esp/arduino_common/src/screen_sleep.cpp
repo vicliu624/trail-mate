@@ -135,7 +135,8 @@ void dispatch_event(Event event)
     }
     effects = s_machine.dispatch(event, now_ms());
     xSemaphoreGive(s_state_mutex);
-    if (event == Event::Input || event == Event::ConfirmInput || event == Event::InputRelease)
+    if (before.state != s_machine.snapshot().state || effects.wake_display || effects.sleep_display ||
+        effects.show_saver || effects.show_main_menu)
     {
         const Snapshot after = s_machine.snapshot();
         std::printf("[ScreenPower] event=%u state=%u->%u effects wake=%u sleep=%u saver=%u menu=%u\n",

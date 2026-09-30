@@ -524,6 +524,7 @@ if(BUILD_TESTING)
         "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_deferred_discovery_queue.cpp")
     target_include_directories(trailmate_lxmf_deferred_discovery_queue_smoke
         PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/third_party/rweather_crypto"
             "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/include"
             "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/include"
@@ -549,6 +550,7 @@ if(BUILD_TESTING)
         "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/src/chat/infra/store/protocol_chat_codec.cpp")
     target_include_directories(trailmate_protocol_chat_storage_v2_codec_smoke
         PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include"
             "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/include")
     target_compile_features(trailmate_protocol_chat_storage_v2_codec_smoke
@@ -562,6 +564,7 @@ if(BUILD_TESTING)
         "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/src/chat/infra/store/protocol_chat_codec.cpp")
     target_include_directories(trailmate_protocol_peer_storage_v2_codec_smoke
         PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include"
             "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/include")
     target_compile_features(trailmate_protocol_peer_storage_v2_codec_smoke
@@ -702,6 +705,9 @@ if(BUILD_TESTING)
     add_test(NAME trailmate_reticulum_wifi_gateway_pending_contract_smoke
              COMMAND trailmate_reticulum_wifi_gateway_pending_contract_smoke
                      "${TRAIL_MATE_REPO_ROOT}")
+
+    add_subdirectory("${TRAIL_MATE_REPO_ROOT}/tests/reticulum_gateway"
+                     "${CMAKE_CURRENT_BINARY_DIR}/reticulum_gateway")
 
     add_executable(trailmate_mt_dedup_smoke
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/tests/test_mt_dedup.cpp"
@@ -1442,6 +1448,7 @@ if(BUILD_TESTING)
         "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/platform/linux/runtime_paths.cpp")
     target_include_directories(trailmate_team_map_overlay_source_smoke
         PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_map_runtime/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
@@ -1681,6 +1688,7 @@ if(BUILD_TESTING)
         "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/src/sys/clock.cpp")
     target_include_directories(trailmate_team_chat_action_sink_smoke
         PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/include"
@@ -1701,6 +1709,7 @@ if(BUILD_TESTING)
         "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/platform/linux/runtime_paths.cpp")
     target_include_directories(trailmate_team_chat_presentation_source_smoke
         PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/include"
@@ -1737,6 +1746,7 @@ if(BUILD_TESTING)
         "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/src/sys/clock.cpp")
     target_include_directories(trailmate_team_action_runtime_sink_smoke
         PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/include"

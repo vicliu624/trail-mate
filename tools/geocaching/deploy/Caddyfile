@@ -1,0 +1,9 @@
+# Replace this reserved example hostname with the operator's real DNS name.
+geocaching.example.org {
+    handle /rns {
+        reverse_proxy 127.0.0.1:8787
+    }
+    handle {
+        respond "Not found" 404
+    }
+}

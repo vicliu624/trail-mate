@@ -65,6 +65,10 @@ Effects StateMachine::dispatch(Event event, std::uint32_t now_ms)
         return {};
 
     case Event::Tick:
+        if (timeout_ms_ == kAlwaysOnTimeoutMs)
+        {
+            return state_ == State::Awake ? Effects{} : enter_awake();
+        }
         if (sleep_disable_depth_ != 0)
         {
             return {};

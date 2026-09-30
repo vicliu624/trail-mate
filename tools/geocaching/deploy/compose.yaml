@@ -1,0 +1,92 @@
+name: trail-mate-geocaching
+
+x-runtime: &runtime
+  image: trail-mate-geocaching:local
+  build:
+    context: ../../..
+    dockerfile: tools/geocaching/deploy/Dockerfile
+  restart: unless-stopped
+  init: true
+  read_only: true
+  tmpfs:
+    - /tmp:size=32m,mode=1777
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  logging:
+    driver: json-file
+    options:
+      max-size: "5m"
+      max-file: "3"
+
+services:
+  directory:
+    <<: *runtime
+    # Bridge shares this namespace; publish only its TLS listener.
+    ports:
+      - "${WSS_PORT:-18434}:8787/tcp"
+    command:
+      - python
+      - directory_service.py
+      - --state
+      - /var/lib/trail-mate/directory
+      - --rns-config
+      - /var/lib/trail-mate/reticulum
+      - --name
+      - ${DIRECTORY_NAME:-Trail Mate public directory}
+    volumes:
+      - directory-data:/var/lib/trail-mate/directory
+      - reticulum-data:/var/lib/trail-mate/reticulum
+      - ./reticulum/config:/var/lib/trail-mate/reticulum/config:ro
+    healthcheck:
+      test: [CMD, python, -c, "import socket; socket.create_connection(('127.0.0.1',44242),3).close()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    stop_grace_period: 40s
+
+  bridge:
+    <<: *runtime
+    network_mode: service:directory
+    depends_on:
+      directory:
+        condition: service_healthy
+        restart: true
+    command:
+      - python
+      - packet_bridge.py
+      - --listen
+      - 0.0.0.0
+      - --port
+      - "8787"
+      - --tcp-host
+      - 127.0.0.1
+      - --tcp-port
+      - "44242"
+      - --origin
+      - ${SITE_ORIGIN:-https://vicliu624.github.io}
+      - --max-clients
+      - "32"
+      - --tls-cert
+      - /certs/fullchain.pem
+      - --tls-key
+      - /certs/privkey.pem
+    volumes:
+      - type: bind
+        source: ${TLS_CERT_DIR:-./certs}
+        target: /certs
+        read_only: true
+        bind:
+          create_host_path: false
+    healthcheck:
+      test: [CMD, python, -c, "import os,socket,ssl; c=ssl.create_default_context().wrap_socket(socket.create_connection(('127.0.0.1',8787),3),server_hostname=os.environ['WSS_HOST']); c.close()"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    environment:
+      WSS_HOST: ${WSS_HOST:-vicliu.i234.me}
+
+volumes:
+  directory-data:
+  reticulum-data:

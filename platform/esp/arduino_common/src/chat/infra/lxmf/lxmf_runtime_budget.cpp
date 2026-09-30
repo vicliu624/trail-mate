@@ -65,7 +65,9 @@ RuntimeBudget makeRuntimeBudget(const RuntimeBudgetInput& input)
         budget.allow_persistence = false;
         budget.allow_peer_projection = false;
         budget.allow_announce_tx = false;
-        budget.allow_propagation_client = false;
+        // Screen presentation must not freeze queued uploads or their expiry.
+        // The client already advances stamp work incrementally and limits sync.
+        budget.allow_propagation_client = true;
         budget.drop_public_discovery = true;
         budget.phase = "saver";
         return budget;

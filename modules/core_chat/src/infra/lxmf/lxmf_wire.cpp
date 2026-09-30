@@ -903,6 +903,36 @@ bool encodeTextPayload(double timestamp,
     return true;
 }
 
+bool encodeCustomDataPayload(double timestamp, const char* title, const char* content,
+                             const char* custom_type, ByteSpan custom_data,
+                             uint8_t* out_payload, size_t* inout_len)
+{
+    if (!inout_len) return false;
+    const size_t capacity = *inout_len;
+    *inout_len = 0;
+    if (!out_payload || !custom_type || !custom_type[0] ||
+        (!custom_data.data && custom_data.size) || custom_data.size > 65535) return false;
+    const auto* title_bytes = reinterpret_cast<const uint8_t*>(title ? title : "");
+    const auto* content_bytes = reinterpret_cast<const uint8_t*>(content ? content : "");
+    const auto* type_bytes = reinterpret_cast<const uint8_t*>(custom_type);
+    const size_t title_len = title ? strlen(title) : 0;
+    const size_t content_len = content ? strlen(content) : 0;
+    const size_t type_len = strlen(custom_type);
+    if (title_len > 65535 || content_len > 65535 || type_len > 65535) return false;
+    size_t used = 0;
+    if (!appendArrayHeader(4, out_payload, capacity, used) ||
+        !appendFloat64(timestamp, out_payload, capacity, used) ||
+        !appendBin(title_bytes, title_len, out_payload, capacity, used) ||
+        !appendBin(content_bytes, content_len, out_payload, capacity, used) ||
+        !appendMapHeader(2, out_payload, capacity, used) ||
+        !appendUint(0xfb, out_payload, capacity, used) ||
+        !appendString(type_bytes, type_len, out_payload, capacity, used) ||
+        !appendUint(0xfc, out_payload, capacity, used) ||
+        !appendBin(custom_data.data, custom_data.size, out_payload, capacity, used)) return false;
+    *inout_len = used;
+    return true;
+}
+
 bool encodeSidebandTelemetryLocationPayload(
     double message_timestamp,
     const SidebandTelemetryLocation& location,
@@ -1234,24 +1264,26 @@ bool encodeResourceAdvertisement(uint32_t transfer_size,
     }
 
     size_t used = 0;
+    // Python Reticulum reads these fields by text key. Binary map keys make
+    // ResourceAdvertisement.unpack fail and the receiver closes the link.
     if (!appendMapHeader(11, out_payload, *inout_len, used) ||
-        !appendBin(reinterpret_cast<const uint8_t*>("t"), 1, out_payload, *inout_len, used) ||
+        !appendString(reinterpret_cast<const uint8_t*>("t"), 1, out_payload, *inout_len, used) ||
         !appendUint(transfer_size, out_payload, *inout_len, used) ||
-        !appendBin(reinterpret_cast<const uint8_t*>("d"), 1, out_payload, *inout_len, used) ||
+        !appendString(reinterpret_cast<const uint8_t*>("d"), 1, out_payload, *inout_len, used) ||
         !appendUint(data_size, out_payload, *inout_len, used) ||
-        !appendBin(reinterpret_cast<const uint8_t*>("n"), 1, out_payload, *inout_len, used) ||
+        !appendString(reinterpret_cast<const uint8_t*>("n"), 1, out_payload, *inout_len, used) ||
         !appendUint(part_count, out_payload, *inout_len, used) ||
-        !appendBin(reinterpret_cast<const uint8_t*>("h"), 1, out_payload, *inout_len, used) ||
+        !appendString(reinterpret_cast<const uint8_t*>("h"), 1, out_payload, *inout_len, used) ||
         !appendBin(resource_hash, reticulum::kFullHashSize, out_payload, *inout_len, used) ||
-        !appendBin(reinterpret_cast<const uint8_t*>("r"), 1, out_payload, *inout_len, used) ||
+        !appendString(reinterpret_cast<const uint8_t*>("r"), 1, out_payload, *inout_len, used) ||
         !appendBin(random_hash, 4, out_payload, *inout_len, used) ||
-        !appendBin(reinterpret_cast<const uint8_t*>("o"), 1, out_payload, *inout_len, used) ||
+        !appendString(reinterpret_cast<const uint8_t*>("o"), 1, out_payload, *inout_len, used) ||
         !appendBin(original_hash, reticulum::kFullHashSize, out_payload, *inout_len, used) ||
-        !appendBin(reinterpret_cast<const uint8_t*>("i"), 1, out_payload, *inout_len, used) ||
+        !appendString(reinterpret_cast<const uint8_t*>("i"), 1, out_payload, *inout_len, used) ||
         !appendUint(segment_index, out_payload, *inout_len, used) ||
-        !appendBin(reinterpret_cast<const uint8_t*>("l"), 1, out_payload, *inout_len, used) ||
+        !appendString(reinterpret_cast<const uint8_t*>("l"), 1, out_payload, *inout_len, used) ||
         !appendUint(total_segments, out_payload, *inout_len, used) ||
-        !appendBin(reinterpret_cast<const uint8_t*>("q"), 1, out_payload, *inout_len, used))
+        !appendString(reinterpret_cast<const uint8_t*>("q"), 1, out_payload, *inout_len, used))
     {
         return false;
     }
@@ -1268,9 +1300,9 @@ bool encodeResourceAdvertisement(uint32_t transfer_size,
         return false;
     }
 
-    if (!appendBin(reinterpret_cast<const uint8_t*>("f"), 1, out_payload, *inout_len, used) ||
+    if (!appendString(reinterpret_cast<const uint8_t*>("f"), 1, out_payload, *inout_len, used) ||
         !appendUint(flags, out_payload, *inout_len, used) ||
-        !appendBin(reinterpret_cast<const uint8_t*>("m"), 1, out_payload, *inout_len, used) ||
+        !appendString(reinterpret_cast<const uint8_t*>("m"), 1, out_payload, *inout_len, used) ||
         !appendBin(hashmap, hashmap_len, out_payload, *inout_len, used))
     {
         return false;
@@ -2472,8 +2504,15 @@ bool unpackTextPayload(const uint8_t* data, size_t len, DecodedTextPayload* out_
         if (numeric_key &&
             (field_key == kFieldTelemetry ||
              field_key == kFieldTelemetryStream ||
-             field_key == kFieldCommands))
+             field_key == kFieldCommands ||
+             field_key == kFieldCustomType ||
+             field_key == kFieldCustomData))
         {
+            if ((field_key == kFieldCustomType && cursor.pos - value_start > 258) ||
+                (field_key == kFieldCustomData && cursor.pos - value_start > 8195))
+            {
+                return false;
+            }
             DecodedField field{};
             field.key = field_key;
             field.encoded_value.assign(data + value_start, data + cursor.pos);
@@ -2507,6 +2546,43 @@ bool unpackTextPayload(const uint8_t* data, size_t len, DecodedTextPayload* out_
 
     *out_payload = std::move(decoded);
     return true;
+}
+
+CustomDataResult extractCustomData(const DecodedTextPayload& payload,
+                                   ByteSpan* out_type, ByteSpan* out_data)
+{
+    if (!out_type || !out_data) return CustomDataResult::Invalid;
+    *out_type = {};
+    *out_data = {};
+    const DecodedField* type = nullptr;
+    const DecodedField* data = nullptr;
+    for (const auto& field : payload.fields)
+    {
+        if (field.key == kFieldCustomType)
+        {
+            if (type) return CustomDataResult::Invalid;
+            type = &field;
+        }
+        if (field.key == kFieldCustomData)
+        {
+            if (data) return CustomDataResult::Invalid;
+            data = &field;
+        }
+    }
+    if (!type && !data) return CustomDataResult::NotCustom;
+    if (!type || !data || type->encoded_value.empty() || data->encoded_value.empty()) return CustomDataResult::Invalid;
+    const uint8_t type_tag = type->encoded_value[0];
+    const uint8_t data_tag = data->encoded_value[0];
+    if (!((type_tag & 0xe0) == 0xa0 || type_tag == 0xd9 || type_tag == 0xda) ||
+        !(data_tag == 0xc4 || data_tag == 0xc5)) return CustomDataResult::Invalid;
+    Cursor tc{type->encoded_value.data(), type->encoded_value.size(), 0};
+    Cursor dc{data->encoded_value.data(), data->encoded_value.size(), 0};
+    ByteSpan tv, dv;
+    if (!readBinarySpan(tc, &tv.data, &tv.size) || tc.pos != tc.len || tv.size == 0 || tv.size > 96 ||
+        !readBinarySpan(dc, &dv.data, &dv.size) || dc.pos != dc.len || dv.size > 8192) return CustomDataResult::Invalid;
+    *out_type = tv;
+    *out_data = dv;
+    return CustomDataResult::Valid;
 }
 
 const DecodedField* findField(const DecodedTextPayload& payload, uint32_t key)

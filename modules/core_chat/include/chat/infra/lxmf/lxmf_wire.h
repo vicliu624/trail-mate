@@ -18,6 +18,8 @@ namespace chat::lxmf
 constexpr uint32_t kFieldTelemetry = 0x02;
 constexpr uint32_t kFieldTelemetryStream = 0x03;
 constexpr uint32_t kFieldCommands = 0x09;
+constexpr uint32_t kFieldCustomType = 0xFB;
+constexpr uint32_t kFieldCustomData = 0xFC;
 
 struct DecodedField
 {
@@ -35,6 +37,13 @@ struct ByteSpanList
 {
     const ByteSpan* items = nullptr;
     size_t size = 0;
+};
+
+enum class CustomDataResult : uint8_t
+{
+    NotCustom,
+    Invalid,
+    Valid,
 };
 
 using BinItemCallback = bool (*)(const uint8_t* data,
@@ -201,6 +210,11 @@ bool encodeTextPayload(double timestamp,
                        const char* content,
                        uint8_t* out_payload,
                        size_t* inout_len);
+
+// Standard custom fields: type is MessagePack str; data is MessagePack bin.
+bool encodeCustomDataPayload(double timestamp, const char* title, const char* content,
+                             const char* custom_type, ByteSpan custom_data,
+                             uint8_t* out_payload, size_t* inout_len);
 
 bool encodeAppDataPayload(uint32_t portnum,
                           uint32_t packet_id,
@@ -390,6 +404,9 @@ bool encodeSidebandTelemetryLocationPayload(
     uint8_t* out_payload,
     size_t* inout_len);
 const DecodedField* findField(const DecodedTextPayload& payload, uint32_t key);
+// Output borrows payload.fields storage; reject duplicate and wrong-type fields.
+CustomDataResult extractCustomData(const DecodedTextPayload& payload,
+                                   ByteSpan* out_type, ByteSpan* out_data);
 bool decodeSidebandTelemetryLocation(const DecodedTextPayload& payload,
                                      SidebandTelemetryLocation* out_location);
 bool decodeSidebandTelemetryRequest(const DecodedTextPayload& payload,

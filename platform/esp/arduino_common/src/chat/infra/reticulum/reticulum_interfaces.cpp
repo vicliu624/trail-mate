@@ -5,6 +5,7 @@
 
 #include "platform/esp/arduino_common/chat/infra/reticulum/reticulum_interfaces.h"
 
+#include "chat/infra/reticulum/public_gateway_host.h"
 #include "chat/time_utils.h"
 #if defined(ARDUINO)
 #include "platform/esp/arduino_common/app_tasks.h"
@@ -233,13 +234,15 @@ void WifiGatewayReticulumInterface::applyConfig(
              next_enabled ? config->target_host : nullptr);
     const uint16_t next_port =
         next_enabled && config->target_port != 0 ? config->target_port : 4242;
+    static constexpr reticulum::InterfaceAccessConfig public_access{};
+    const auto& next_access = next_enabled ? config->access : public_access;
 
     const bool changed = next_enabled != enabled_ ||
                          interface_id != interface_id_ ||
                          next_port != port_ ||
-                         std::strcmp(next_host, host_) != 0;
+                         std::strcmp(next_host, host_) != 0 || !access_.matches(next_access);
 
-    enabled_ = next_enabled;
+    enabled_ = access_.configure(next_access) && next_enabled;
     auto_connect_wifi_ = auto_connect_wifi;
     interface_id_ = next_enabled ? interface_id : kInvalidInterfaceId;
     copyHost(host_, sizeof(host_), next_host);
@@ -248,11 +251,12 @@ void WifiGatewayReticulumInterface::applyConfig(
     if (changed)
     {
         stop();
-        last_reconnect_ms_ = 0;
+        reconnect_.reset();
         hdlc_in_frame_ = false;
         hdlc_escape_ = false;
         hdlc_frame_len_ = 0;
         rx_queue_.clear();
+        rx_priority_queue_.clear();
     }
 
     Serial.printf("[Reticulum][IF][TCP] id=%u enabled=%s host=%s port=%u auto_wifi=%s available=%s\n",
@@ -270,12 +274,13 @@ void WifiGatewayReticulumInterface::setTransportEnabled(bool enabled)
     if (!transport_enabled_)
     {
         stop();
-        last_reconnect_ms_ = 0;
+        reconnect_.reset();
     }
 }
 
 void WifiGatewayReticulumInterface::maintain()
 {
+    if (!selected_) return;
     if (!transport_enabled_ || !enabled_)
     {
         stop();
@@ -291,6 +296,7 @@ void WifiGatewayReticulumInterface::maintain()
     syncSocketState();
     if (connected())
     {
+        reconnect_.connected(millis());
         readAvailable();
         return;
     }
@@ -307,7 +313,24 @@ void WifiGatewayReticulumInterface::maintain()
 
 bool WifiGatewayReticulumInterface::isReady() const
 {
-    return transport_enabled_ && enabled_ && host_[0] != '\0' && socket_online_;
+    return selected_ && transport_enabled_ && enabled_ && host_[0] != '\0' && socket_online_;
+}
+
+void WifiGatewayReticulumInterface::setSelected(bool selected)
+{
+    if (selected_ == selected) return;
+    selected_ = selected;
+    if (!selected_) stop(); // Preserve this endpoint's failure backoff.
+}
+
+bool WifiGatewayReticulumInterface::canAttempt() const
+{
+    return transport_enabled_ && enabled_ && host_[0] != '\0' && reconnect_.ready(millis());
+}
+
+bool WifiGatewayReticulumInterface::stableConnection() const
+{
+    return isReady() && reconnect_.stable(millis());
 }
 
 bool WifiGatewayReticulumInterface::isConfigured() const
@@ -346,11 +369,17 @@ bool WifiGatewayReticulumInterface::sendPacket(const uint8_t* data,
         return false;
     }
 
+    // Put the packet in the upper half and expand HDLC into the lower half.
+    // Even a fully escaped packet cannot overtake the next unread source byte.
+    uint8_t* const wire = tx_frame_ + kMaxWirePacketSize + 2U;
+    std::memcpy(wire, data, len);
+    size_t wire_len = len;
+    if (!access_.encode(wire, wire_len, kMaxWirePacketSize)) return false;
     size_t tx_len = 0;
     tx_frame_[tx_len++] = kHdlcFlag;
-    for (size_t i = 0; i < len && tx_len + 2U < sizeof(tx_frame_); ++i)
+    for (size_t i = 0; i < wire_len; ++i)
     {
-        const uint8_t byte = data[i];
+        const uint8_t byte = wire[i];
         if (byte == kHdlcFlag || byte == kHdlcEscape)
         {
             tx_frame_[tx_len++] = kHdlcEscape;
@@ -436,6 +465,7 @@ bool WifiGatewayReticulumInterface::pollPacket(RxPacket* out)
 
 void WifiGatewayReticulumInterface::stop()
 {
+    reconnect_.disconnected();
 #if TRAIL_MATE_RETICULUM_WIFI_CLIENT_AVAILABLE
     connector_.cancel();
     client_.stop();
@@ -465,6 +495,7 @@ void WifiGatewayReticulumInterface::syncSocketState()
         client_.stop();
         socket_online_ = false;
         socket_open_pending_ = false;
+        reconnect_.failed(millis());
     }
 #elif TRAIL_MATE_RETICULUM_C6_TCP_AVAILABLE
     using ::platform::esp::idf_common::wireless_companion::WifiTcpState;
@@ -495,6 +526,7 @@ void WifiGatewayReticulumInterface::syncSocketState()
 
     if (socket_online_ || socket_open_pending_)
     {
+        reconnect_.failed(millis());
         Serial.printf("[Reticulum][IF][WiFi] gateway disconnected host=%s port=%u state=%u error=%u detail=%s\n",
                       host_,
                       static_cast<unsigned>(port_),
@@ -526,9 +558,7 @@ bool WifiGatewayReticulumInterface::ensureSocket()
 #else
         false;
 #endif
-    if (!socket_connect_pending &&
-        last_reconnect_ms_ != 0 &&
-        (now_ms - last_reconnect_ms_) < kReconnectIntervalMs)
+    if (!socket_connect_pending && !reconnect_.ready(now_ms))
     {
         return false;
     }
@@ -562,12 +592,12 @@ bool WifiGatewayReticulumInterface::ensureSocket()
 
         if (!wifi_status.connected)
         {
-            last_reconnect_ms_ = now_ms;
+            stop();
+            reconnect_.defer(now_ms);
             return false;
         }
     }
 
-    last_reconnect_ms_ = now_ms;
     platform::ui::wifi_access::Request socket_request{};
     socket_request.client = platform::ui::wifi_access::Client::ReticulumGateway;
     socket_request.kind = platform::ui::wifi_access::AccessKind::LongLivedSocket;
@@ -576,8 +606,8 @@ bool WifiGatewayReticulumInterface::ensureSocket()
     const auto lease = platform::ui::wifi_access::acquire(socket_request);
     if (!lease.granted)
     {
-        socket_online_ = false;
-        socket_open_pending_ = false;
+        stop();
+        reconnect_.defer(now_ms);
         Serial.printf("[Reticulum][IF][WiFi] gateway connect deferred decision=%s host=%s port=%u\n",
                       platform::ui::wifi_access::decision_name(lease.decision),
                       host_,
@@ -600,6 +630,9 @@ bool WifiGatewayReticulumInterface::ensureSocket()
                               static_cast<uint32_t>(kSocketConnectTimeoutMs)))
         {
             const auto status = connector_.status();
+            connector_.cancel();
+            socket_open_pending_ = false;
+            reconnect_.failed(now_ms);
             Serial.printf("[Reticulum][IF][WiFi] gateway connect failed host=%s port=%u stage=%s err=%d\n",
                           host_,
                           static_cast<unsigned>(port_),
@@ -621,6 +654,7 @@ bool WifiGatewayReticulumInterface::ensureSocket()
     {
         connector_.cancel();
         socket_open_pending_ = false;
+        reconnect_.failed(now_ms);
         Serial.printf("[Reticulum][IF][WiFi] gateway connect failed host=%s port=%u stage=%s err=%d\n",
                       host_,
                       static_cast<unsigned>(port_),
@@ -634,11 +668,14 @@ bool WifiGatewayReticulumInterface::ensureSocket()
     if (socket < 0)
     {
         socket_open_pending_ = false;
+        reconnect_.failed(now_ms);
         return false;
     }
     client_ = WiFiClient(socket);
     client_.setNoDelay(true);
     socket_online_ = true;
+    socket_open_pending_ = false;
+    reconnect_.connected(now_ms);
     hdlc_in_frame_ = false;
     hdlc_escape_ = false;
     hdlc_frame_len_ = 0;
@@ -671,6 +708,7 @@ bool WifiGatewayReticulumInterface::ensureSocket()
         const auto failed = transport.tcpStatus();
         socket_online_ = false;
         socket_open_pending_ = false;
+        reconnect_.failed(now_ms);
         Serial.printf("[Reticulum][IF][WiFi] gateway connect failed host=%s port=%u state=%u error=%u detail=%s\n",
                       host_,
                       static_cast<unsigned>(port_),
@@ -718,7 +756,7 @@ void WifiGatewayReticulumInterface::readAvailable()
         if (!budget.allow_connect && !budget.allow_write)
         {
             stop();
-            last_reconnect_ms_ = now_ms;
+            reconnect_.defer(now_ms);
         }
         return;
     }
@@ -770,7 +808,7 @@ void WifiGatewayReticulumInterface::readAvailable()
         if (!budget.allow_connect && !budget.allow_write)
         {
             stop();
-            last_reconnect_ms_ = now_ms;
+            reconnect_.defer(now_ms);
         }
         return;
     }
@@ -802,7 +840,8 @@ void WifiGatewayReticulumInterface::feedHdlcByte(uint8_t byte)
     {
         if (hdlc_in_frame_ && hdlc_frame_len_ > 0)
         {
-            enqueueFrame(hdlc_frame_, hdlc_frame_len_);
+            if (access_.decode(hdlc_frame_, hdlc_frame_len_, sizeof(hdlc_frame_)))
+                enqueueFrame(hdlc_frame_, hdlc_frame_len_);
         }
         hdlc_in_frame_ = true;
         hdlc_escape_ = false;
@@ -869,9 +908,15 @@ void WifiGatewayReticulumInterface::enqueueFrame(const uint8_t* data, size_t len
         ++rx_stats_drops_;
     }
     const uint32_t now_ms = millis();
+#if defined(TRAIL_MATE_VERBOSE_RUNTIME_LOGS) && TRAIL_MATE_VERBOSE_RUNTIME_LOGS
+    constexpr uint32_t log_interval_ms = kRxStatsLogIntervalMs;
+#else
+    constexpr uint32_t log_interval_ms = 60000;
+#endif
     if (rx_stats_last_log_ms_ == 0 ||
-        (now_ms - rx_stats_last_log_ms_) >= kRxStatsLogIntervalMs)
+        (now_ms - rx_stats_last_log_ms_) >= log_interval_ms)
     {
+#if defined(TRAIL_MATE_VERBOSE_RUNTIME_LOGS) && TRAIL_MATE_VERBOSE_RUNTIME_LOGS
         Serial.printf("[Reticulum][IF][WiFi][RX] stats frames=%u priority=%u drops=%u bytes=%u read_skips=%u depth=%u prio_depth=%u last_len=%u\n",
                       static_cast<unsigned>(rx_stats_frames_),
                       static_cast<unsigned>(rx_stats_priority_frames_),
@@ -881,6 +926,12 @@ void WifiGatewayReticulumInterface::enqueueFrame(const uint8_t* data, size_t len
                       static_cast<unsigned>(rx_queue_.size()),
                       static_cast<unsigned>(rx_priority_queue_.size()),
                       static_cast<unsigned>(len));
+#else
+        if (rx_stats_drops_ != 0)
+            Serial.printf("[Reticulum][IF][WiFi][RX] queue_drops=%u frames=%u interval_ms=%lu\n",
+                          static_cast<unsigned>(rx_stats_drops_), static_cast<unsigned>(rx_stats_frames_),
+                          static_cast<unsigned long>(now_ms - rx_stats_last_log_ms_));
+#endif
         rx_stats_last_log_ms_ = now_ms;
         rx_stats_frames_ = 0;
         rx_stats_priority_frames_ = 0;
@@ -1600,8 +1651,8 @@ AutoReticulumInterface::Peer* AutoReticulumInterface::findPeer(
     return nullptr;
 }
 
-ReticulumInterfaceSet::ReticulumInterfaceSet(LoraBoard& board)
-    : lora_(board)
+ReticulumInterfaceSet::ReticulumInterfaceSet(LoraBoard& board, bool owns_integrated_radio)
+    : lora_(board), owns_integrated_radio_(owns_integrated_radio)
 {
 }
 
@@ -1611,15 +1662,23 @@ void ReticulumInterfaceSet::applyConfig(
 {
     config_ = config;
     network_config_ = network_config;
+    bootstrap_trial_started_ = false;
+    prefer_discovered_ = false;
+
+    // Service-local effective policy only: never change persisted user settings.
+    // Reapply on every config refresh so a radio interface in the shared network
+    // configuration cannot seize the active chat protocol's hardware.
+    if (!owns_integrated_radio_)
+    {
+        config_.reticulum_lora_enabled = false;
+        config_.reticulum_wifi_gateway_enabled = true;
+        config_.reticulum_interface_policy = ReticulumInterfacePolicy::WifiGatewayOnly;
+    }
 
     bool lora_configured = false;
     const reticulum::NetworkInterfaceConfig* auto_config = nullptr;
     tcp_count_ = 0;
-#if TRAIL_MATE_RETICULUM_C6_TCP_AVAILABLE
-    constexpr size_t tcp_capacity = 1;
-#else
     constexpr size_t tcp_capacity = reticulum::kMaxTcpClientInterfaces;
-#endif
     const size_t interface_count = std::min<size_t>(
         network_config_.interface_count,
         reticulum::kMaxNetworkInterfaces);
@@ -1633,7 +1692,7 @@ void ReticulumInterfaceSet::applyConfig(
         switch (interface_config.type)
         {
         case reticulum::NetworkInterfaceType::IntegratedLoRa:
-            lora_configured = true;
+            lora_configured = owns_integrated_radio_;
             break;
         case reticulum::NetworkInterfaceType::Auto:
             if (!auto_config)
@@ -1672,6 +1731,35 @@ void ReticulumInterfaceSet::applyConfig(
                   static_cast<unsigned>(tcp_count_));
 }
 
+bool ReticulumInterfaceSet::canReplaceDiscoveredGateway(const char* host, uint16_t port) const
+{
+    // An explicitly empty manual TCP list must not silently enable TCP access.
+    if (!wifiAllowed() || !host || !reticulum::publicGatewayHost(host, std::strlen(host)) || !port || !tcp_count_) return false;
+    for (size_t i = 0; i < network_config_.interface_count && i < reticulum::kMaxNetworkInterfaces; ++i)
+    {
+        const auto& item = network_config_.interfaces[i];
+        if (item.enabled && item.type == reticulum::NetworkInterfaceType::TcpClient &&
+            item.target_port == port && std::strcmp(item.target_host, host) == 0) return false;
+    }
+    const auto& learned = tcp_[reticulum::kMaxTcpClientInterfaces];
+    if (learned.isReady() || learned.isConnecting()) return false;
+    return !learned.isConfigured() || discovered_config_.target_port != port ||
+           std::strcmp(discovered_config_.target_host, host) != 0;
+}
+
+void ReticulumInterfaceSet::replaceDiscoveredGateway(const char* host, uint16_t port, bool previously_stable)
+{
+    if (!canReplaceDiscoveredGateway(host, port)) return;
+    discovered_config_.type = reticulum::NetworkInterfaceType::TcpClient;
+    discovered_config_.enabled = true;
+    copyHost(discovered_config_.target_host, sizeof(discovered_config_.target_host), host);
+    discovered_config_.target_port = port;
+    tcp_[reticulum::kMaxTcpClientInterfaces].applyConfig(
+        &discovered_config_, config_.reticulum_wifi_auto_connect, kDiscoveredTcpInterfaceId);
+    tcp_count_ = static_cast<uint8_t>(tcp_.size());
+    prefer_discovered_ = previously_stable;
+}
+
 void ReticulumInterfaceSet::setWifiTransportEnabled(bool enabled)
 {
     auto_.setTransportEnabled(enabled);
@@ -1682,12 +1770,77 @@ void ReticulumInterfaceSet::setWifiTransportEnabled(bool enabled)
     syncSharedLoRaRxGate();
 }
 
-void ReticulumInterfaceSet::maintain()
+void ReticulumInterfaceSet::maintain(bool allow_bootstrap_handoff)
 {
     auto_.maintain();
-    for (uint8_t index = 0; index < tcp_count_; ++index)
+    const auto bootstrap = [this](uint8_t tcp_index)
     {
-        tcp_[index].maintain();
+        uint8_t index = 0;
+        for (size_t i = 0; i < network_config_.interface_count && i < reticulum::kMaxNetworkInterfaces; ++i)
+        {
+            const auto& entry = network_config_.interfaces[i];
+            if (!entry.enabled || entry.type != reticulum::NetworkInterfaceType::TcpClient) continue;
+            if (index++ != tcp_index) continue;
+            if (entry.target_port != 4242 || entry.access.enabled() || std::strncmp(entry.id, "public-tcp-", 11)) return false;
+            return !std::strcmp(entry.target_host, "sydney.reticulum.au") ||
+                   !std::strcmp(entry.target_host, "node.reticulumnet.nl") ||
+                   !std::strcmp(entry.target_host, "rmap.world");
+        }
+        return false;
+    };
+    constexpr uint8_t learned_index = reticulum::kMaxTcpClientInterfaces;
+    auto& learned = tcp_[learned_index];
+    // Factory peers bootstrap discovery. Try one verified candidate after a
+    // stable bootstrap, then keep it if usable or fail back with its cooldown.
+    // A saved stable candidate can skip the bootstrap on subsequent boots.
+    // Explicit/IFAC interfaces and active calls never trigger this handoff.
+    if (allow_bootstrap_handoff && !bootstrap_trial_started_ && active_tcp_ < tcp_count_ && bootstrap(active_tcp_) &&
+        learned.canAttempt() && learned.retryState().failures() == 0 &&
+        (prefer_discovered_ || tcp_[active_tcp_].stableConnection()) &&
+        !::platform::ui::reticulum_call::resource_preempt_active())
+    {
+        Serial.printf("[Reticulum][Discovery] bootstrap handoff host=%s port=%u restored=%u\n",
+                      learned.host(), learned.port(), prefer_discovered_ ? 1U : 0U);
+        tcp_[active_tcp_].setSelected(false);
+        learned.setSelected(true);
+        active_tcp_ = next_tcp_ = learned_index;
+        bootstrap_trial_started_ = true;
+    }
+    // One public TCP uplink at a time. Other entries remain candidates with
+    // their own cooldown, including on the single-socket C6 transport.
+    if (active_tcp_ < tcp_count_)
+    {
+        auto& active = tcp_[active_tcp_];
+        active.maintain();
+        if (!active.isReady() && !active.isConnecting())
+        {
+            active.setSelected(false);
+            next_tcp_ = static_cast<uint8_t>((active_tcp_ + 1) % tcp_count_);
+            active_tcp_ = UINT8_MAX;
+        }
+    }
+    else
+    {
+        if (active_tcp_ < tcp_.size()) tcp_[active_tcp_].setSelected(false);
+        active_tcp_ = UINT8_MAX;
+    }
+    if (active_tcp_ == UINT8_MAX)
+    {
+        for (uint8_t attempt = 0; attempt < tcp_count_; ++attempt)
+        {
+            const auto candidate = static_cast<uint8_t>((next_tcp_ + attempt) % tcp_count_);
+            if (!tcp_[candidate].canAttempt()) continue;
+            if (active_tcp_ == UINT8_MAX || tcp_[candidate].retryState().failures() < tcp_[active_tcp_].retryState().failures() ||
+                (candidate == learned_index && prefer_discovered_ && bootstrap(active_tcp_) &&
+                 tcp_[candidate].retryState().failures() == tcp_[active_tcp_].retryState().failures()))
+                active_tcp_ = candidate;
+        }
+        if (active_tcp_ != UINT8_MAX)
+        {
+            if (active_tcp_ == learned_index) bootstrap_trial_started_ = true;
+            tcp_[active_tcp_].setSelected(true);
+            tcp_[active_tcp_].maintain();
+        }
     }
     syncSharedLoRaRxGate();
 }
@@ -1987,6 +2140,10 @@ float ReticulumInterfaceSet::lastRxSnr() const
 
 bool ReticulumInterfaceSet::loraAllowed() const
 {
+    if (!owns_integrated_radio_)
+    {
+        return false;
+    }
     if (::platform::ui::reticulum_call::resource_preempt_active())
     {
         return false;
@@ -2060,6 +2217,11 @@ bool ReticulumInterfaceSet::hasConfiguredIpInterface() const
 
 void ReticulumInterfaceSet::syncSharedLoRaRxGate()
 {
+    // Background IP services must not suppress Meshtastic/MeshCore reception.
+    if (!owns_integrated_radio_)
+    {
+        return;
+    }
     const bool suppress = !loraSelectedForRuntime();
 #if defined(ARDUINO)
     if (shared_lora_rx_suppressed_ == suppress &&

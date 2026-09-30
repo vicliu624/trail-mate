@@ -491,6 +491,7 @@ int get_int(const char* ns, const char* key, int default_value)
     const bool exists = nvs_get_i32(handle, storage_key, &value) == ESP_OK;
     nvs_close(handle);
 
+#if defined(TRAIL_MATE_VERBOSE_RUNTIME_LOGS) && TRAIL_MATE_VERBOSE_RUNTIME_LOGS
     logf("[CfgStore][READ] ns=%s key=%s storage_key=%s type=int source=%s value=%d default=%d\n",
          safe_label(ns),
          safe_label(key),
@@ -498,6 +499,7 @@ int get_int(const char* ns, const char* key, int default_value)
          exists ? "stored" : "default",
          static_cast<int>(value),
          default_value);
+#endif
     return static_cast<int>(value);
 }
 

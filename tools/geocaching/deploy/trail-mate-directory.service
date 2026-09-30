@@ -1,0 +1,28 @@
+[Unit]
+Description=Trail Mate Reticulum geocaching directory
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=trail-mate
+Group=trail-mate
+WorkingDirectory=/opt/trail-mate
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/trail-mate/.venv/bin/python tools/geocaching/directory_service.py --state /var/lib/trail-mate/directory --rns-config /var/lib/trail-mate/reticulum --name "Trail Mate public directory"
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30
+StateDirectory=trail-mate
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

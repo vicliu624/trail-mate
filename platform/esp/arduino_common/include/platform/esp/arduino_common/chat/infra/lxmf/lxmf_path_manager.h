@@ -95,6 +95,7 @@ class PathManager
     void expirePath(
         const uint8_t destination_hash[reticulum::kTruncatedHashSize]);
     void clearPaths();
+    void retireInterface(uint8_t interface_id);
 
     LinkRelayEntry& upsertLinkRelay(
         const uint8_t link_id[reticulum::kTruncatedHashSize],

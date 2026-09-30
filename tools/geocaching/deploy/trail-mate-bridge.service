@@ -1,0 +1,27 @@
+[Unit]
+Description=Trail Mate browser Reticulum packet bridge
+Wants=network-online.target trail-mate-directory.service
+After=network-online.target trail-mate-directory.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=trail-mate
+Group=trail-mate
+WorkingDirectory=/opt/trail-mate
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+EnvironmentFile=/etc/trail-mate/bridge.env
+ExecStart=/opt/trail-mate/.venv/bin/python tools/geocaching/packet_bridge.py --listen 127.0.0.1 --port 8787 --tcp-host 127.0.0.1 --tcp-port 44242 --origin ${TRAIL_MATE_ORIGIN} --max-clients 32
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=10
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

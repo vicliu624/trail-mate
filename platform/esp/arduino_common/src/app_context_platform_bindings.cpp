@@ -15,6 +15,7 @@
 #include "platform/esp/arduino_common/chat/infra/store/sd_protocol_peer_repository.h"
 #include "platform/esp/arduino_common/chat/infra/store/sd_store.h"
 #include "platform/esp/arduino_common/device_identity.h"
+#include "platform/esp/arduino_common/geocaching/browse_runtime.h"
 #include "platform/esp/arduino_common/gps/gps_service.h"
 #include "platform/esp/arduino_common/gps/track_recorder.h"
 #include "platform/esp/arduino_common/storage/sd_card_runtime.h"
@@ -295,6 +296,9 @@ app::ChatServicesBundle create_chat_services(const app::AppConfig& config,
     {
         bundle.start_deferred_storage = start_deferred_storage;
     }
+    if (lora_board)
+        ::platform::esp::arduino_common::geocaching::browse_runtime::configure(
+            *static_cast<chat::MeshAdapterRouter*>(bundle.mesh_runtime.get()), *lora_board);
     return bundle;
 }
 

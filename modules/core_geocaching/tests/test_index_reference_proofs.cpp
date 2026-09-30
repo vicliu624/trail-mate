@@ -1,0 +1,244 @@
+#include "geocaching/protocol/query_request.h"
+#include "geocaching/storage/queued_request.h"
+#include "platform/esp/arduino_common/geocaching/indexed_dispatch_store.h"
+#include "platform/esp/arduino_common/geocaching/sd_index_initialize.h"
+#include "platform/esp/arduino_common/geocaching/sd_indexed_commit.h"
+#include "platform/esp/arduino_common/geocaching/sd_indexed_remove_saved.h"
+#include "platform/esp/arduino_common/geocaching/sd_indexed_stop_task.h"
+#include "runtime_environment.h"
+#include <cstdio>
+
+namespace gc = geocaching::storage;
+namespace sd = platform::esp::arduino_common::geocaching;
+namespace test = runtime_test;
+static void require(bool ok, const char* message)
+{
+    if (!ok)
+    {
+        std::fprintf(stderr, "%s\n", message);
+        std::exit(1);
+    }
+}
+template <class Job, class State>
+static State pump(Job& job, State working)
+{
+    auto state = working;
+    for (unsigned i = 0; i < 100000 && state == working; ++i)
+    {
+        test::io_bytes = 0;
+        state = job.step();
+        require(test::io_bytes <= 512, "reference proof exceeded transfer budget");
+    }
+    return state;
+}
+int main()
+{
+    gc::VolumeInstance volume{}, confirmed;
+    require(sd::createNewSdVolume(volume, confirmed) == sd::SdVolumeResult::Ready, "create volume");
+    std::array<gc::IndexRootBytes, 2> roots;
+    gc::IndexRootView root;
+    unsigned copy = 0;
+    std::array<uint8_t, 8192> frame{}, encoded{};
+    {
+        sd::SdIndexInitialize init(volume);
+        require(init.begin(roots[0]) && pump(init, sd::IndexRootWriteStep::Working) == sd::IndexRootWriteStep::Verified, "initialize roots");
+        require(gc::decodeIndexRoot({roots[0].data(), roots[0].size()}, volume, root), "decode root");
+    }
+    std::array<std::array<uint8_t, 16>, 7> task_ids{};
+    std::array<std::array<uint8_t, 48>, 7> request_keys{};
+    // More tasks than cache slots forces eviction; every task remains checked.
+    for (unsigned n = 0; n < task_ids.size(); ++n)
+    {
+        geocaching::RequestId id;
+        id.bytes.fill(static_cast<uint8_t>(n + 1));
+        task_ids[n].fill(static_cast<uint8_t>(n + 11));
+        std::array<uint8_t, 64> request{};
+        std::array<uint8_t, 512> outgoing{};
+        gc::QueuedRequestWorkspace scratch(outgoing.data(), outgoing.size());
+        size_t request_size = 0, size = 0;
+        require(geocaching::protocol::encodeCapabilitiesRequest(id, request.data(), request.size(), request_size), "encode request");
+        require(gc::encodeNewRequestTask(root.sequence, {}, {}, id, task_ids[n], 3, {request.data(), request_size}, {}, scratch, encoded.data(), encoded.size(), size), "encode task");
+        gc::MutationView rows[2];
+        gc::TransactionView tx;
+        require(gc::decodeTransaction({encoded.data(), size}, root.sequence, rows, 2, tx), "decode task transaction");
+        std::copy(rows[0].key.data, rows[0].key.data + 48, request_keys[n].begin());
+        sd::SdIndexedCommit commit(volume);
+        require(commit.begin(root, copy, rows, 2, frame.data(), frame.size(), roots[1 - copy]), "begin task commit");
+        require(pump(commit, sd::IndexedCommitStep::Working) == sd::IndexedCommitStep::Verified && commit.committed(root), "commit task");
+        copy = 1 - copy;
+    }
+    const auto verify = [&](const gc::MutationView* rows, size_t count, sd::IndexScanStep expected)
+    {
+        sd::SdIndexReferences references(volume);
+        require(references.begin(root, frame.data(), frame.size(), rows, count), "begin reference proof");
+        require(pump(references, sd::IndexScanStep::Working) == expected, "reference proof accepted a dangling or mismatched relation");
+        require(!test::open_files && !test::open_dirs, "reference proof leaked handles");
+    };
+    verify(nullptr, 0, sd::IndexScanStep::End);
+    {
+        // Exercise the maximum overlay count and its final relationship;
+        // narrowing the bounded counters must not skip the last mutation.
+        std::array<gc::MutationView, 64> rows{};
+        std::array<std::array<uint8_t, 32>, 63> keys{};
+        std::array<uint8_t, 64> head_bytes{}, attempt_key{};
+        size_t head_size = 0;
+        gc::CacheHeadView head;
+        head.install_generation = 1;
+        for (size_t i = 0; i < keys.size(); ++i)
+        {
+            keys[i].fill(static_cast<uint8_t>(i + 1));
+            if (!i) require(gc::encodeCacheHead({keys[i].data(), keys[i].size()}, head, head_bytes.data(), head_bytes.size(), head_size), "encode bounded overlay head");
+            rows[i] = {2, {keys[i].data(), keys[i].size()}, {head_bytes.data(), head_size}, false};
+        }
+        std::copy(request_keys[0].begin(), request_keys[0].end(), attempt_key.begin());
+        std::fill(attempt_key.begin() + 48, attempt_key.end(), 0x73);
+        gc::TxAttemptView attempt;
+        std::array<uint8_t, 192> attempt_bytes{};
+        size_t attempt_size = 0;
+        require(gc::encodeTxAttempt({attempt_key.data(), attempt_key.size()}, attempt, attempt_bytes.data(), attempt_bytes.size(), attempt_size), "encode bounded overlay attempt");
+        rows.back() = {13, {attempt_key.data(), attempt_key.size()}, {attempt_bytes.data(), attempt_size}, false};
+        verify(rows.data(), rows.size(), sd::IndexScanStep::End);
+        attempt_key[0] ^= 0x80;
+        verify(rows.data(), rows.size(), sd::IndexScanStep::Invalid);
+        sd::SdIndexReferences overflow(volume);
+        require(!overflow.begin(root, frame.data(), frame.size(), rows.data(), rows.size() + 1), "oversized overlay accepted");
+    }
+    for (unsigned n = 0; n < task_ids.size(); ++n)
+    {
+        gc::MutationView removed[] = {{5, {request_keys[n].data(), 48}, {}, true}, {10, {task_ids[n].data(), 16}, {}, true}};
+        verify(removed, 1, sd::IndexScanStep::Invalid);
+        verify(removed + 1, 1, sd::IndexScanStep::Invalid);
+        verify(removed, 2, sd::IndexScanStep::End);
+        // A task with one valid and one wrong child must not pass because one
+        // relationship was already proven in the outgoing scan.
+        gc::TaskView task;
+        task.kind = 3;
+        task.request_count = 2;
+        task.requests[0] = {request_keys[n].data(), 48};
+        task.requests[1] = {request_keys[(n + 1) % task_ids.size()].data(), 48};
+        std::array<uint8_t, 256> value{};
+        size_t size = 0;
+        require(gc::encodeTask({task_ids[n].data(), 16}, task, value.data(), value.size(), size), "encode mismatched task");
+        gc::MutationView changed{10, {task_ids[n].data(), 16}, {value.data(), size}, false};
+        verify(&changed, 1, sd::IndexScanStep::Invalid);
+    }
+    // Reuse the real pending request fixture to compare the send payload lease
+    // against small and aliased workspace fallbacks.
+    sd::IndexWorkspaceOwner owner;
+    gc::QueuedRequestWorkspace workspace(encoded.data(), encoded.size());
+    {
+        sd::IndexedDispatchStore store(volume, root, copy, roots[0], roots[1], owner, workspace, frame.data(), frame.size());
+        std::array<uint8_t, 16> attempt{};
+        attempt.fill(0x71);
+        require(store.beginAttempt({}, {request_keys[0].data(), 48}, attempt, {}) == sd::JournalWriteResult::InProgress, "begin send lease attempt");
+        auto state = sd::JournalWriteResult::InProgress;
+        for (unsigned i = 0; i < 100000 && state == sd::JournalWriteResult::InProgress; ++i) state = store.stepCommit();
+        require(state == sd::JournalWriteResult::Verified, "persist send lease attempt");
+    }
+    {
+        // Attempt-only updates validate the target without auditing history.
+        std::array<uint8_t, 64> key{};
+        std::copy(request_keys[1].begin(), request_keys[1].end(), key.begin());
+        std::fill(key.begin() + 48, key.end(), 0x72);
+        gc::TxAttemptView attempt;
+        std::array<uint8_t, 192> value{};
+        size_t size = 0;
+        require(gc::encodeTxAttempt({key.data(), key.size()}, attempt, value.data(), value.size(), size), "encode attempt");
+        gc::MutationView changed{13, {key.data(), key.size()}, {value.data(), size}, false};
+        test::profile_reads = true;
+        test::read_bytes_by_path.clear();
+        verify(&changed, 1, sd::IndexScanStep::End);
+        require(!test::read_bytes_by_path.empty(), "attempt read profile missing");
+        for (const auto& file : test::read_bytes_by_path)
+            require(file.first.find("/0d/") == std::string::npos || file.first.find(".gci.h") != std::string::npos,
+                    "attempt commit scanned historical attempts");
+        test::profile_reads = false;
+        key[0] ^= 0x80;
+        verify(&changed, 1, sd::IndexScanStep::Invalid);
+    }
+    geocaching::RequestId expected_id;
+    expected_id.bytes.fill(1);
+    std::array<uint8_t, 64> expected{};
+    size_t expected_size = 0;
+    require(geocaching::protocol::encodeCapabilitiesRequest(expected_id, expected.data(), expected.size(), expected_size), "encode expected send");
+    const auto readSend = [&](unsigned mode, bool stopped)
+    {
+        workspace.outgoing = mode == 2 ? frame.data() : encoded.data();
+        workspace.outgoing_capacity = mode == 1 ? 1 : encoded.size();
+        sd::IndexedDispatchStore store(volume, root, copy, roots[0], roots[1], owner, workspace, frame.data(), frame.size());
+        test::profile_reads = true;
+        test::read_bytes_by_path.clear();
+        sd::DispatchSendView send;
+        auto state = sd::DispatchReadResult::Pending;
+        for (unsigned i = 0; i < 100000 && state == sd::DispatchReadResult::Pending; ++i)
+        {
+            test::io_bytes = 0;
+            state = store.readForSend({request_keys[0].data(), 48}, send);
+            require(test::io_bytes <= 512, "send lease exceeded transfer budget");
+        }
+        require(state == sd::DispatchReadResult::Ready && send.stopped == stopped, "send lease lost stop or readiness state");
+        if (!stopped)
+        {
+            require(send.request.size == expected_size && !std::memcmp(send.request.data, expected.data(), expected_size), "task lookup overwrote send body");
+            if (!mode) require(send.request.data == encoded.data(), "send did not reuse encoding workspace");
+        }
+        else require(!send.request.size, "stopped task exposed a send body");
+        require(!owner.holder() && !test::open_files && !test::open_dirs, "send lease retained owner or handles");
+        uint64_t bytes = 0;
+        for (const auto& file : test::read_bytes_by_path) bytes += file.second;
+        test::profile_reads = false;
+        return bytes;
+    };
+    const auto reused = readSend(0, false);
+    const auto small = readSend(1, false);
+    const auto aliased = readSend(2, false);
+    require(reused < small && small == aliased, "send lease did not remove a request reload");
+    {
+        sd::SdIndexedStopTask stop(volume);
+        require(stop.begin(root, copy, {task_ids[0].data(), 16}, false, frame.data(), frame.size(), roots[1 - copy]), "begin stopped task");
+        require(pump(stop, sd::IndexedCommitStep::Working) == sd::IndexedCommitStep::Verified && stop.committed(root), "persist stopped task");
+        copy = 1 - copy;
+    }
+    readSend(0, true);
+    {
+        // Removal selects the exact current revision and advances the durable
+        // generation, without deleting the head's rollback protection.
+        std::array<uint8_t, 32> cache{}, hash{}, wrong{};
+        cache.fill(0x41);
+        hash.fill(0x42);
+        wrong.fill(0x43);
+        gc::CacheHeadView head;
+        head.current_hash = {hash.data(), hash.size()};
+        head.install_generation = 7;
+        head.highest_seen_revision = 9;
+        std::array<uint8_t, 64> value{};
+        size_t size = 0;
+        require(gc::encodeCacheHead({cache.data(), cache.size()}, head, value.data(), value.size(), size), "encode removal fixture head");
+        gc::MutationView row{2, {cache.data(), cache.size()}, {value.data(), size}, false};
+        sd::SdIndexedCommit commit(volume);
+        require(commit.begin(root, copy, &row, 1, frame.data(), frame.size(), roots[1 - copy]) &&
+                    pump(commit, sd::IndexedCommitStep::Working) == sd::IndexedCommitStep::Verified && commit.committed(root),
+                "commit removal fixture head");
+        copy = 1 - copy;
+        const auto unchanged = test::files;
+        sd::SdIndexedRemoveSaved stale(volume);
+        require(stale.begin(root, copy, cache, wrong, frame.data(), frame.size(), roots[1 - copy]) &&
+                    pump(stale, sd::IndexedCommitStep::Working) == sd::IndexedCommitStep::Invalid && test::files == unchanged,
+                "stale detail deleted another revision");
+        sd::SdIndexedRemoveSaved remove(volume);
+        require(remove.begin(root, copy, cache, hash, frame.data(), frame.size(), roots[1 - copy]) &&
+                    pump(remove, sd::IndexedCommitStep::Working) == sd::IndexedCommitStep::Verified && remove.committed(root),
+                "remove offline head");
+        copy = 1 - copy;
+        sd::SdIndexGet read(volume);
+        require(read.begin(root, 2, {cache.data(), cache.size()}, frame.data(), frame.size()) &&
+                    pump(read, sd::IndexGetStep::Working) == sd::IndexGetStep::Ready &&
+                    gc::decodeCacheHead({cache.data(), cache.size()}, read.value(), head),
+                "read removed head");
+        require(!head.current_hash.size && head.install_generation == 8 && head.highest_seen_revision == 9,
+                "removal lost generation or rollback protection");
+    }
+    std::printf("Send preparation read bytes: reused=%llu fallback=%llu\n", static_cast<unsigned long long>(reused), static_cast<unsigned long long>(small));
+    std::printf("Reference validator size: %u bytes; eviction and overlay mismatch checks passed\n", static_cast<unsigned>(sizeof(sd::SdIndexReferences)));
+    return 0;
+}

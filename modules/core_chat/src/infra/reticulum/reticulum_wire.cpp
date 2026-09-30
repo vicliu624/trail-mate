@@ -473,7 +473,8 @@ class Aes256CbcCipher
   public:
     Aes256CbcCipher()
     {
-#if defined(ESP_PLATFORM) && !defined(TRAIL_MATE_RETICULUM_SOFTWARE_AES)
+#if defined(ESP_PLATFORM) && !defined(TRAIL_MATE_RETICULUM_SOFTWARE_AES) && \
+    !defined(TRAIL_MATE_RETICULUM_PARSE_ONLY) && !defined(TRAIL_MATE_RETICULUM_HASH_ONLY)
         mbedtls_aes_init(&encrypt_);
         mbedtls_aes_init(&decrypt_);
 #endif
@@ -481,7 +482,8 @@ class Aes256CbcCipher
 
     ~Aes256CbcCipher()
     {
-#if defined(ESP_PLATFORM) && !defined(TRAIL_MATE_RETICULUM_SOFTWARE_AES)
+#if defined(ESP_PLATFORM) && !defined(TRAIL_MATE_RETICULUM_SOFTWARE_AES) && \
+    !defined(TRAIL_MATE_RETICULUM_PARSE_ONLY) && !defined(TRAIL_MATE_RETICULUM_HASH_ONLY)
         mbedtls_aes_free(&encrypt_);
         mbedtls_aes_free(&decrypt_);
 #endif

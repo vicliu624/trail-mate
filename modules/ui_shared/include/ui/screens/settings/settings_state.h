@@ -77,6 +77,8 @@ enum class SettingId : std::uint16_t
     RtIdentityHash,
     RtLxmfAddress,
     RtWifiGateway,
+    RtTcpSlot,
+    RtTcpDefaults,
     RtWifiHost,
     RtWifiPort,
     RtWifiAuto,
@@ -261,6 +263,7 @@ struct SettingsData
     char rt_identity_hash[36] = "--";
     char rt_lxmf_address[36] = "--";
     char rt_wifi_gateway_host[64] = "";
+    int rt_tcp_slot = 0;
     char rt_wifi_gateway_port[6] = "4242";
 
     // Meshtastic MQTT
