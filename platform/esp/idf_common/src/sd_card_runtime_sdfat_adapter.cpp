@@ -14,6 +14,7 @@
 #include <common/FsBlockDeviceInterface.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
@@ -65,6 +66,7 @@ sdmmc_card_t* s_card = nullptr;
 sdmmc_host_t s_host = SDMMC_HOST_DEFAULT();
 sdmmc_host_runtime::SlotOwner s_owner = sdmmc_host_runtime::SlotOwner::None;
 bool s_mounted = false;
+std::atomic<uint32_t> s_media_session{1};
 volatile bool s_external_block_owner_active = false;
 SemaphoreHandle_t s_storage_mutex = nullptr;
 uint32_t s_last_sd_io_log_ms = 0;
@@ -446,6 +448,7 @@ uint8_t card_type_from_idf(const sdmmc_card_t* card)
 
 void clear_mounted_locked()
 {
+    ++s_media_session;
     if (s_mounted)
     {
         s_volume.end();
@@ -553,6 +556,7 @@ bool mount_sdmmc_locked(sdmmc_host_runtime::SlotOwner owner,
         return false;
     }
 
+    ++s_media_session;
     s_mounted = true;
     record_sdfat_info_locked();
     ESP_LOGI(kTag,
@@ -660,6 +664,11 @@ bool sd_external_block_owner_active()
     return s_external_block_owner_active;
 }
 
+uint32_t sd_media_session()
+{
+    return s_media_session.load();
+}
+
 bool sd_set_external_block_owner_active(bool active)
 {
     SdRuntimeBusGuard guard("sd_external_owner_transition");
@@ -667,6 +676,7 @@ bool sd_set_external_block_owner_active(bool active)
     {
         return false;
     }
+    if (s_external_block_owner_active != active) ++s_media_session;
     s_external_block_owner_active = active;
     return true;
 }
@@ -932,6 +942,11 @@ SdRuntimeFile::~SdRuntimeFile()
 
 bool SdRuntimeFile::open(const char* path, const char* mode)
 {
+    return open(path, mode, sd_media_session());
+}
+
+bool SdRuntimeFile::open(const char* path, const char* mode, uint32_t expected_session)
+{
     close();
     read_busy_ = false;
     if (impl_ == nullptr || path_empty(path))
@@ -953,6 +968,11 @@ bool SdRuntimeFile::open(const char* path, const char* mode)
     {
         read_busy_ = s_storage_mutex != nullptr;
         sd_io_end("file_open", impl_->path, start_ms, false, 0, -2);
+        return false;
+    }
+    if (expected_session != sd_media_session() || s_external_block_owner_active)
+    {
+        sd_io_end("file_open", impl_->path, start_ms, false, 0, -1);
         return false;
     }
     if (s_info.backend == SdCardBackend::SdFat)
