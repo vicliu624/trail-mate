@@ -11,7 +11,8 @@ namespace platform::esp::arduino_common::geocaching
 class SdIndexedDownloadContext
 {
   public:
-    explicit SdIndexedDownloadContext(const ::geocaching::storage::VolumeInstance& volume) : volume_(volume) {}
+    explicit SdIndexedDownloadContext(const ::geocaching::storage::VolumeInstance& volume, SdVolumeReadSession* session = nullptr)
+        : volume_(volume), session_(session) {}
     bool begin(const ::geocaching::storage::IndexRootView& root, ::geocaching::ByteView key, uint64_t generation,
                uint8_t* frame, size_t capacity)
     {
@@ -21,7 +22,7 @@ class SdIndexedDownloadContext
         generation_ = generation;
         frame_ = frame;
         capacity_ = capacity;
-        if (!get_.emplace(volume_).begin(root_, 5, {key_.data(), key_.size()}, frame_, capacity_)) return false;
+        if (!get_.emplace(volume_, session_).begin(root_, 5, {key_.data(), key_.size()}, frame_, capacity_)) return false;
         result_ = IndexGetStep::Working;
         return true;
     }
@@ -62,7 +63,7 @@ class SdIndexedDownloadContext
                 return result_ = IndexGetStep::Ready;
             }
             std::memcpy(task_id_.data(), outgoing.task_id.data, task_id_.size());
-            if (!get_.emplace(volume_).begin(root_, 10, {task_id_.data(), task_id_.size()}, frame_, capacity_)) return fail(IndexGetStep::Invalid);
+            if (!get_.emplace(volume_, session_).begin(root_, 10, {task_id_.data(), task_id_.size()}, frame_, capacity_)) return fail(IndexGetStep::Invalid);
             phase_ = Phase::Task;
             return result_;
         }
@@ -77,7 +78,7 @@ class SdIndexedDownloadContext
             task_size_ = get_->value().size;
             std::memcpy(task_.data(), get_->value().data, task_size_);
             if (!decodeTask({task_id_.data(), task_id_.size()}, {task_.data(), task_size_}, task) ||
-                !get_.emplace(volume_).begin(root_, 2, task.cache_id, frame_, capacity_)) return fail(IndexGetStep::Invalid);
+                !get_.emplace(volume_, session_).begin(root_, 2, task.cache_id, frame_, capacity_)) return fail(IndexGetStep::Invalid);
             phase_ = Phase::Head;
             return result_;
         }
@@ -87,7 +88,7 @@ class SdIndexedDownloadContext
             return fail(IndexGetStep::Invalid);
         head_size_ = get_->value().size;
         std::memcpy(head_.data(), get_->value().data, head_size_);
-        if (!get_.emplace(volume_).begin(root_, 5, {key_.data(), key_.size()}, frame_, capacity_)) return fail(IndexGetStep::Invalid);
+        if (!get_.emplace(volume_, session_).begin(root_, 5, {key_.data(), key_.size()}, frame_, capacity_)) return fail(IndexGetStep::Invalid);
         phase_ = Phase::Reload;
         return result_;
     }
@@ -115,6 +116,7 @@ class SdIndexedDownloadContext
     uint8_t* frame_ = nullptr;
     size_t capacity_ = 0, task_size_ = 0, head_size_ = 0;
     uint64_t generation_ = 0;
+    SdVolumeReadSession* session_;
     Phase phase_ = Phase::Outgoing;
     IndexGetStep result_ = IndexGetStep::Idle;
 };

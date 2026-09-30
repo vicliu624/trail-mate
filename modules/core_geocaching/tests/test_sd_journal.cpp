@@ -456,8 +456,11 @@ int checkBrowseFlow(const char* capabilities_path, const char* query_path)
     Destination wrong;
     wrong.bytes[0] = 1;
     if (port.accepted(wrong, id, {original.data(), original.size()})) return 127;
+    const auto retained_rows = snapshot.generation;
     source.refresh(::ui::geocaching::Section::Discover);
-    if (source.item(::ui::geocaching::Section::Discover, 0, snapshot.generation, item)) return 128;
+    source.snapshot(::ui::geocaching::Section::Discover, snapshot);
+    if (snapshot.generation != retained_rows || snapshot.can_refresh ||
+        !source.item(::ui::geocaching::Section::Discover, 0, retained_rows, item) || std::strcmp(item.name.data(), "Test")) return 128;
     if (!client->tick(10) || !advance() || client->phase() != QueryClientPhase::Querying) return 129;
     client->tick(10);
     if (!client->tick(10 + QueryClient::kReplyTimeoutMs) || client->phase() != QueryClientPhase::Cancelling) return 130;
@@ -480,7 +483,8 @@ int checkBrowseFlow(const char* capabilities_path, const char* query_path)
     storage::PendingRequestView pending;
     if (storage::nextPendingRequest(state.view(), {}, {}, pending) != storage::PendingRequestResult::None) return 133;
     source.snapshot(::ui::geocaching::Section::Discover, snapshot);
-    if (!snapshot.can_refresh || !std::strstr(snapshot.status.data(), "did not reply")) return 134;
+    if (!snapshot.can_refresh || !std::strstr(snapshot.status.data(), "did not reply") ||
+        !source.item(::ui::geocaching::Section::Discover, 0, snapshot.generation, item) || std::strcmp(item.name.data(), "Test")) return 134;
     fixture::files.clear();
     return 0;
 }

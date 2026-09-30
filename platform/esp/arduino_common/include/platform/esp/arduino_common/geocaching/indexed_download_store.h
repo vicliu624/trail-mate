@@ -83,11 +83,13 @@ class IndexedDownloadStore final : public DownloadStore
         }
         const auto status = page_->step();
         if (status == IndexScanStep::Working) return DownloadRecoveryRead::Pending;
-        const auto result = page_->unavailable() ? DownloadRecoveryRead::Unavailable : status == IndexScanStep::End             ? DownloadRecoveryRead::Ready
-                                                                                   : status == IndexScanStep::WorkspaceTooSmall ? DownloadRecoveryRead::WorkspaceTooSmall
-                                                                                   : status == IndexScanStep::IoError           ? DownloadRecoveryRead::IoError
-                                                                                   : status == IndexScanStep::VolumeChanged     ? DownloadRecoveryRead::VolumeChanged
-                                                                                                                                : DownloadRecoveryRead::Invalid;
+        projection_upgrade_required_ = page_->missingProjection(cache_);
+        const auto result = projection_upgrade_required_ ? DownloadRecoveryRead::NeedsUpgrade : page_->unavailable()                     ? DownloadRecoveryRead::Unavailable
+                                                                                            : status == IndexScanStep::End               ? DownloadRecoveryRead::Ready
+                                                                                            : status == IndexScanStep::WorkspaceTooSmall ? DownloadRecoveryRead::WorkspaceTooSmall
+                                                                                            : status == IndexScanStep::IoError           ? DownloadRecoveryRead::IoError
+                                                                                            : status == IndexScanStep::VolumeChanged     ? DownloadRecoveryRead::VolumeChanged
+                                                                                                                                         : DownloadRecoveryRead::Invalid;
         releaseRead();
         // Retry only the failed page; transient I/O must not invalidate the
         // already opened index or start a full storage audit.
@@ -99,6 +101,114 @@ class IndexedDownloadStore final : public DownloadStore
         page_read_retries_ = 0;
         blocked_ = result == DownloadRecoveryRead::Invalid || result == DownloadRecoveryRead::IoError || result == DownloadRecoveryRead::VolumeChanged;
         return result;
+    }
+    bool missingSavedProjection(std::array<uint8_t, 32>& id) const
+    {
+        if (!projection_upgrade_required_) return false;
+        id = cache_;
+        return true;
+    }
+    // Caller must admit writes through storage recovery before upgrading a
+    // legacy row. History is consulted here once, never inside a list page.
+    JournalWriteResult upgradeSavedProjection(const std::array<uint8_t, 32>& id)
+    {
+        using namespace ::geocaching;
+        using namespace ::geocaching::storage;
+        if (blocked_) return JournalWriteResult::Unavailable;
+        if (phase_ == Phase::None)
+        {
+            if (!acquire()) return JournalWriteResult::Busy;
+            cache_ = id;
+            saved_.reset(::platform::memory::createPsram<SdIndexedSavedCache>(volume_));
+            if (!saved_)
+            {
+                releaseRead();
+                return JournalWriteResult::Unavailable;
+            }
+            if (!io_->emplace<SdIndexGet>(volume_, &saved_->readSession()).begin(root_, 2, {cache_.data(), 32}, frame_, capacity_)) return fail();
+            phase_ = Phase::UpgradeHead;
+            return JournalWriteResult::InProgress;
+        }
+        if (cache_ != id || !owner_.heldBy(this) || root_.revision != revision_) return fail();
+        if (phase_ == Phase::Finish)
+        {
+            const auto result = stepCommit();
+            if (result == JournalWriteResult::Verified) projection_upgrade_required_ = false;
+            return result;
+        }
+        if (phase_ == Phase::UpgradeRead)
+        {
+            const auto status = saved_->step();
+            if (status == IndexScanStep::Working) return JournalWriteResult::InProgress;
+            if (status != IndexScanStep::Item) return error(status);
+            ByteView request, task, signed_cache;
+            const auto* record = saved_->installation(request, task, signed_cache);
+            if (!record || record->id != cache_ || record->hash != proof_hash_) return fail();
+            ::platform::memory::PsramPtr<protocol::VerifiedRecordView> verified(::platform::memory::createPsram<protocol::VerifiedRecordView>());
+            if (!verified)
+            {
+                releaseRead();
+                return JournalWriteResult::Unavailable;
+            }
+            GeocacheId expected_id{cache_};
+            RevisionHash expected_hash{proof_hash_};
+            if (protocol::verifyGeocache(signed_cache, crypto_, verification_, verification_capacity_, *verified, &expected_id, &expected_hash) != protocol::VerificationResult::Valid) return fail();
+            ObjectRefView object;
+            if (!decodeObjectRef({proof_hash_.data(), 32}, outgoing_, object) ||
+                object.revision != verified->record.revision || object.state != verified->record.state || object.created_at != verified->record.created_at ||
+                std::memcmp(object.cache_id.data, cache_.data(), 32) || object.previous_hash.size != verified->record.previous_hash.size ||
+                (object.previous_hash.size && std::memcmp(object.previous_hash.data, verified->record.previous_hash.data, object.previous_hash.size))) return fail();
+            std::memcpy(key_.data(), request.data, 48);
+            std::memcpy(task_.data(), task.data, 16);
+            object.cache_id = {cache_.data(), 32};
+            object.previous_hash = verified->record.previous_hash;
+            object.name = verified->record.name;
+            object.latitude_e7 = verified->record.latitude_e7;
+            object.longitude_e7 = verified->record.longitude_e7;
+            object.saved_request = {key_.data(), 48};
+            object.saved_task = {task_.data(), 16};
+            size_t size = 0;
+            if (!encodeObjectRef({proof_hash_.data(), 32}, object, response_, response_capacity_, size)) return fail();
+            upgrade_mutations_.reset(::platform::memory::createPsram<std::array<MutationView, 2>>());
+            if (!upgrade_mutations_)
+            {
+                releaseRead();
+                return JournalWriteResult::Unavailable;
+            }
+            saved_.reset();
+            (*upgrade_mutations_)[0] = {1, {proof_hash_.data(), 32}, {response_, size}, false};
+            (*upgrade_mutations_)[1] = {2, {cache_.data(), 32}, {install_.data(), install_size_}, false};
+            if (!io_->emplace<SdIndexedCommit>(volume_).begin(root_, copy_, upgrade_mutations_->data(), 2, frame_, capacity_, *roots_[1 - copy_])) return fail();
+            phase_ = Phase::Finish;
+            return JournalWriteResult::InProgress;
+        }
+        if (phase_ != Phase::UpgradeHead && phase_ != Phase::UpgradeObject) return fail();
+        auto& get = std::get<SdIndexGet>(*io_);
+        const auto status = get.step();
+        if (status == IndexGetStep::Working) return JournalWriteResult::InProgress;
+        if (status != IndexGetStep::Ready) return error(status);
+        if (phase_ == Phase::UpgradeHead)
+        {
+            CacheHeadView head;
+            if (!decodeCacheHead({cache_.data(), 32}, get.value(), head) || get.value().size > install_.size()) return fail();
+            install_size_ = get.value().size;
+            std::memcpy(install_.data(), get.value().data, install_size_);
+            if (!head.current_hash.size) return beginHeadUpgrade();
+            std::memcpy(proof_hash_.data(), head.current_hash.data, 32);
+            if (!io_->emplace<SdIndexGet>(volume_, &saved_->readSession()).begin(root_, 1, {proof_hash_.data(), 32}, frame_, capacity_)) return fail();
+            phase_ = Phase::UpgradeObject;
+            return JournalWriteResult::InProgress;
+        }
+        ObjectRefView object;
+        if (!decodeObjectRef({proof_hash_.data(), 32}, get.value(), object) || std::memcmp(object.cache_id.data, cache_.data(), 32)) return fail();
+        if (object.saved_request.size) return beginHeadUpgrade(get.value());
+        if (get.value().size > response_capacity_) return fail();
+        std::memcpy(response_, get.value().data, get.value().size);
+        outgoing_ = {response_, get.value().size}; // Phase-local owned legacy object.
+        io_->emplace<std::monostate>();
+        if (!saved_->beginFromHead(root_, {cache_.data(), 32}, {install_.data(), install_size_}, frame_, capacity_, false)) return fail();
+        phase_ = Phase::UpgradeRead;
+        return JournalWriteResult::InProgress;
     }
     // Called by the workspace owner's prepare callback, before acquiring a
     // fresh lease. No borrowed view or operation may outlive its prior lease.
@@ -225,6 +335,7 @@ class IndexedDownloadStore final : public DownloadStore
         recovery_.reset();
         saved_.reset();
         page_.reset();
+        upgrade_mutations_.reset();
         phase_ = Phase::None;
         cached_ = active_ = completed_ = false;
         outgoing_ = {};
@@ -332,6 +443,7 @@ class IndexedDownloadStore final : public DownloadStore
             std::memcpy(task_.data(), outgoing.task_id.data, task_.size());
             std::memcpy(cache_.data(), task.cache_id.data, cache_.size());
             has_current_ = head.current_hash.size == 32;
+            removed_current_ = !has_current_ && head.highest_seen_revision != 0;
             if (has_current_) std::memcpy(old_revision_.bytes.data(), head.current_hash.data, 32);
             if (!io_->emplace<SdIndexGet>(volume_).begin(root_, 12, {task_.data(), task_.size()}, frame_, capacity_)) return fail();
             phase_ = Phase::Install;
@@ -347,14 +459,15 @@ class IndexedDownloadStore final : public DownloadStore
             MutationView row;
             InstallRecordView install;
             if (!scan.item(row) || !decodeInstallRecord(row.key, row.value, install)) return fail();
-            const bool matching = completed_ ? install.generation < generation_ && !std::memcmp(install.new_file_hash.data, recovery_old_hash_.data(), 32)
-                                             : !std::memcmp(install.revision_hash.data, old_revision_.bytes.data(), 32);
+            const bool matching = completed_         ? install.generation < generation_ && !std::memcmp(install.new_file_hash.data, recovery_old_hash_.data(), 32)
+                                  : removed_current_ ? install.generation < generation_
+                                                     : !std::memcmp(install.revision_hash.data, old_revision_.bytes.data(), 32);
             if (install.phase == InstallPhase::Installed && install.generation <= generation_ && install.generation > proof_generation_ &&
                 !std::memcmp(install.cache_id.data, cache_.data(), 32) && matching)
             {
                 proof_generation_ = install.generation;
                 std::memcpy(proof_hash_.data(), install.new_file_hash.data, 32);
-                if (completed_) std::memcpy(old_revision_.bytes.data(), install.revision_hash.data, 32);
+                if (completed_ || removed_current_) std::memcpy(old_revision_.bytes.data(), install.revision_hash.data, 32);
             }
             if (!scan.advance()) return fail();
             return JournalWriteResult::InProgress;
@@ -380,7 +493,9 @@ class IndexedDownloadStore final : public DownloadStore
                 }
             }
             else if (completed_) return fail();
-            if (!has_current_) return reload();
+            // A local deletion retains the GPX. Locate its last committed
+            // installation proof before allowing a later download to replace it.
+            if (!has_current_ && (!removed_current_ || completed_)) return reload();
             if (!io_->emplace<SdIndexScan>(volume_).begin(root_, 12, frame_, capacity_)) return fail();
             phase_ = Phase::Proof;
             return JournalWriteResult::InProgress;
@@ -508,7 +623,7 @@ class IndexedDownloadStore final : public DownloadStore
                                        {
                                           using T = std::decay_t<decltype(operation)>;
                                           if constexpr (std::is_same_v<T, SdIndexedNewTask> || std::is_same_v<T, SdIndexedDownloadReply> ||
-                                                        std::is_same_v<T, SdIndexedStopTask> || std::is_same_v<T, SdIndexedInstall>)
+                                                        std::is_same_v<T, SdIndexedStopTask> || std::is_same_v<T, SdIndexedInstall> || std::is_same_v<T, SdIndexedCommit>)
                                           {
                                               const auto result = operation.step();
                                               if (result == IndexedCommitStep::Verified && !operation.committed(committed)) return IndexedCommitStep::Invalid;
@@ -538,6 +653,9 @@ class IndexedDownloadStore final : public DownloadStore
         Reload,
         Generation,
         GenerationReady,
+        UpgradeHead,
+        UpgradeObject,
+        UpgradeRead,
         Create,
         Reply,
         Stop,
@@ -545,7 +663,26 @@ class IndexedDownloadStore final : public DownloadStore
         Finish
     };
     using Operation = std::variant<std::monostate, SdIndexedDownloadContext, SdIndexGet, SdIndexScan,
-                                   SdIndexedNewTask, SdIndexedDownloadReply, SdIndexedStopTask, SdIndexedInstall>;
+                                   SdIndexedNewTask, SdIndexedDownloadReply, SdIndexedStopTask, SdIndexedInstall, SdIndexedCommit>;
+    JournalWriteResult beginHeadUpgrade(::geocaching::ByteView object = {})
+    {
+        upgrade_mutations_.reset(::platform::memory::createPsram<std::array<::geocaching::storage::MutationView, 2>>());
+        if (!upgrade_mutations_)
+        {
+            releaseRead();
+            return JournalWriteResult::Unavailable;
+        }
+        (*upgrade_mutations_)[0] = {2, {cache_.data(), 32}, {install_.data(), install_size_}, false};
+        if (object.size)
+        {
+            if (object.size > response_capacity_) return fail();
+            std::memcpy(response_, object.data, object.size);
+            (*upgrade_mutations_)[1] = {1, {proof_hash_.data(), 32}, {response_, object.size}, false};
+        }
+        if (!io_->emplace<SdIndexedCommit>(volume_).begin(root_, copy_, upgrade_mutations_->data(), object.size ? 2 : 1, frame_, capacity_, *roots_[1 - copy_])) return fail();
+        phase_ = Phase::Finish;
+        return JournalWriteResult::InProgress;
+    }
     bool matches(::geocaching::ByteView key, uint64_t generation) const
     {
         return !blocked_ && owner_.heldBy(this) && revision_ == root_.revision && generation == generation_ &&
@@ -614,11 +751,13 @@ class IndexedDownloadStore final : public DownloadStore
     std::array<uint8_t, 16> task_{};
     std::array<uint8_t, 32> cache_{}, proof_hash_{}, recovery_old_hash_{};
     std::array<uint8_t, 160> install_{};
+    ::platform::memory::PsramPtr<std::array<::geocaching::storage::MutationView, 2>> upgrade_mutations_;
     uint64_t generation_ = 0, revision_ = 0, proof_generation_ = 0;
     size_t install_size_ = 0;
     Phase phase_ = Phase::None;
     uint8_t page_read_retries_ = 0;
-    bool valid_ = false, blocked_ = false, cached_ = false, active_ = false, completed_ = false, has_current_ = false;
+    bool valid_ = false, blocked_ = false, cached_ = false, active_ = false, completed_ = false, has_current_ = false, removed_current_ = false;
+    bool projection_upgrade_required_ = false;
 };
 static_assert(sizeof(IndexedDownloadStore) <= 640, "Idle download storage contains metadata and caller buffer leases only");
 } // namespace platform::esp::arduino_common::geocaching

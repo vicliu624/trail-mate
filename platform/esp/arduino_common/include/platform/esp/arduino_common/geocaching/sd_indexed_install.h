@@ -112,7 +112,7 @@ class SdIndexedInstall
                 // read() copies its key before destroying the context.
                 return read(1, head.current_hash, Phase::CurrentObject);
             }
-            if (old_present_ || !installableRecord(head, nullptr, verified)) return fail();
+            if (!installableRecord(head, nullptr, verified)) return fail();
             return read(1, {hash_.bytes.data(), 32}, Phase::Object);
         }
         if (phase_ == Phase::Proof) return proofStep();
@@ -230,7 +230,7 @@ class SdIndexedInstall
         verification_ = verification;
         verification_capacity_ = verification_capacity;
         candidate_ = &candidate;
-        if (!io_.emplace<SdIndexedDownloadContext>(volume_).begin(root_, {key_.data(), key_.size()}, generation, frame, capacity)) return false;
+        if (!io_.emplace<SdIndexedDownloadContext>(volume_, &read_session_).begin(root_, {key_.data(), key_.size()}, generation, frame, capacity)) return false;
         result_ = IndexedCommitStep::Working;
         return true;
     }
@@ -240,7 +240,7 @@ class SdIndexedInstall
         if (key.size > copied.size()) return fail();
         const auto size = key.size;
         std::memcpy(copied.data(), key.data, size);
-        if (!io_.emplace<SdIndexGet>(volume_).begin(root_, table, {copied.data(), size}, frame_, capacity_)) return fail();
+        if (!io_.emplace<SdIndexGet>(volume_, &read_session_).begin(root_, table, {copied.data(), size}, frame_, capacity_)) return fail();
         phase_ = phase;
         return result_;
     }
@@ -261,9 +261,11 @@ class SdIndexedInstall
         InstallRecordView install;
         if (!decodeCacheHead({cache_.bytes.data(), 32}, {head_.data(), head_size_}, head) ||
             !scan.item(row) || !decodeInstallRecord(row.key, row.value, install)) return fail();
+        const bool matching = head.current_hash.size == 32 ? !std::memcmp(install.revision_hash.data, head.current_hash.data, 32)
+                                                           : install.generation < generation_;
         if (install.phase == InstallPhase::Installed && install.generation <= generation_ &&
-            install.generation > proof_generation_ && head.current_hash.size == 32 &&
-            !std::memcmp(install.cache_id.data, cache_.bytes.data(), 32) && !std::memcmp(install.revision_hash.data, head.current_hash.data, 32))
+            install.generation > proof_generation_ && matching &&
+            !std::memcmp(install.cache_id.data, cache_.bytes.data(), 32))
         {
             proof_generation_ = install.generation;
             std::memcpy(proof_hash_.data(), install.new_file_hash.data, 32);
@@ -354,6 +356,7 @@ class SdIndexedInstall
     ::geocaching::protocol::RecordCrypto& crypto_;
     ::geocaching::storage::IndexRootView root_;
     ::geocaching::storage::IndexRootBytes* candidate_ = nullptr;
+    SdVolumeReadSession read_session_;
     ::geocaching::GeocacheId cache_;
     ::geocaching::RevisionHash hash_;
     std::array<uint8_t, 48> key_{};

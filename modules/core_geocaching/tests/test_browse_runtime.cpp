@@ -1,3 +1,4 @@
+#include "geocaching/protocol/get_response.h"
 #include "geocaching/protocol/publish_request.h"
 #include "geocaching/protocol/query_response.h"
 #include "platform/esp/arduino_common/geocaching/browse_runtime.h"
@@ -253,6 +254,10 @@ int main(int argc, char** argv)
 {
     require(argc == 2 || argc == 3, "expected fixture directory and optional runtime scenario");
     const bool close_on_save = argc == 3 && std::strcmp(argv[2], "save-close-detail") == 0;
+    const bool bad_legacy_signature = argc == 3 && std::strcmp(argv[2], "legacy-saved-bad-signature") == 0;
+    const bool legacy_projected = argc == 3 && std::strcmp(argv[2], "legacy-saved-projected-index") == 0;
+    const bool legacy_object_only = argc == 3 && std::strcmp(argv[2], "legacy-saved-object-index") == 0;
+    const bool legacy_projection = bad_legacy_signature || legacy_projected || legacy_object_only || (argc == 3 && std::strcmp(argv[2], "legacy-saved-projection") == 0);
     const std::string folder(argv[1]);
     const auto encoded_record = fixture(folder, "record-v1.bin");
     geocaching::RecordView expected_record;
@@ -261,9 +266,10 @@ int main(int argc, char** argv)
     chat::MeshAdapterRouter router;
     LoraBoard board;
     rt::configure(router, board);
-    if (argc == 3 && !close_on_save)
+    if (argc == 3 && !close_on_save && !legacy_projection)
     {
-        require(std::strcmp(argv[2], "local-draft-only") == 0, "unknown runtime scenario");
+        const bool legacy_upgrade = std::strcmp(argv[2], "legacy-index-upgrade") == 0;
+        require(legacy_upgrade || std::strcmp(argv[2], "local-draft-only") == 0, "unknown runtime scenario");
         router.ready = false;
         test::in_ui = true;
         test::source->activate(true);
@@ -284,6 +290,48 @@ int main(int argc, char** argv)
         until([&]
               { return test::allocations.empty(); },
               "draft editor session did not close");
+        namespace gc = geocaching::storage;
+        namespace sd = platform::esp::arduino_common::geocaching;
+        gc::VolumeInstance volume;
+        const auto& format = test::files.at("/trailmate/geocaching/.state/format.bin");
+        require(gc::decodeVolumeHeader({format.data(), format.size()}, volume) == gc::VolumeFormatResult::Supported, "legacy fixture volume");
+        const auto selected_root = [&]
+        {
+            gc::IndexRootView first, second, selected;
+            const auto& a = test::files.at("/trailmate/geocaching/.state/index/root.h0");
+            const auto& b = test::files.at("/trailmate/geocaching/.state/index/root.h1");
+            // Maintenance publishes each metadata copy in bounded writes.
+            // A partially written copy is not a completed rotation yet.
+            if (!gc::decodeIndexRoot({a.data(), a.size()}, volume, first) || !gc::decodeIndexRoot({b.data(), b.size()}, volume, second) ||
+                !gc::selectIndexRoot(first, second, selected)) return gc::IndexRootView{};
+            return selected;
+        };
+        if (legacy_upgrade)
+        {
+            const auto root = selected_root();
+            require(gc::validIndexRoot(root), "invalid legacy upgrade roots");
+            for (unsigned bucket = 0; bucket < 256; ++bucket)
+            {
+                if (!gc::indexHasShard(root, 4, static_cast<uint8_t>(bucket))) continue;
+                char paths[2][96];
+                gc::IndexShardHead heads[2], head;
+                for (unsigned copy = 0; copy < 2; ++copy)
+                {
+                    require(sd::indexShardHeadPathForBucket(root.slot, 4, static_cast<uint8_t>(bucket), copy, paths[copy], sizeof(paths[copy])), "legacy fixture head path");
+                    const auto& bytes = test::files.at(paths[copy]);
+                    require(gc::decodeIndexShardHead({bytes.data(), bytes.size()}, volume, root.epoch, 4, static_cast<uint8_t>(bucket), heads[copy]), "legacy fixture head");
+                }
+                require(gc::selectIndexShardHead(heads[0], heads[1], root.sequence, head) && head.current_only, "legacy fixture selected head");
+                char current[96], legacy[96];
+                require(sd::indexShardDataPath(root.slot, head, current, sizeof(current)), "legacy fixture current path");
+                head.current_only = false;
+                require(sd::indexShardDataPath(root.slot, head, legacy, sizeof(legacy)), "legacy fixture append path");
+                test::files[legacy] = test::files.at(current);
+                gc::IndexShardHeadBytes bytes;
+                require(gc::encodeIndexShardHead(volume, head, bytes), "legacy fixture encoding");
+                for (const auto& path : paths) test::files[path] = {bytes.begin(), bytes.end()};
+            }
+        }
         const auto saved_files = test::files;
         // Reproduce the L2 heap snapshot: PSRAM is available, internal heap is
         // below the unrelated 40 KiB reserve used by network admissions.
@@ -328,6 +376,55 @@ int main(int argc, char** argv)
                                            &draft_loaded) == ui::geocaching::DraftReadStatus::Ready; },
               "low internal heap blocked the draft editor");
         require(draft_loaded && test::clock_ms - read_started <= 3000, "draft editor exceeded three seconds with PSRAM available");
+        if (legacy_upgrade)
+        {
+            const auto before_epoch = selected_root().epoch;
+            require(selected_root().sequence < 256, "legacy fixture exceeded ordinary checkpoint interval");
+            ui::geocaching::DraftInput another;
+            another.name = "Second local draft";
+            another.has_coordinates = true;
+            another.latitude_e7 = local.latitude_e7;
+            another.longitude_e7 = local.longitude_e7;
+            require(test::source->saveDraft(another), "legacy card did not accept writable operation");
+            until([&]
+                  { return test::source->draftSaveStatus(another.id, 0) == ui::geocaching::DraftSaveStatus::Saved; },
+                  "legacy card draft save failed");
+            until([&]
+                  { return selected_root().epoch > before_epoch; },
+                  "writable legacy card did not automatically upgrade current indexes");
+            // Wait for mirror/cleanup to finish and verify that idle ticks
+            // do not start another conversion or allocate online transport.
+            const auto upgraded_epoch = selected_root().epoch;
+            for (unsigned i = 0; i < 10000; ++i) tick();
+            require(selected_root().epoch == upgraded_epoch && !router.sends && !router.service, "legacy upgrade repeated or started networking");
+            const auto upgraded = selected_root();
+            for (const uint8_t table : {uint8_t(1), uint8_t(2), uint8_t(4)})
+                for (unsigned bucket = 0; bucket < 256; ++bucket)
+                {
+                    if (!gc::indexHasShard(upgraded, table, static_cast<uint8_t>(bucket))) continue;
+                    gc::IndexShardHead heads[2], head;
+                    for (unsigned copy = 0; copy < 2; ++copy)
+                    {
+                        char path[96];
+                        require(sd::indexShardHeadPathForBucket(upgraded.slot, table, static_cast<uint8_t>(bucket), copy, path, sizeof(path)), "upgraded head path");
+                        const auto& bytes = test::files.at(path);
+                        require(gc::decodeIndexShardHead({bytes.data(), bytes.size()}, volume, upgraded.epoch, table, static_cast<uint8_t>(bucket), heads[copy]), "upgraded head encoding");
+                    }
+                    require(gc::selectIndexShardHead(heads[0], heads[1], upgraded.sequence, head) && head.current_only, "upgrade retained legacy bucket");
+                }
+            test::source->activate(false);
+            until([&]
+                  { return test::allocations.empty(); },
+                  "upgraded session did not close");
+            const auto upgraded_files = test::files;
+            test::source->activate(true);
+            const auto reopened = test::clock_ms;
+            until([&]
+                  { return snapshot(Section::Published).count == 2; },
+                  "upgraded local drafts did not reopen");
+            require(test::clock_ms - reopened <= 3000 && test::files == upgraded_files && !router.sends && !router.service,
+                    "upgraded local reopen was slow, wrote storage or started networking");
+        }
         test::source->activate(false);
         until([&]
               { return test::allocations.empty(); },
@@ -445,6 +542,9 @@ int main(int argc, char** argv)
           "online detail not displayed");
     require(detailText(item).description == expected_record.description && detailText(item).hint == expected_record.hint,
             "online detail omitted full description or hint");
+    ui::geocaching::Item discover_probe;
+    require(snapshot(Section::Discover).generation == generation && test::source->item(Section::Discover, 0, generation, discover_probe),
+            "detail response invalidated unchanged discovery rows");
     require(test::files.empty() && !test::blocked_io, "online detail required SD");
     require(router.delivery({{reply_remote.data(), 16}, {router.local.data(), 16}, {}, {last_reply.data(), last_reply.size()}}, router.context),
             "verified detail duplicate was not acknowledged");
@@ -467,6 +567,7 @@ int main(int argc, char** argv)
     until([&]
           { return std::strstr(snapshot(Section::Published).status.data(), "No local drafts"); },
           "initial publication projection did not load");
+    const auto publication_rows_before_download = snapshot(Section::Published).generation;
     test::source->requestWindow(Section::Discover, 0, 1);
     generation = snapshot(Section::Discover).generation;
     void* open_response = nullptr;
@@ -508,6 +609,8 @@ int main(int argc, char** argv)
         tick();
     }
     require(router.sends == 4, "saving verified detail sent a redundant network request");
+    require(snapshot(Section::Discover).generation != generation && !test::source->item(Section::Discover, 0, generation, discover_probe),
+            "downloaded membership retained stale discovery rows");
     const auto released_response = test::allocations.find(open_response);
     require(released_response == test::allocations.end() || released_response->second.owner != "geocaching.rx",
             "saved detail retained its response buffer");
@@ -515,6 +618,8 @@ int main(int argc, char** argv)
     // heads. None changes the publication projection we already loaded.
     require(std::strstr(snapshot(Section::Published).status.data(), "No local drafts"),
             "unrelated download invalidated the loaded publication projection");
+    require(snapshot(Section::Published).generation == publication_rows_before_download,
+            "unrelated download changed the publication row token");
     test::source->requestWindow(Section::Downloaded, 0, 4);
     until([&]
           {
@@ -522,6 +627,212 @@ int main(int argc, char** argv)
               return view.count == 1 && test::source->item(Section::Downloaded, 0, view.generation, item) && item.downloaded; },
           "installed GPX missing from directory");
     const auto saved_id = item.id;
+    if (legacy_projection)
+    {
+        namespace gc = geocaching::storage;
+        namespace sd = platform::esp::arduino_common::geocaching;
+        test::source->activate(false);
+        until([&]
+              { return test::allocations.empty(); },
+              "legacy fixture session did not close");
+        gc::VolumeInstance volume;
+        const auto& format = test::files.at("/trailmate/geocaching/.state/format.bin");
+        require(gc::decodeVolumeHeader({format.data(), format.size()}, volume) == gc::VolumeFormatResult::Supported, "legacy saved volume");
+        auto roots = std::make_unique<std::array<gc::IndexRootBytes, 2>>();
+        gc::IndexRootView root, decoded[2];
+        for (unsigned copy = 0; copy < 2; ++copy)
+        {
+            const auto& bytes = test::files.at(copy ? "/trailmate/geocaching/.state/index/root.h1" : "/trailmate/geocaching/.state/index/root.h0");
+            require(bytes.size() == (*roots)[copy].size(), "legacy saved root size");
+            std::memcpy((*roots)[copy].data(), bytes.data(), bytes.size());
+            require(gc::decodeIndexRoot({(*roots)[copy].data(), bytes.size()}, volume, decoded[copy]), "legacy saved root decode");
+        }
+        require(gc::selectIndexRoot(decoded[0], decoded[1], root), "legacy saved selected root");
+        unsigned copy = root.shards.data == decoded[1].shards.data ? 1 : 0;
+        auto frame = std::make_unique<std::array<uint8_t, 8192>>();
+        const auto read_index = [&](uint8_t table, geocaching::ByteView key)
+        {
+            auto get = std::make_unique<sd::SdIndexGet>(volume);
+            require(get->begin(root, table, key, frame->data(), frame->size()), "legacy fixture get begin");
+            sd::IndexGetStep result;
+            do
+            {
+                test::in_ui = false;
+                test::io_bytes = 0;
+                result = get->step();
+            } while (result == sd::IndexGetStep::Working);
+            require(result == sd::IndexGetStep::Ready, "legacy fixture get result");
+            const auto value = get->value();
+            return std::vector<uint8_t>(value.data, value.data + value.size);
+        };
+        auto object_bytes = read_index(1, {item.revision_hash.data(), 32});
+        gc::ObjectRefView object;
+        require(gc::decodeObjectRef({item.revision_hash.data(), 32}, {object_bytes.data(), object_bytes.size()}, object) && object.saved_request.size, "legacy saved projected object");
+        std::array<uint8_t, 16> installed_task{};
+        std::array<uint8_t, 48> installed_request{};
+        std::memcpy(installed_task.data(), object.saved_task.data, 16);
+        std::memcpy(installed_request.data(), object.saved_request.data, 48);
+        const auto install_before = read_index(12, {installed_task.data(), 16});
+        if (!legacy_projected && !legacy_object_only)
+        {
+            object.name = {};
+            object.saved_task = object.saved_request = {};
+        }
+        auto encoded = std::make_unique<std::array<uint8_t, 320>>();
+        size_t encoded_size = 0;
+        require(gc::encodeObjectRef({item.revision_hash.data(), 32}, object, encoded->data(), encoded->size(), encoded_size), "legacy saved object encoding");
+        gc::MutationView mutation{1, {item.revision_hash.data(), 32}, {encoded->data(), encoded_size}, false};
+        auto commit = std::make_unique<sd::SdIndexedCommit>(volume);
+        require(commit->begin(root, copy, &mutation, 1, frame->data(), frame->size(), (*roots)[1 - copy]), "legacy fixture commit begin");
+        sd::IndexedCommitStep committed;
+        do
+        {
+            test::in_ui = false;
+            test::io_bytes = 0;
+            committed = commit->step();
+        } while (committed == sd::IndexedCommitStep::Working);
+        require(committed == sd::IndexedCommitStep::Verified && commit->committed(root), "legacy fixture object commit");
+        copy = 1 - copy;
+        if (bad_legacy_signature)
+        {
+            auto outgoing_bytes = read_index(5, {installed_request.data(), 48});
+            gc::OutgoingView outgoing;
+            geocaching::RequestId request;
+            std::memcpy(request.bytes.data(), installed_request.data() + 32, 16);
+            geocaching::protocol::GetResponseView response;
+            require(gc::decodeOutgoing({installed_request.data(), 48}, {outgoing_bytes.data(), outgoing_bytes.size()}, outgoing) &&
+                        geocaching::protocol::decodeGetResponse(outgoing.terminal_data, request, 8192, response),
+                    "legacy corrupt receipt");
+            outgoing_bytes[response.signed_cache.data - outgoing_bytes.data() + response.signed_cache.size - 1] ^= 1;
+            mutation = {5, {installed_request.data(), 48}, {outgoing_bytes.data(), outgoing_bytes.size()}, false};
+            commit = std::make_unique<sd::SdIndexedCommit>(volume);
+            require(commit->begin(root, copy, &mutation, 1, frame->data(), frame->size(), (*roots)[1 - copy]), "legacy corrupt receipt commit begin");
+            do
+            {
+                test::in_ui = false;
+                test::io_bytes = 0;
+                committed = commit->step();
+            } while (committed == sd::IndexedCommitStep::Working);
+            require(committed == sd::IndexedCommitStep::Verified && commit->committed(root), "legacy corrupt receipt commit");
+            copy = 1 - copy;
+        }
+        // Also cover already projected objects in append-era object shards,
+        // including when cache heads already use current generations.
+        for (const uint8_t table : {uint8_t(1), uint8_t(2)})
+            for (unsigned bucket = 0; bucket < 256; ++bucket)
+            {
+                if (legacy_object_only && table == 2) continue;
+                if (!gc::indexHasShard(root, table, static_cast<uint8_t>(bucket))) continue;
+                char paths[2][96];
+                gc::IndexShardHead heads[2], head;
+                for (unsigned n = 0; n < 2; ++n)
+                {
+                    require(sd::indexShardHeadPathForBucket(root.slot, table, static_cast<uint8_t>(bucket), n, paths[n], sizeof(paths[n])), "legacy saved head path");
+                    const auto& bytes = test::files.at(paths[n]);
+                    require(gc::decodeIndexShardHead({bytes.data(), bytes.size()}, volume, root.epoch, table, static_cast<uint8_t>(bucket), heads[n]), "legacy saved head decode");
+                }
+                require(gc::selectIndexShardHead(heads[0], heads[1], root.sequence, head) && head.current_only, "legacy saved head selection");
+                char current[96], legacy[96];
+                require(sd::indexShardDataPath(root.slot, head, current, sizeof(current)), "legacy saved current path");
+                head.current_only = false;
+                require(sd::indexShardDataPath(root.slot, head, legacy, sizeof(legacy)), "legacy saved old path");
+                test::files[legacy] = test::files.at(current);
+                gc::IndexShardHeadBytes bytes;
+                require(gc::encodeIndexShardHead(volume, head, bytes), "legacy saved head encode");
+                for (const auto& path : paths) test::files[path] = {bytes.begin(), bytes.end()};
+            }
+        // Metadata upgrade must not hash, rewrite, or reject an edited GPX.
+        std::map<std::string, std::vector<uint8_t>> gpx_files;
+        for (auto& file : test::files)
+            if (file.first.find("/caches/") != std::string::npos && file.first.find(".gpx") != std::string::npos)
+            {
+                file.second.push_back('\n');
+                gpx_files.emplace(file.first, file.second);
+            }
+        require(!gpx_files.empty(), "legacy saved GPX absent");
+        router.ready = false;
+        const auto sends = router.sends;
+        test::internal_free = 38904;
+        test::io_delay_ms = 25;
+        const auto before_upgrade = test::files;
+        test::source->activate(true);
+        test::source->requestWindow(Section::Downloaded, 0, 4);
+        if (bad_legacy_signature)
+        {
+            until([&]
+                  { return std::strstr(snapshot(Section::Downloaded).status.data(), "index upgrade failed"); },
+                  "invalid legacy signature did not stop upgrade", true);
+            for (const auto& file : test::read_bytes_by_path) require(file.first.find("/caches/") == std::string::npos, "failed legacy upgrade read GPX");
+            for (unsigned i = 0; i < 2000; ++i) tick();
+            require(test::files == before_upgrade && router.sends == sends && !router.service, "invalid signature wrote projection or started network");
+            test::source->activate(false);
+            until([&]
+                  { return test::allocations.empty(); },
+                  "failed legacy upgrade leaked PSRAM");
+            return 0;
+        }
+        const auto upgrade_started = test::clock_ms;
+        until([&]
+              { const auto view = snapshot(Section::Downloaded); return view.ready && view.count == 1 && test::source->item(Section::Downloaded, 0, view.generation, item); },
+              "legacy saved projection upgrade did not finish", true);
+        std::fprintf(stderr, "Legacy saved upgrade elapsed_ms=%llu\n", static_cast<unsigned long long>(test::clock_ms - upgrade_started));
+        require(test::clock_ms - upgrade_started < 10000, "legacy saved one-time upgrade exceeded ten seconds");
+        require(item.id == saved_id && item.name.data() == expected_record.name && item.latitude_e7 == expected_record.latitude_e7 && item.longitude_e7 == expected_record.longitude_e7,
+                "legacy saved upgrade lost display metadata");
+        for (const auto& file : test::read_bytes_by_path) require(file.first.find("/caches/") == std::string::npos, "legacy metadata upgrade read GPX");
+        for (const auto& file : gpx_files) require(test::files.at(file.first) == file.second, "legacy metadata upgrade changed GPX");
+        require(router.sends == sends && !router.service, "legacy metadata upgrade started networking");
+        test::source->activate(false);
+        until([&]
+              { return test::allocations.empty(); },
+              "legacy saved upgrade did not close");
+        // Re-select published roots before checking that cleanup was untouched.
+        for (unsigned n = 0; n < 2; ++n)
+        {
+            const auto& bytes = test::files.at(n ? "/trailmate/geocaching/.state/index/root.h1" : "/trailmate/geocaching/.state/index/root.h0");
+            std::memcpy((*roots)[n].data(), bytes.data(), bytes.size());
+            require(gc::decodeIndexRoot({(*roots)[n].data(), bytes.size()}, volume, decoded[n]), "upgraded root decode");
+        }
+        require(gc::selectIndexRoot(decoded[0], decoded[1], root), "upgraded root selection");
+        require(read_index(12, {installed_task.data(), 16}) == install_before, "metadata upgrade changed installation or cleanup proof");
+        for (const uint8_t table : {uint8_t(1), uint8_t(2)})
+            for (unsigned bucket = 0; bucket < 256; ++bucket)
+            {
+                if (!gc::indexHasShard(root, table, static_cast<uint8_t>(bucket))) continue;
+                gc::IndexShardHead heads[2], head;
+                for (unsigned n = 0; n < 2; ++n)
+                {
+                    char path[96];
+                    require(sd::indexShardHeadPathForBucket(root.slot, table, static_cast<uint8_t>(bucket), n, path, sizeof(path)), "converted saved shard path");
+                    const auto& bytes = test::files.at(path);
+                    require(gc::decodeIndexShardHead({bytes.data(), bytes.size()}, volume, root.epoch, table, static_cast<uint8_t>(bucket), heads[n]), "converted saved shard decode");
+                }
+                require(gc::selectIndexShardHead(heads[0], heads[1], root.sequence, head) && head.current_only, "saved upgrade retained legacy generation");
+            }
+        const auto upgraded_files = test::files;
+        test::source->activate(true);
+        test::source->requestWindow(Section::Downloaded, 0, 4);
+        const auto reopened = test::clock_ms;
+        until([&]
+              { require(!test::allocated("geocaching.index.verify") && !test::allocated("geocaching.index.payload"), "current saved page allocated signed-record buffers"); const auto view = snapshot(Section::Downloaded); return view.ready && view.count == 1 && test::source->item(Section::Downloaded, 0, view.generation, item); },
+              "upgraded saved page did not reopen", true);
+        require(test::clock_ms - reopened <= 3000 && test::files == upgraded_files, "upgraded saved page repeated migration or exceeded three seconds");
+        for (const auto& file : test::read_bytes_by_path)
+            require(file.first.find("/caches/") == std::string::npos && file.first.find("/05/") == std::string::npos && file.first.find("/0a/") == std::string::npos && file.first.find("/0c/") == std::string::npos,
+                    "upgraded saved page scanned requests, tasks, installations, or GPX");
+        test::source->open(item, snapshot(Section::Downloaded).generation);
+        until([&]
+              { return detailText(item).status == ui::geocaching::DetailStatus::Ready; },
+              "upgraded saved details unavailable");
+        require(detailText(item).description == expected_record.description && detailText(item).hint == expected_record.hint && router.sends == sends,
+                "upgraded saved detail lost signed text or required network");
+        test::source->closeDetail();
+        test::source->activate(false);
+        until([&]
+              { return test::allocations.empty(); },
+              "upgraded saved details leaked PSRAM");
+        return 0;
+    }
     if (close_on_save)
     {
         test::source->open(item, snapshot(Section::Downloaded).generation);
@@ -603,6 +914,7 @@ int main(int argc, char** argv)
               return view.count == 1 && test::source->item(Section::Published, 0, view.generation, item) && item.publication_confirmed && item.publication_revision == 1; },
           "publication receipt not reflected in draft list");
     require(router.identity.signs == 1, "publication signed more than once");
+    const auto discovery_before_edit = snapshot(Section::Discover).generation;
     // Exercise the UI field limits and the confirmed-version edit path through
     // the same device owner, not a direct store call.
     const std::string long_name(96, 'N'), long_description(2048, 'D'), long_hint(512, 'H');
@@ -632,6 +944,9 @@ int main(int argc, char** argv)
               return test::source->item(Section::Published, 0, view.generation, item) && item.publication_confirmed && item.publication_revision == 2; },
           "second publication receipt not reflected in list");
     require(router.identity.signs == 2, "version update signed more than once");
+    require(snapshot(Section::Discover).generation == discovery_before_edit &&
+                test::source->item(Section::Discover, 0, discovery_before_edit, discover_probe),
+            "unrelated publication invalidated unchanged discovery rows");
     // Isolate archive conformance from the following restart fixture, which
     // intentionally retains an active revision-2 draft for its map assertions.
     const auto active_fixture = test::files;
@@ -1324,8 +1639,11 @@ int main(int argc, char** argv)
             if (found == test::files.end()) removed_staging = true;
             return removed_staging && snapshot(Section::Discover).has_more && found != test::files.end() && found->second.empty(); },
               "pagination test did not enter maintenance");
+        const auto rows_before_pagination = snapshot(Section::Discover).generation;
         require(test::source->loadMore(), "maintenance rejected pagination intent");
         require(!test::source->loadMore() && !snapshot(Section::Discover).has_more, "duplicate pagination was accepted");
+        require(snapshot(Section::Discover).generation == rows_before_pagination,
+                "pagination status invalidated the retained query page");
         require(!test::ui_io, "pagination callback touched storage");
         until([&]
               { return router.sends == paging_sends + 3; },
@@ -1336,6 +1654,9 @@ int main(int argc, char** argv)
               { const auto view = snapshot(Section::Discover); return view.can_refresh && !view.has_more && view.count == 0; },
               "final pagination response was not displayed");
         require(router.sends == paging_sends + 3, "pagination request sent twice");
+        require(snapshot(Section::Discover).generation != rows_before_pagination &&
+                    !test::source->item(Section::Discover, 0, rows_before_pagination, discover_probe),
+                "replacement query page retained a stale selection");
         closeRuntime();
         const auto journalCount = []
         {

@@ -355,6 +355,15 @@ class SdDownloadPort final : public ::geocaching::DownloadPort, private ::geocac
     }
     Result recoverInstalled()
     {
+        if (phase_ == Phase::RecoverInstalledHistoryOpen)
+        {
+            // The normal finish transaction releases its read lease. When a
+            // retained copy already exists, reacquire the completed receipt
+            // before verifying that copy and removing the duplicate backup.
+            const auto loaded = store_.readDownload(key(), identity_.generation);
+            if (loaded == JournalWriteResult::InProgress || loaded == JournalWriteResult::Busy) return Result::Pending;
+            if (loaded != JournalWriteResult::Verified) return fail();
+        }
         if (!store_.downloadCompleted(key(), identity_.generation)) return fail();
         if (phase_ == Phase::RecoverInstalledHistoryOpen)
         {

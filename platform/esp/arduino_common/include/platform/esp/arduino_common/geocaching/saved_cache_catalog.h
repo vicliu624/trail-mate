@@ -146,6 +146,8 @@ class SavedCacheCatalog
     {
         switch (error_)
         {
+        case DownloadRecoveryRead::NeedsUpgrade:
+            return "Updating saved cache index...";
         case DownloadRecoveryRead::Unavailable:
             return "Saved cache data temporarily unavailable";
         case DownloadRecoveryRead::WorkspaceTooSmall:

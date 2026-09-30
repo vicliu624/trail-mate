@@ -25,6 +25,7 @@ template <class Digest>
 class SdIndexedRecovery
 {
   public:
+    bool needsCurrentIndexUpgrade() const { return result_ == IndexedRecoveryStep::Restored && legacy_current_index_; }
     SdIndexedRecovery(const ::geocaching::storage::VolumeInstance& volume,
                       ::geocaching::storage::IndexRootBytes& first, ::geocaching::storage::IndexRootBytes& second,
                       uint8_t* frame, size_t capacity, uint8_t* validation_frame, size_t validation_capacity,
@@ -54,7 +55,7 @@ class SdIndexedRecovery
         copy = copy_;
         return true;
     }
-    // A read-only lease after validated suffix replay, before whole-index audit.
+    // A read-only lease of the selected committed root, before journal inventory.
     // Pause step() while using this snapshot and the shared frame. Readers must
     // validate each accessed record. This is not permission to mutate storage.
     bool committedSnapshot(::geocaching::storage::IndexRootView& root, unsigned& copy) const
@@ -196,7 +197,7 @@ class SdIndexedRecovery
             // Root selection and replay only prove the newly applied suffix.
             // Existing shards and their referenced values must also be readable
             // before the application can publish new work on this snapshot.
-            if (!io_.template emplace<SdIndexScan>(volume_).begin(root_, audit_table_, frame_, capacity_)) return finish(IndexedRecoveryStep::RecoveryRequired);
+            if (!io_.template emplace<SdIndexScan>(volume_, &read_session_).begin(root_, audit_table_, frame_, capacity_)) return finish(IndexedRecoveryStep::RecoveryRequired);
             phase_ = Phase::Audit;
             readable_snapshot_ = true;
             return result_;
@@ -213,6 +214,8 @@ class SdIndexedRecovery
                 return result_;
             }
             if (status != IndexScanStep::End) return error(status);
+            if (audit_table_ == 1 || audit_table_ == 2 || audit_table_ == 4)
+                legacy_current_index_ |= scan.sawLegacyGeneration();
             // References scans every live row of these three tables using the
             // same CRC/shape-checked reader. Do not read them twice at startup.
             do
@@ -221,10 +224,10 @@ class SdIndexedRecovery
             } while (audit_table_ == 5 || audit_table_ == 10 || audit_table_ == 13);
             if (audit_table_ <= 13)
             {
-                if (!io_.template emplace<SdIndexScan>(volume_).begin(root_, audit_table_, frame_, capacity_)) return finish(IndexedRecoveryStep::RecoveryRequired);
+                if (!io_.template emplace<SdIndexScan>(volume_, &read_session_).begin(root_, audit_table_, frame_, capacity_)) return finish(IndexedRecoveryStep::RecoveryRequired);
                 return result_;
             }
-            if (!io_.template emplace<SdIndexReferences>(volume_).begin(root_, frame_, capacity_)) return finish(IndexedRecoveryStep::RecoveryRequired);
+            if (!io_.template emplace<SdIndexReferences>(volume_, &read_session_).begin(root_, frame_, capacity_)) return finish(IndexedRecoveryStep::RecoveryRequired);
             phase_ = Phase::References;
             return result_;
         }
@@ -280,6 +283,7 @@ class SdIndexedRecovery
     ::geocaching::storage::MutationView* mutations_;
     size_t mutation_capacity_;
     Digest import_digest_;
+    SdVolumeReadSession read_session_;
     std::variant<std::monostate, SdIndexRootReader, SdCheckpointSelection<Digest>, SdIndexInitialize,
                  SdCheckpointIndexImport<Digest>, SdJournalInventory, SdIndexReplay, SdIndexScan, SdIndexReferences>
         io_;
@@ -289,6 +293,7 @@ class SdIndexedRecovery
     bool roots_loaded_ = true;
     bool readable_snapshot_ = false;
     bool committed_snapshot_ = false;
+    bool legacy_current_index_ = false;
     Phase phase_ = Phase::Volume;
     IndexedRecoveryStep result_ = IndexedRecoveryStep::Working;
 };

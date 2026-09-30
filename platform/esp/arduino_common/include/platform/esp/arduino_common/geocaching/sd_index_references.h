@@ -12,7 +12,8 @@ namespace platform::esp::arduino_common::geocaching
 class SdIndexReferences
 {
   public:
-    explicit SdIndexReferences(const ::geocaching::storage::VolumeInstance& volume) : volume_(volume) {}
+    explicit SdIndexReferences(const ::geocaching::storage::VolumeInstance& volume, SdVolumeReadSession* session = nullptr)
+        : volume_(volume), session_(session) {}
 
     // Pending mutations are borrowed and immutable until completion. Their
     // storage must be disjoint from the reusable read frame.
@@ -48,7 +49,7 @@ class SdIndexReferences
         for (size_t i = 0; i < count; ++i)
             attempts_only &= mutations[i].table != 5 && mutations[i].table != 10;
         const bool changed_only = count && (attempts_only || preserves_existing_links);
-        if (!changed_only && !scan_.emplace(volume_).begin(root, 5, frame, capacity)) return false;
+        if (!changed_only && !scan_.emplace(volume_, session_).begin(root, 5, frame, capacity)) return false;
         scanned_ = changed_only;
         mutations_ = mutations;
         mutation_count_ = count;
@@ -117,7 +118,7 @@ class SdIndexReferences
                 return result_;
             }
             table_ = table_ == 5 ? 10 : 13;
-            if (!scan_.emplace(volume_).begin(root_, table_, frame_, capacity_)) return finish(IndexScanStep::Invalid);
+            if (!scan_.emplace(volume_, session_).begin(root_, table_, frame_, capacity_)) return finish(IndexScanStep::Invalid);
             return result_;
         }
         if (status != IndexScanStep::Item) return finish(status);
@@ -144,7 +145,7 @@ class SdIndexReferences
             overlay_value_ = row->value;
             overlay_ready_ = true;
         }
-        else if (!get_.emplace(volume_).begin(root_, table, key, frame_, capacity_)) return finish(IndexScanStep::Invalid);
+        else if (!get_.emplace(volume_, session_).begin(root_, table, key, frame_, capacity_)) return finish(IndexScanStep::Invalid);
         return result_;
     }
     IndexScanStep checkRow(const ::geocaching::storage::MutationView& row)
@@ -213,6 +214,7 @@ class SdIndexReferences
     }
     ::geocaching::storage::VolumeInstance volume_;
     ::geocaching::storage::IndexRootView root_;
+    SdVolumeReadSession* session_;
     std::optional<SdIndexScan> scan_;
     std::optional<SdIndexGet> get_;
     ::geocaching::storage::TaskReferenceCheck references_;

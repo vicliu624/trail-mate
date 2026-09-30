@@ -15,6 +15,7 @@ template <class Digest>
 class SdIndexRepair
 {
   public:
+    bool needsCurrentIndexUpgrade() const { return result_ == IndexedRecoveryStep::Restored && legacy_current_index_; }
     SdIndexRepair(const ::geocaching::storage::VolumeInstance& volume,
                   ::geocaching::storage::IndexRootBytes& first, ::geocaching::storage::IndexRootBytes& second,
                   uint8_t* frame, size_t capacity, uint8_t* validation_frame, size_t validation_capacity,
@@ -65,6 +66,7 @@ class SdIndexRepair
             if (status == IndexedRecoveryStep::Restored)
             {
                 if (!recovery_->selected(root_, copy_) || root_.sequence < floor_) return finish(IndexedRecoveryStep::RecoveryRequired);
+                legacy_current_index_ = recovery_->needsCurrentIndexUpgrade();
                 recovery_.reset();
                 if (!archive_present_) return finish(IndexedRecoveryStep::Restored);
                 return clean(true);
@@ -290,6 +292,7 @@ class SdIndexRepair
     unsigned copy_ = 0;
     uint8_t position_ = 0;
     bool stored_floor_valid_ = false, have_floor_ = false, index_present_ = false, archive_present_ = false, pending_repair_ = false, attempted_ = false;
+    bool legacy_current_index_ = false;
     Phase phase_ = Phase::OpenState;
     IndexedRecoveryStep result_ = IndexedRecoveryStep::Working;
 };

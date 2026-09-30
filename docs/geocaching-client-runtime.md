@@ -17,20 +17,34 @@ valid. A nonempty generation must have exactly the length in its head; malformed
 references and CRC failures are still rejected. Legacy heads and readers retain
 their existing checks.
 
-The production transaction writer maintains current-only cache-head shards
-(table 2). It folds all mutations for the same bucket in a transaction into one
+The production transaction writer maintains current-only object, cache-head,
+and draft shards (tables 1, 2, and 4). It folds all mutations for the same bucket in a transaction into one
 replacement, verifies the flushed file by read-back CRC, then publishes the
 shard head through the existing root commit. Failed verification leaves the
 parent head unchanged and requires journal recovery. The bounded writer and its
 optional legacy lookup are allocated in PSRAM only; neither retains a complete
 shard or GPX payload.
 
-Updating a legacy cache-head bucket converts that bucket during the write.
-Opening a local list does not create or rebuild generations, and untouched
-legacy buckets still use their original reader. Other tables retain append
-shards. Exclusive index-slot cleanup recognizes generation filenames; older
-generations remain until their retired index slot is cleaned. Full conversion
-of untouched old-card buckets and earlier reclamation remain unfinished.
+Checkpoint import and rotation preserve this format for tables 1, 2, and 4.
+They write checkpoint references to the sequence-named generation before
+publishing its head. The checkpoint reader enforces strict key order across
+pages; the appender checks the previous entry to maintain that order within each
+bucket, rather than searching the whole bucket for every imported row. Journal
+appends retain their existing replay behavior. Reference checks, checkpoint
+digest validation, and replacement equivalence still precede root publication.
+
+Updating a legacy object, cache-head, or draft bucket converts that bucket during
+the write. The existing recovery audit also detects untouched legacy buckets in
+these tables. After a writable operation completes, idle maintenance uses the
+existing checkpoint rotation to convert them without waiting for the ordinary
+256-record interval. Foreground work takes priority; a pinned checkpoint slot
+defers another attempt until the root changes. No separate migration scan or
+service is created. Current-format local lists remain read-only. Downloaded
+detects legacy cache-head buckets or missing object display fields and requests
+one bounded, transactional compatibility upgrade before retrying that page.
+The remaining tables retain append shards. Exclusive index-slot
+cleanup recognizes generation filenames; older generations remain until their
+retired index slot is cleaned.
 
 Local lists and the standalone Map can open a CRC-checked committed index root
 before journal inventory or suffix replay. The read lease is not a write-ready
@@ -44,6 +58,27 @@ A read-only Downloaded session does not create the draft/publication storage
 adapter. The storage worker creates it when the draft list or draft map section
 is requested, or when full recovery prepares a write-capable session. Network
 query and dispatch services retain their separate on-demand activation.
+
+Old saved objects without display metadata are upgraded once, using their
+retained signed response and committed Installed record. The upgrade admits
+writes through full suffix recovery and reference validation, authenticates the
+exact cache ID and revision, preserves retention fields, and rewrites only its
+object projection and unchanged cache head. It does not open GPX files, change
+installation generations or cleanup proofs, or start network services. Failure
+leaves the old data intact and reports an error instead of retrying forever.
+Subsequent Downloaded pages read only current heads and object projections;
+full details still verify the retained signed record. An operation-scoped volume
+session avoids repeated format reads while checking media/USB transitions on
+every read; CRC and reference checks are unchanged.
+
+The native runtime regressions simulate 25 ms per SD I/O and 38,904 bytes of
+internal free heap with PSRAM available. The oldest saved-object upgrade finishes
+in 9,660 simulated milliseconds; reopening its Downloaded page takes 1,225 ms.
+The tests also cover already projected legacy buckets, an object-only legacy
+bucket, and a corrupted author signature. They assert unchanged edited GPX,
+unchanged installation/cleanup metadata, no GPX reads during upgrade, no history
+reads or writes after reopening, offline full details, and released PSRAM.
+These timings are regression evidence, not hardware measurements.
 
 ## Archive a published cache
 
@@ -108,9 +143,12 @@ and hint after author verification. Only the open detail owns these text buffers
 closing it cancels further requests. Online detail reads do not require SD.
 Saved items read the complete signed record already retained by the download
 transaction, so descriptions and hints remain available offline after restart.
-Saving an open verified online detail transfers its immutable response and
-verified record view to the installation job. It does not repeat the network
-request or Ed25519 verification, or allocate a second verification workspace.
+Saving an open verified online detail copies its immutable response into a
+separate PSRAM allocation for installation. The detail retains its own response,
+so staying on the page or closing it cannot invalidate the other owner. The
+installation reparses the copy to bind borrowed fields to its own bytes and
+reuses the verified identity and hash. It does not repeat the network request
+or Ed25519 verification, or allocate a second verification workspace.
 The handoff still checks the source, request ID, revision hash, summary fields,
 and that the verified signature borrows the retained response. New network
 responses continue through full signature verification.
@@ -156,6 +194,26 @@ list metadata from the retained signed record. Subsequent startup skips these
 completed installations without reopening their GPX files. Downloaded pages use
 the current head/object/install indexes, with four rows and one lookahead, rather
 than scanning request history or hashing GPX files.
+
+Local list row tokens combine the current catalogue's lifetime and its own
+content generation. Download and transport progress do not change Published
+row tokens; publication progress does not change Downloaded row tokens. Replacing
+a catalogue gives it a new lifetime token, so stale selections from a closed
+session cannot become valid when a new catalogue starts at generation one.
+Status messages and action buttons update independently of row rendering.
+
+Discover rows use the committed query page's content generation. Query phase,
+failure text, detail responses and unrelated publication progress do not change
+that version. A separate source-lifetime token and saved-membership generation
+invalidate selections when the browser session is replaced or Downloaded
+membership changes. Pagination retains the existing rows while requesting the
+next page; committing the replacement page invalidates the previous selection.
+
+Background publication recovery filters completed, cancelled and no-intent
+requests before opening their parent tasks. Exact cache lookups still read
+confirmed receipts, and eligible unfinished requests retain task/reference
+validation. Selecting unfinished work scans the current request index; it does
+not reopen every completed task or GPX file.
 
 Legacy kind-3 browse tasks remain readable on existing cards. The indexed
 dispatcher skips them without a startup scan that rewrites each task. Older
@@ -206,6 +264,13 @@ not a promise of immediate physical file reclamation. Local map projections
 invalidate on committed saves, removals and installation changes even when the
 viewport stays unchanged. Work and payload buffers are allocated in PSRAM.
 
+A later download may replace the retained GPX only after its bytes match the
+last committed installation for that cache from an earlier generation. A
+modified or unowned GPX is still rejected. Removing the head does not reactivate
+old download tasks. When identical history already exists, installation
+reacquires the completed receipt before checking the retained file and removing
+its duplicate backup; that cleanup is also safe to resume after restart.
+
 Archive retries reuse an existing author reservation's issuance time and verify
 the reconstructed revision hash before signing. Advancing the wall clock must
 not create different bytes for a previously reserved revision. Preparation
@@ -214,10 +279,12 @@ failures are reported in the detail action and once in the publication log.
 Object references (table 1), installed heads (table 2), and local drafts (table
 4) use current-reference shard generations. Repeated changes to one key retain
 one lookup reference, with older generations still available to pinned roots.
-Legacy shards convert when next written; untouched legacy shards still need
-migration before all old-card reads can be free of historical references.
+Legacy shards convert when next written; untouched legacy buckets are detected
+by writable recovery and converted by idle checkpoint maintenance. A card used
+only for local draft reads retains its compatible legacy reader until a write
+occurs. Legacy Downloaded records use the one-time metadata upgrade above.
 
-Downloaded page reads allocate index and verification buffers only. The 8 KiB
-download response buffer is allocated by the workspace preparation callback
-when a download operation acquires its lease, rather than during local startup.
+Downloaded page reads allocate index buffers only. Signed-record verification
+and the 8 KiB response buffer are allocated when a detail, download, or legacy
+metadata upgrade acquires its lease, rather than during current-format startup.
 All these buffers remain PSRAM-only and are trimmed after the lease is released.

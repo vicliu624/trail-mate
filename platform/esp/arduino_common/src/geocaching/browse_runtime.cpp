@@ -85,6 +85,8 @@ std::atomic<PendingReply*> pending_reply{nullptr};
 struct Session
 {
     uint64_t local_map_revision = 0;
+    uint64_t saved_catalog_epoch = 0, draft_catalog_epoch = 0;
+    uint64_t discover_catalog_epoch = 0, discover_saved_epoch = 0, discover_saved_generation = 0;
     struct Publication
     {
         enum class DraftStage : uint8_t
@@ -175,6 +177,8 @@ struct Session
     const char* browse_status = "Connecting to Reticulum...";
     bool storage_requested = false;
     bool local_read_only = false, local_snapshot_attempted = false;
+    std::array<uint8_t, 32> legacy_projection_cache{};
+    bool legacy_projection_pending = false, projection_upgrade_admitted = false;
     uint8_t startup_read_retries = 0;
     size_t saved_offset = 0, saved_count = 0;
     gc::storage::VolumeInstance volume{};
@@ -202,6 +206,9 @@ struct Session
     ::platform::memory::PsramPtr<SdIndexRepair<Digest>> recovery;
     ::platform::memory::PsramPtr<SdCheckpointRotation<Digest>> checkpoint;
     uint64_t checkpoint_attempt_sequence = 0;
+    bool current_index_upgrade_pending = false;
+    uint32_t current_index_upgrade_retry_ms = 0;
+    uint64_t current_index_upgrade_deferred_revision = 0;
     bool checkpoint_recovery_required = false;
     ::platform::memory::PsramPtr<IndexedPublicationStore> store;
     ::platform::memory::PsramPtr<IndexedDispatchStore> dispatch_store;
@@ -238,9 +245,9 @@ struct Session
     uint32_t download_wait_ms = gc::QueryClient::kReplyTimeoutMs;
     size_t download_scratch = 0;
     chat::IMeshAdapter* created_backend = nullptr;
-    bool ensureBuffers(bool operations, bool metadata = false)
+    bool ensureBuffers(bool operations)
     {
-        const bool needs_verification = operations || metadata;
+        const bool needs_verification = operations;
         const size_t missing = (!frame ? kFrameCapacity : 0) + (!encoded ? kEncodingCapacity : 0) +
                                (operations && !payload ? kPayloadCapacity : 0) + (needs_verification && !verification ? kVerificationCapacity : 0);
         // These buffers are PSRAM-only (no internal fallback below). Charging
@@ -263,7 +270,7 @@ struct Session
         auto& s = *static_cast<Session*>(context);
         const bool metadata = owner == s.download_store.get() && s.download_store->metadataRead();
         const bool needs_record = owner == s.store.get() || (owner == s.download_store.get() && !metadata);
-        if (!s.ensureBuffers(needs_record, metadata)) return false;
+        if (!s.ensureBuffers(needs_record)) return false;
         if (s.store) s.store->bindWorkspace(s.frame, s.payload, s.verification);
         if (s.download_store) s.download_store->bindWorkspace(s.frame, s.payload, s.verification);
         if (s.dispatch_store) s.dispatch_store->bindWorkspace(s.frame);
@@ -322,6 +329,17 @@ std::atomic<uint32_t> next_step{0};
 std::atomic<uint32_t> replies_seen{0}, replies_busy{0}, replies_queued{0};
 uint32_t replies_processed = 0, replies_accepted = 0;
 uint64_t epoch = 0;
+uint64_t discoverScope(Session& s)
+{
+    const auto saved_generation = s.saved ? s.saved->generation() : 0;
+    if (s.discover_saved_epoch != s.saved_catalog_epoch || s.discover_saved_generation != saved_generation)
+    {
+        s.discover_saved_epoch = s.saved_catalog_epoch;
+        s.discover_saved_generation = saved_generation;
+        s.discover_catalog_epoch = ++epoch;
+    }
+    return s.discover_catalog_epoch;
+}
 void reportPublication(const char* event, const gc::PublishAttempt& attempt)
 {
     const auto& id = attempt.cacheId().bytes;
@@ -397,7 +415,11 @@ bool draftMetadataReady(const Session& s)
 bool advanceDraftCatalog(Session& s)
 {
     if (!s.draft_catalog_wanted || !s.store || s.needsRecovery() || (s.phase != Phase::Ready && s.phase != Phase::ResumeDownloads)) return false;
-    if (!s.draft_catalog) s.draft_catalog.reset(::platform::memory::createPsram<Session::DraftCatalog>());
+    if (!s.draft_catalog)
+    {
+        s.draft_catalog.reset(::platform::memory::createPsram<Session::DraftCatalog>());
+        if (s.draft_catalog) s.draft_catalog_epoch = ++epoch;
+    }
     if (!s.draft_catalog) return false;
     auto& catalog = *s.draft_catalog;
     if (s.map_metadata_only && draftMetadataReady(s))
@@ -495,8 +517,12 @@ bool advanceCheckpoint(Session& s)
         next_step.store(millis() + 1000);
         return true;
     }
+    const auto previous_epoch = s.root.epoch;
     const bool complete = (result == CheckpointRotationStep::Complete || result == CheckpointRotationStep::Yielded) &&
                           s.checkpoint->selected(s.root, s.root_copy);
+    if (complete && s.root.epoch != previous_epoch) s.current_index_upgrade_pending = false;
+    if (result == CheckpointRotationStep::Deferred) s.current_index_upgrade_deferred_revision = s.root.revision;
+    if (s.current_index_upgrade_pending) s.current_index_upgrade_retry_ms = millis() + 5000;
     s.workspace_owner.release(s.checkpoint.get());
     s.checkpoint.reset();
     if (!complete && result != CheckpointRotationStep::Deferred)
@@ -516,8 +542,15 @@ bool startCheckpoint(Session& s)
     // transaction. All consumers use the same workspace lease; acquiring it
     // proves their borrowed index cursors have been released.
     constexpr uint64_t interval = 256;
-    if (s.root.sequence < s.checkpoint_attempt_sequence || s.root.sequence - s.checkpoint_attempt_sequence < interval ||
+    const bool upgrade = s.current_index_upgrade_pending;
+    if (upgrade && (s.current_index_upgrade_deferred_revision == s.root.revision ||
+                    static_cast<int32_t>(millis() - s.current_index_upgrade_retry_ms) < 0)) return false;
+    if (!upgrade && (s.root.sequence < s.checkpoint_attempt_sequence || s.root.sequence - s.checkpoint_attempt_sequence < interval)) return false;
+    if (s.local_read_only ||
         s.workspace_owner.holder() || s.response || pending_announcement.load(std::memory_order_acquire) || downloadActive() || publicationActive() || draftSaveActive()) return false;
+    if (upgrade && ((s.saved && s.saved->pending() && !s.draft_catalog_wanted) || (s.draft_catalog_wanted && !draftCatalogReady(s)) ||
+                    (s.detail && s.detail->state == CacheDetail::State::Saved) ||
+                    (s.draft_read && s.draft_read->status == ::ui::geocaching::DraftReadStatus::Pending))) return false;
     s.checkpoint.reset(::platform::memory::createPsram<SdCheckpointRotation<Digest>>(s.volume));
     if (!s.checkpoint)
     {
@@ -531,7 +564,7 @@ bool startCheckpoint(Session& s)
     }
     // Sorting reuses the 8 KiB encoding buffer; the smaller signature scratch
     // cannot hold a run. Import subsequently reuses it for value comparison.
-    if (!s.checkpoint->begin(s.roots[0], s.roots[1], s.root_copy, s.frame, kFrameCapacity, s.encoded, kEncodingCapacity, interval))
+    if (!s.checkpoint->begin(s.roots[0], s.roots[1], s.root_copy, s.frame, kFrameCapacity, s.encoded, kEncodingCapacity, upgrade ? 0 : interval))
     {
         s.workspace_owner.release(s.checkpoint.get());
         s.checkpoint.reset();
@@ -869,7 +902,7 @@ void advanceBrowse(Session& s)
             return;
         }
         s.client->query(kWorld);
-        ++epoch;
+        s.discover_catalog_epoch = ++epoch;
     }
     drainReply(s);
     if (auto* pending = pending_announcement.exchange(nullptr, std::memory_order_acq_rel))
@@ -951,6 +984,9 @@ void advanceStorageRecovery(Session& s)
             return;
         }
         if (s.root.sequence != previous_sequence) s.draft_catalog.reset();
+        s.current_index_upgrade_pending = s.recovery->needsCurrentIndexUpgrade();
+        s.projection_upgrade_admitted = true;
+        s.current_index_upgrade_retry_ms = millis();
         s.recovery.reset();
     }
     if (!s.ensureBuffers(false))
@@ -961,7 +997,7 @@ void advanceStorageRecovery(Session& s)
     s.download_store.reset(::platform::memory::createPsram<IndexedDownloadStore>(s.volume, s.root, s.root_copy, s.roots[0], s.roots[1],
                                                                                  s.workspace_owner, s.workspace, s.frame, kFrameCapacity,
                                                                                  s.payload, kPayloadCapacity, s.verification, kVerificationCapacity, s.crypto));
-    if ((!s.local_read_only || s.draft_catalog_wanted) && !ensurePublicationStore(s))
+    if (((!s.local_read_only && !s.legacy_projection_pending) || s.draft_catalog_wanted) && !ensurePublicationStore(s))
     {
         fail("Insufficient publication storage memory");
         return;
@@ -977,6 +1013,7 @@ void advanceStorageRecovery(Session& s)
         fail("Insufficient catalogue memory");
         return;
     }
+    s.saved_catalog_epoch = ++epoch;
     if (s.saved_count) s.saved->requestWindow(s.saved_offset, s.saved_count);
     s.phase = s.local_read_only ? Phase::Ready : Phase::ResumeDownloads;
     s.status = s.local_read_only ? "Saved storage ready" : "Recovering downloaded GPX files...";
@@ -1638,7 +1675,13 @@ class Facade final : public ::ui::geocaching::Source
             out.can_refresh = true;
             out.can_create = out.has_more = false;
         }
-        out.generation ^= epoch << 32;
+        // List ownership and its own content version determine row validity.
+        // Transport and operation progress must not invalidate unchanged rows.
+        const auto scope = section == ::ui::geocaching::Section::Published && session    ? session->draft_catalog_epoch
+                           : section == ::ui::geocaching::Section::Downloaded && session ? session->saved_catalog_epoch
+                           : section == ::ui::geocaching::Section::Discover && session   ? discoverScope(*session)
+                                                                                         : epoch;
+        out.generation ^= scope << 32;
     }
     void requestWindow(::ui::geocaching::Section section, size_t offset, size_t count) override
     {
@@ -1701,7 +1744,7 @@ class Facade final : public ::ui::geocaching::Source
             out = {};
             if (!draftMetadataReady(*session)) return false;
             const auto& catalog = *session->draft_catalog;
-            if ((generation ^ (epoch << 32)) != catalog.generation || index < catalog.page.offset || index - catalog.page.offset >= catalog.page.count) return false;
+            if ((generation ^ (session->draft_catalog_epoch << 32)) != catalog.generation || index < catalog.page.offset || index - catalog.page.offset >= catalog.page.count) return false;
             const auto& draft = catalog.page.rows[index - catalog.page.offset];
             out.is_draft = true;
             out.state = draft.state;
@@ -1740,8 +1783,8 @@ class Facade final : public ::ui::geocaching::Source
             return true;
         }
         if (guard.locked && section == ::ui::geocaching::Section::Downloaded && session && session->saved && !session->needsRecovery())
-            return session->saved->item(index, generation ^ (epoch << 32), out);
-        if (!guard.locked || !session || !session->source || !session->source->item(section, index, generation ^ (epoch << 32), out)) return false;
+            return session->saved->item(index, generation ^ (session->saved_catalog_epoch << 32), out);
+        if (!guard.locked || !session || !session->source || !session->source->item(section, index, generation ^ (discoverScope(*session) << 32), out)) return false;
         out.downloaded = session->saved && session->saved->contains(out.id, out.revision_hash);
         out.can_download = !out.downloaded && !downloadActive() && !publicationActive() && !draftSaveActive() && (!session->store || !session->store->commitPending()) &&
                            !session->needsRecovery() && session->phase != Phase::Failed && storage::sd_card_ready() && !storage::sd_external_block_owner_active() &&
@@ -2064,7 +2107,7 @@ class Facade final : public ::ui::geocaching::Source
         if (session->saved && session->saved->contains(item.id, item.revision_hash)) return false;
         ::ui::geocaching::Snapshot snapshot;
         session->source->snapshot(::ui::geocaching::Section::Discover, snapshot);
-        if ((generation ^ (epoch << 32)) != snapshot.generation) return false;
+        if ((generation ^ (discoverScope(*session) << 32)) != snapshot.generation) return false;
         gc::protocol::SummaryView summary;
         bool found = false;
         for (size_t i = 0; i < snapshot.count; ++i)
@@ -2351,6 +2394,16 @@ void step()
         return;
     }
     WorkspaceSlice workspace_slice{s};
+    if (s.phase == Phase::Ready && s.download_store && s.download_store->missingSavedProjection(s.legacy_projection_cache))
+    {
+        s.legacy_projection_pending = true;
+        if (s.projection_upgrade_admitted)
+        {
+            s.saved->releaseRead();
+            s.local_read_only = false;
+            s.phase = Phase::ResumeDownloads;
+        }
+    }
     if (s.phase == Phase::Ready && s.draft_catalog_wanted && !ensurePublicationStore(s))
     {
         next_step.store(millis() + 1000);
@@ -2686,6 +2739,30 @@ void step()
     }
     case Phase::ResumeDownloads:
     {
+        if (s.legacy_projection_pending)
+        {
+            const auto result = s.download_store->upgradeSavedProjection(s.legacy_projection_cache);
+            if (result == JournalWriteResult::InProgress || result == JournalWriteResult::Busy) return;
+            if (result == JournalWriteResult::Unavailable && !s.download_store->needsRecovery())
+            {
+                next_step.store(millis() + 1000);
+                return;
+            }
+            if (result != JournalWriteResult::Verified)
+            {
+                fail("Saved cache index upgrade failed - reopen to retry");
+                return;
+            }
+            s.legacy_projection_pending = false;
+            s.saved->reset();
+            // Metadata backfill is not GPX cleanup. Resume normal read-only
+            // browsing without creating download/network recovery services.
+            s.local_snapshot_attempted = s.local_read_only = true;
+            s.phase = Phase::Ready;
+            s.status = "Saved storage ready";
+            ++epoch;
+            return;
+        }
         if (s.download_port)
         {
             const auto result = s.download_port->poll();
