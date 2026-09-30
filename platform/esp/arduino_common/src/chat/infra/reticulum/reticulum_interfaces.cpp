@@ -276,6 +276,7 @@ void WifiGatewayReticulumInterface::setTransportEnabled(bool enabled)
 
 void WifiGatewayReticulumInterface::maintain()
 {
+    if (!selected_) return;
     if (!transport_enabled_ || !enabled_)
     {
         stop();
@@ -308,7 +309,19 @@ void WifiGatewayReticulumInterface::maintain()
 
 bool WifiGatewayReticulumInterface::isReady() const
 {
-    return transport_enabled_ && enabled_ && host_[0] != '\0' && socket_online_;
+    return selected_ && transport_enabled_ && enabled_ && host_[0] != '\0' && socket_online_;
+}
+
+void WifiGatewayReticulumInterface::setSelected(bool selected)
+{
+    if (selected_ == selected) return;
+    selected_ = selected;
+    if (!selected_) stop(); // Preserve this endpoint's failure backoff.
+}
+
+bool WifiGatewayReticulumInterface::canAttempt() const
+{
+    return transport_enabled_ && enabled_ && host_[0] != '\0' && reconnect_.ready(millis());
 }
 
 bool WifiGatewayReticulumInterface::isConfigured() const
@@ -1646,11 +1659,7 @@ void ReticulumInterfaceSet::applyConfig(
     bool lora_configured = false;
     const reticulum::NetworkInterfaceConfig* auto_config = nullptr;
     tcp_count_ = 0;
-#if TRAIL_MATE_RETICULUM_C6_TCP_AVAILABLE
-    constexpr size_t tcp_capacity = 1;
-#else
     constexpr size_t tcp_capacity = reticulum::kMaxTcpClientInterfaces;
-#endif
     const size_t interface_count = std::min<size_t>(
         network_config_.interface_count,
         reticulum::kMaxNetworkInterfaces);
@@ -1716,9 +1725,35 @@ void ReticulumInterfaceSet::setWifiTransportEnabled(bool enabled)
 void ReticulumInterfaceSet::maintain()
 {
     auto_.maintain();
-    for (uint8_t index = 0; index < tcp_count_; ++index)
+    // One public TCP uplink at a time. Other entries remain candidates with
+    // their own cooldown, including on the single-socket C6 transport.
+    if (active_tcp_ < tcp_count_)
     {
-        tcp_[index].maintain();
+        auto& active = tcp_[active_tcp_];
+        active.maintain();
+        if (!active.isReady() && !active.isConnecting())
+        {
+            active.setSelected(false);
+            next_tcp_ = static_cast<uint8_t>((active_tcp_ + 1) % tcp_count_);
+            active_tcp_ = UINT8_MAX;
+        }
+    }
+    else
+    {
+        if (active_tcp_ < tcp_.size()) tcp_[active_tcp_].setSelected(false);
+        active_tcp_ = UINT8_MAX;
+    }
+    if (active_tcp_ == UINT8_MAX)
+    {
+        for (uint8_t attempt = 0; attempt < tcp_count_; ++attempt)
+        {
+            const auto candidate = static_cast<uint8_t>((next_tcp_ + attempt) % tcp_count_);
+            if (!tcp_[candidate].canAttempt()) continue;
+            active_tcp_ = candidate;
+            tcp_[candidate].setSelected(true);
+            tcp_[candidate].maintain();
+            break;
+        }
     }
     syncSharedLoRaRxGate();
 }

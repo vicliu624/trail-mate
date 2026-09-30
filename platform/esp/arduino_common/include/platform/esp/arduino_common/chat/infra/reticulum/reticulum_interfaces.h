@@ -108,6 +108,9 @@ class WifiGatewayReticulumInterface
                      bool auto_connect_wifi,
                      InterfaceId interface_id);
     void setTransportEnabled(bool enabled);
+    void setSelected(bool selected);
+    bool canAttempt() const;
+    bool isConnecting() const { return socket_open_pending_; }
     void maintain();
     bool isReady() const;
     bool isConfigured() const;
@@ -137,6 +140,7 @@ class WifiGatewayReticulumInterface
     static constexpr int32_t kSocketConnectTimeoutMs = 5000;
 
     bool enabled_ = false;
+    bool selected_ = false;
     bool transport_enabled_ = true;
     bool auto_connect_wifi_ = true;
     InterfaceId interface_id_ = kInvalidInterfaceId;
@@ -301,6 +305,8 @@ class ReticulumInterfaceSet
     TxResult last_tx_result_{};
     bool has_last_rx_meta_ = false;
     uint8_t tcp_count_ = 0;
+    uint8_t active_tcp_ = UINT8_MAX;
+    uint8_t next_tcp_ = 0;
     uint8_t next_poll_index_ = 0;
     bool shared_lora_rx_suppressed_ = false;
 

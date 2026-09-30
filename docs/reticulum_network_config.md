@@ -99,12 +99,20 @@ Pending asynchronous DNS/TCP work continues to be polled without waiting for
 the retry interval. Losing Wi-Fi or socket admission cancels pending work and
 defers the next attempt without counting it as an endpoint failure.
 
-This is endpoint retry handling, not automatic gateway discovery or selection.
-The current runtime still maintains the configured TCP entries concurrently.
+The configured TCP entries form an ordered candidate list. Only one TCP uplink
+is selected at a time. A failed or deferred attempt yields to the next candidate
+whose cooldown has expired; a healthy connection is retained. Once all candidates
+are cooling down, the runtime waits rather than opening parallel connections.
+AutoInterface LAN peers continue to operate independently. C6-based devices also
+retain all three candidates and try them sequentially through their single socket.
+
+Candidate selection currently uses the configured entries. Native interface
+discovery and persistence of discovered candidates are not yet implemented.
 
 The native `tests/reticulum_gateway` regression compiles the production connect
 and cancel functions with controlled socket, admission and clock adapters. It
-covers pending work, cancellation, retry deadlines, clock wrap and stable recovery;
+covers pending work, cancellation, retry deadlines, clock wrap, stable recovery,
+single-uplink selection, candidate failover and cooldown exhaustion;
 it does not certify public endpoint reachability.
 
 ## Example

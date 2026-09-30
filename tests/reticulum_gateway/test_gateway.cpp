@@ -1,4 +1,5 @@
 #include "chat/infra/reticulum/tcp_retry.h"
+#include <array>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -128,6 +129,7 @@ class WifiGatewayReticulumInterface
   public:
     bool transport_enabled_ = true;
     bool enabled_ = true;
+    bool selected_ = false;
     bool auto_connect_wifi_ = true;
     char host_[16] = "example.invalid";
     uint16_t port_ = 4242;
@@ -142,6 +144,26 @@ class WifiGatewayReticulumInterface
     WiFiClient client_;
     void stop();
     bool ensureSocket();
+    void maintain();
+    bool isReady() const;
+    bool canAttempt() const;
+    bool isConnecting() const { return socket_open_pending_; }
+    void setSelected(bool);
+    void syncSocketState() {}
+    bool connected() const { return socket_online_; }
+    void readAvailable() {}
+};
+class ReticulumInterfaceSet
+{
+  public:
+    struct Auto
+    {
+        void maintain() {}
+    } auto_;
+    std::array<WifiGatewayReticulumInterface, 3> tcp_;
+    uint8_t tcp_count_ = 3, active_tcp_ = UINT8_MAX, next_tcp_ = 0;
+    void maintain();
+    void syncSharedLoRaRxGate() {}
 };
 #include "gateway_actual.inc"
 
@@ -204,4 +226,35 @@ int main()
     ++now;
     assert(gateway.ensureSocket());
     assert(gateway.socket_online_ && !gateway.socket_open_pending_);
+
+    ReticulumInterfaceSet pool;
+    now = 100000;
+    pool.maintain();
+    assert(pool.active_tcp_ == 0 && pool.tcp_[0].isConnecting());
+    // Send/poll paths call individual maintenance too. Standby entries must
+    // remain closed even when those callers tick all configured interfaces.
+    for (auto& candidate : pool.tcp_) candidate.maintain();
+    assert(pool.tcp_[0].connector_.starts == 1);
+    assert(pool.tcp_[1].connector_.starts == 0 && pool.tcp_[2].connector_.starts == 0);
+    for (unsigned failed = 0; failed < 3; ++failed)
+    {
+        pool.tcp_[failed].connector_.fail_poll = true;
+        pool.maintain();
+        assert(!pool.tcp_[failed].selected_ && !pool.tcp_[failed].canAttempt());
+        assert(pool.active_tcp_ == (failed == 2 ? UINT8_MAX : failed + 1));
+    }
+    for (unsigned tick = 0; tick < 20; ++tick) pool.maintain();
+    for (const auto& candidate : pool.tcp_) assert(candidate.connector_.starts == 1);
+    now += 10000;
+    pool.maintain();
+    assert(pool.active_tcp_ == 0 && pool.tcp_[0].connector_.starts == 2);
+    pool.tcp_[0].connector_.state.phase = TcpConnectPhase::Connected;
+    pool.maintain();
+    now += 60000;
+    for (unsigned tick = 0; tick < 20; ++tick) pool.maintain();
+    assert(pool.active_tcp_ == 0 && pool.tcp_[0].isReady());
+    assert(pool.tcp_[1].connector_.starts == 1 && pool.tcp_[2].connector_.starts == 1);
+    pool.tcp_count_ = 0;
+    pool.maintain();
+    assert(pool.active_tcp_ == UINT8_MAX && !pool.tcp_[0].selected_);
 }
