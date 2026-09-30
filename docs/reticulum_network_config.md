@@ -90,6 +90,23 @@ same fixed 2 KB buffer instead of allocating a second output string.
 Configuration reload is deferred while a Reticulum call owns the realtime
 resource lease. The active interfaces are replaced after the call closes.
 
+## TCP failure handling
+
+Each endpoint backs off after failed connections or disconnects: 10, 20, 40,
+80, 160, then at most 300 seconds. A connection must remain up for 60 seconds
+before its failure history resets. Changing the endpoint resets its retry state.
+Pending asynchronous DNS/TCP work continues to be polled without waiting for
+the retry interval. Losing Wi-Fi or socket admission cancels pending work and
+defers the next attempt without counting it as an endpoint failure.
+
+This is endpoint retry handling, not automatic gateway discovery or selection.
+The current runtime still maintains the configured TCP entries concurrently.
+
+The native `tests/reticulum_gateway` regression compiles the production connect
+and cancel functions with controlled socket, admission and clock adapters. It
+covers pending work, cancellation, retry deadlines, clock wrap and stable recovery;
+it does not certify public endpoint reachability.
+
 ## Example
 
 ```json

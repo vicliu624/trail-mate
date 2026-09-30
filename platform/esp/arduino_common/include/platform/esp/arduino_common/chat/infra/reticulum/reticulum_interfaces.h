@@ -9,6 +9,7 @@
 #include "chat/domain/chat_types.h"
 #include "chat/domain/reticulum_network_config.h"
 #include "chat/infra/reticulum/reticulum_wire.h"
+#include "chat/infra/reticulum/tcp_retry.h"
 #include "platform/esp/arduino_common/chat/infra/rnode/rnode_adapter.h"
 #include "sys/ringbuf.h"
 
@@ -132,7 +133,6 @@ class WifiGatewayReticulumInterface
     static constexpr uint8_t kHdlcFlag = 0x7E;
     static constexpr uint8_t kHdlcEscape = 0x7D;
     static constexpr uint8_t kHdlcEscapeMask = 0x20;
-    static constexpr uint32_t kReconnectIntervalMs = 10000;
     static constexpr uint32_t kRxStatsLogIntervalMs = 5000;
     static constexpr int32_t kSocketConnectTimeoutMs = 5000;
 
@@ -144,7 +144,7 @@ class WifiGatewayReticulumInterface
     uint16_t port_ = 4242;
     bool socket_online_ = false;
     bool socket_open_pending_ = false;
-    uint32_t last_reconnect_ms_ = 0;
+    reticulum::TcpRetry reconnect_;
     uint32_t last_socket_read_ms_ = 0;
     bool hdlc_in_frame_ = false;
     bool hdlc_escape_ = false;

@@ -705,6 +705,9 @@ if(BUILD_TESTING)
              COMMAND trailmate_reticulum_wifi_gateway_pending_contract_smoke
                      "${TRAIL_MATE_REPO_ROOT}")
 
+    add_subdirectory("${TRAIL_MATE_REPO_ROOT}/tests/reticulum_gateway"
+                     "${CMAKE_CURRENT_BINARY_DIR}/reticulum_gateway")
+
     add_executable(trailmate_mt_dedup_smoke
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/tests/test_mt_dedup.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/meshtastic/mt_dedup.cpp"

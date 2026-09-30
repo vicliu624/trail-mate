@@ -248,7 +248,7 @@ void WifiGatewayReticulumInterface::applyConfig(
     if (changed)
     {
         stop();
-        last_reconnect_ms_ = 0;
+        reconnect_.reset();
         hdlc_in_frame_ = false;
         hdlc_escape_ = false;
         hdlc_frame_len_ = 0;
@@ -270,7 +270,7 @@ void WifiGatewayReticulumInterface::setTransportEnabled(bool enabled)
     if (!transport_enabled_)
     {
         stop();
-        last_reconnect_ms_ = 0;
+        reconnect_.reset();
     }
 }
 
@@ -291,6 +291,7 @@ void WifiGatewayReticulumInterface::maintain()
     syncSocketState();
     if (connected())
     {
+        reconnect_.connected(millis());
         readAvailable();
         return;
     }
@@ -465,6 +466,7 @@ void WifiGatewayReticulumInterface::syncSocketState()
         client_.stop();
         socket_online_ = false;
         socket_open_pending_ = false;
+        reconnect_.failed(millis());
     }
 #elif TRAIL_MATE_RETICULUM_C6_TCP_AVAILABLE
     using ::platform::esp::idf_common::wireless_companion::WifiTcpState;
@@ -495,6 +497,7 @@ void WifiGatewayReticulumInterface::syncSocketState()
 
     if (socket_online_ || socket_open_pending_)
     {
+        reconnect_.failed(millis());
         Serial.printf("[Reticulum][IF][WiFi] gateway disconnected host=%s port=%u state=%u error=%u detail=%s\n",
                       host_,
                       static_cast<unsigned>(port_),
@@ -526,9 +529,7 @@ bool WifiGatewayReticulumInterface::ensureSocket()
 #else
         false;
 #endif
-    if (!socket_connect_pending &&
-        last_reconnect_ms_ != 0 &&
-        (now_ms - last_reconnect_ms_) < kReconnectIntervalMs)
+    if (!socket_connect_pending && !reconnect_.ready(now_ms))
     {
         return false;
     }
@@ -562,12 +563,12 @@ bool WifiGatewayReticulumInterface::ensureSocket()
 
         if (!wifi_status.connected)
         {
-            last_reconnect_ms_ = now_ms;
+            stop();
+            reconnect_.defer(now_ms);
             return false;
         }
     }
 
-    last_reconnect_ms_ = now_ms;
     platform::ui::wifi_access::Request socket_request{};
     socket_request.client = platform::ui::wifi_access::Client::ReticulumGateway;
     socket_request.kind = platform::ui::wifi_access::AccessKind::LongLivedSocket;
@@ -576,8 +577,8 @@ bool WifiGatewayReticulumInterface::ensureSocket()
     const auto lease = platform::ui::wifi_access::acquire(socket_request);
     if (!lease.granted)
     {
-        socket_online_ = false;
-        socket_open_pending_ = false;
+        stop();
+        reconnect_.defer(now_ms);
         Serial.printf("[Reticulum][IF][WiFi] gateway connect deferred decision=%s host=%s port=%u\n",
                       platform::ui::wifi_access::decision_name(lease.decision),
                       host_,
@@ -600,6 +601,9 @@ bool WifiGatewayReticulumInterface::ensureSocket()
                               static_cast<uint32_t>(kSocketConnectTimeoutMs)))
         {
             const auto status = connector_.status();
+            connector_.cancel();
+            socket_open_pending_ = false;
+            reconnect_.failed(now_ms);
             Serial.printf("[Reticulum][IF][WiFi] gateway connect failed host=%s port=%u stage=%s err=%d\n",
                           host_,
                           static_cast<unsigned>(port_),
@@ -621,6 +625,7 @@ bool WifiGatewayReticulumInterface::ensureSocket()
     {
         connector_.cancel();
         socket_open_pending_ = false;
+        reconnect_.failed(now_ms);
         Serial.printf("[Reticulum][IF][WiFi] gateway connect failed host=%s port=%u stage=%s err=%d\n",
                       host_,
                       static_cast<unsigned>(port_),
@@ -634,11 +639,14 @@ bool WifiGatewayReticulumInterface::ensureSocket()
     if (socket < 0)
     {
         socket_open_pending_ = false;
+        reconnect_.failed(now_ms);
         return false;
     }
     client_ = WiFiClient(socket);
     client_.setNoDelay(true);
     socket_online_ = true;
+    socket_open_pending_ = false;
+    reconnect_.connected(now_ms);
     hdlc_in_frame_ = false;
     hdlc_escape_ = false;
     hdlc_frame_len_ = 0;
@@ -671,6 +679,7 @@ bool WifiGatewayReticulumInterface::ensureSocket()
         const auto failed = transport.tcpStatus();
         socket_online_ = false;
         socket_open_pending_ = false;
+        reconnect_.failed(now_ms);
         Serial.printf("[Reticulum][IF][WiFi] gateway connect failed host=%s port=%u state=%u error=%u detail=%s\n",
                       host_,
                       static_cast<unsigned>(port_),
