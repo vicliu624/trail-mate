@@ -168,3 +168,17 @@ compatible Trail Mate Geocaching directory. A production default still needs
 our TLS packet bridge, a hostname/certificate, and a reachable Geocaching
 directory service. Do not invent a WSS URL by changing a TCP address's scheme.
 Keep this operator setup out of the visitor interface.
+
+## Publishing the live viewer
+
+Run **Pages Geocaching** from `main`. Set `source_ref` to the exact commit
+containing the page changes, and `previous_pages_run` to a successful `Pages`
+run on `main` whose artifact is still available. The workflow builds and tests
+the selected Geocaching source, overlays it on that verified site artifact, and
+deploys through the existing `main` Pages environment. It does not rebuild the
+firmware simulator or merge the firmware branch.
+
+This publishes viewer code and network configuration only. Cache records remain
+live Reticulum queries; publishing or updating a cache does not require a website
+deployment. Prefer an immutable commit for `source_ref` so a deployment can be
+traced to the reviewed source.

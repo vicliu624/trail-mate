@@ -3,6 +3,11 @@ name: Pages Geocaching
 on:
   workflow_dispatch:
     inputs:
+      source_ref:
+        description: Commit or branch containing the Geocaching page to publish
+        required: true
+        default: main
+        type: string
       previous_pages_run:
         description: Successful main-branch Pages run whose unchanged simulator and release assets can be reused
         required: true
@@ -24,6 +29,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Checkout Geocaching source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+          path: geocaching-source
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -40,7 +50,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/publish"
           tar -xf "$RUNNER_TEMP/base-pages/artifact.tar" -C "$RUNNER_TEMP/publish"
       - name: Build and verify the Geocaching page
-        working-directory: site
+        working-directory: geocaching-source/site
         run: |
           npm ci --ignore-scripts
           npm run build:geocaching
@@ -48,9 +58,9 @@ jobs:
       - name: Overlay the Geocaching page and navigation
         run: |
           rm -rf "$RUNNER_TEMP/publish/geocaching"
-          cp -a site/geocaching "$RUNNER_TEMP/publish/"
-          cp site/index.html site/THIRD_PARTY.md "$RUNNER_TEMP/publish/"
-          cp -a site/components-dist "$RUNNER_TEMP/publish/"
+          cp -a geocaching-source/site/geocaching "$RUNNER_TEMP/publish/"
+          cp geocaching-source/site/index.html geocaching-source/site/THIRD_PARTY.md "$RUNNER_TEMP/publish/"
+          cp -a geocaching-source/site/components-dist "$RUNNER_TEMP/publish/"
       - uses: actions/upload-pages-artifact@v5
         with:
           path: ${{ runner.temp }}/publish
