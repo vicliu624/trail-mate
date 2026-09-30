@@ -3651,7 +3651,8 @@ int checkSavedIndexPages()
         size_t bytes = 0;
         for (const auto& read : read_bytes)
             if (read.first.find("/02/") != std::string::npos &&
-                read.first.size() >= 4 && read.first.compare(read.first.size() - 4, 4, ".gci") == 0) bytes += read.second;
+                ((read.first.size() >= 4 && read.first.compare(read.first.size() - 4, 4, ".gci") == 0) ||
+                 read.first.find(".gci.c") != std::string::npos)) bytes += read.second;
         return bytes;
     };
     for (size_t offset : {size_t(0), size_t(4), size_t(8), size_t(12)})

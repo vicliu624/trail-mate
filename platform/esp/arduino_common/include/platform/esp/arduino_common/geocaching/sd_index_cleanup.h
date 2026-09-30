@@ -109,7 +109,14 @@ class SdIndexCleanup
                                    (archive_ && decodeIndexRepairFloorName(volume_, name, floor));
         if (depth_ == 1)
             return directory && length == 2 && name[0] == '0' && name[1] != '0' && hex(name[1]) && name[1] <= 'd';
-        if (depth_ != 2 || directory || (length != 6 && length != 9) || !hex(name[0]) || !hex(name[1]) || std::strncmp(name + 2, ".gci", 4)) return false;
+        if (depth_ != 2 || directory || (length != 6 && length != 9 && length != 24) || !hex(name[0]) || !hex(name[1]) || std::strncmp(name + 2, ".gci", 4)) return false;
+        if (length == 24)
+        {
+            if (name[6] != '.' || name[7] != 'c') return false;
+            for (size_t i = 8; i < length; ++i)
+                if (!hex(name[i])) return false;
+            return true;
+        }
         return length == 6 || !std::strcmp(name + 6, ".h0") || !std::strcmp(name + 6, ".h1");
     }
     IndexCleanupStep finish(IndexCleanupStep result)

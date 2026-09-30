@@ -1,3 +1,5 @@
+#include "geocaching/storage/cache_head.h"
+#include "platform/esp/arduino_common/geocaching/sd_index_get.h"
 #include "platform/esp/arduino_common/geocaching/sd_index_initialize.h"
 #include "platform/esp/arduino_common/geocaching/sd_index_scan.h"
 #include "platform/esp/arduino_common/geocaching/sd_indexed_commit.h"
@@ -180,5 +182,140 @@ int main()
                 pump(empty, sd::IndexScanStep::Working) == sd::IndexScanStep::End,
             "empty current generation");
     require(!test::open_files && !test::open_dirs, "scan leaked handles");
+    // Exercise the production transaction writer, including two mutations in
+    // one colliding shard and repeated replacements of the same live key.
+    test::files.clear();
+    test::directories = {"/", "/trailmate"};
+    require(sd::createNewSdVolume(volume, confirmed) == sd::SdVolumeResult::Ready, "new current-write volume");
+    sd::SdIndexInitialize current_initialize(volume);
+    require(current_initialize.begin(roots[0]) && pump(current_initialize, sd::IndexRootWriteStep::Working) == sd::IndexRootWriteStep::Verified,
+            "initialize current-write index");
+    require(gc::decodeIndexRoot({roots[0].data(), roots[0].size()}, volume, root), "current-write root");
+    copy = 0;
+    std::array<uint8_t, 32> hash{};
+    hash[0] = 1;
+    gc::CacheHeadView cache;
+    cache.current_hash = {hash.data(), hash.size()};
+    cache.install_generation = cache.highest_seen_revision = 1;
+    std::array<uint8_t, 128> a_value{}, b_value{};
+    size_t a_size = 0, b_size = 0;
+    require(gc::encodeCacheHead({a.data(), a.size()}, cache, a_value.data(), a_value.size(), a_size) &&
+                gc::encodeCacheHead({b.data(), b.size()}, cache, b_value.data(), b_value.size(), b_size),
+            "current-write values");
+    const auto current_commit = [&](bool erase_a, bool erase_b = false)
+    {
+        const gc::MutationView changes[] = {
+            {2, {a.data(), a.size()}, erase_a ? geocaching::ByteView{} : geocaching::ByteView{a_value.data(), a_size}, erase_a},
+            {2, {b.data(), b.size()}, erase_b ? geocaching::ByteView{} : geocaching::ByteView{b_value.data(), b_size}, erase_b}};
+        sd::SdIndexedCommit transaction(volume);
+        require(transaction.begin(root, copy, changes, 2, frame.data(), frame.size(), roots[1 - copy]), "begin colliding current update");
+        require(pump(transaction, sd::IndexedCommitStep::Working) == sd::IndexedCommitStep::Verified && transaction.committed(root), "commit current update");
+        copy = 1 - copy;
+    };
+    current_commit(false);
+    const auto old_root = root;
+    current_commit(false);
+    sd::SdIndexGet old_read(volume);
+    require(old_read.begin(old_root, 2, {a.data(), a.size()}, frame.data(), frame.size()) &&
+                pump(old_read, sd::IndexGetStep::Working) == sd::IndexGetStep::Ready,
+            "replacement lost pinned parent generation");
+    for (unsigned i = 0; i < 40; ++i) current_commit(false);
+    sd::SdIndexHeadReader head_reader(volume, root.slot, root.epoch, root.sequence);
+    require(head_reader.beginBucket(2, bucket) && pump(head_reader, sd::IndexHeadReadStep::Working) == sd::IndexHeadReadStep::Ready &&
+                head_reader.selected(current) && current.current_only && current.length == 2 * gc::kIndexEntrySize,
+            "updates accumulated obsolete current references");
+    test::profile_reads = true;
+    test::read_bytes_by_path.clear();
+    sd::SdIndexScan current_scan(volume);
+    require(current_scan.begin(root, 2, frame.data(), frame.size()), "scan committed current keys");
+    std::set<std::array<uint8_t, 32>> live;
+    for (;;)
+    {
+        const auto status = pump(current_scan, sd::IndexScanStep::Working);
+        if (status == sd::IndexScanStep::End) break;
+        gc::MutationView row;
+        require(status == sd::IndexScanStep::Item && current_scan.item(row) && row.key.size == a.size(), "current key scan failed");
+        std::array<uint8_t, 32> id;
+        std::memcpy(id.data(), row.key.data, id.size());
+        require(live.insert(id).second && current_scan.advance(), "duplicate committed current key");
+    }
+    require(live.size() == 2 && live.count(a) && live.count(b), "colliding transaction dropped a key");
+    require(sd::indexShardDataPath(root.slot, current, current_path, sizeof(current_path)) &&
+                test::read_bytes_by_path[current_path] == 2 * gc::kIndexEntrySize,
+            "committed current scan repeated references");
+    for (const auto& read : test::read_bytes_by_path)
+        if (read.first.find("/02/") != std::string::npos && read.first.find(".gci.c") != std::string::npos)
+            require(read.first == current_path, "committed scan visited older generations");
+    test::profile_reads = false;
+    // Reconstruct a legacy append shard with all prior versions, then update
+    // just A. Conversion must retain B's latest reference exactly once.
+    char legacy_path[80], legacy_head_path[80];
+    require(sd::indexShardPathForBucket(root.slot, 2, bucket, legacy_path, sizeof(legacy_path)), "legacy conversion path");
+    std::vector<uint8_t> legacy;
+    const auto prefix = std::string(legacy_path) + ".c";
+    for (const auto& file : test::files)
+        if (file.first.compare(0, prefix.size(), prefix) == 0) legacy.insert(legacy.end(), file.second.begin(), file.second.end());
+    test::files[legacy_path] = legacy;
+    auto legacy_head = current;
+    legacy_head.current_only = false;
+    legacy_head.length = legacy.size();
+    gc::IndexShardHeadBytes legacy_header;
+    require(gc::encodeIndexShardHead(volume, legacy_head, legacy_header), "encode conversion baseline");
+    for (unsigned head_copy = 0; head_copy < 2; ++head_copy)
+    {
+        require(sd::indexShardHeadPathForBucket(root.slot, 2, bucket, head_copy, legacy_head_path, sizeof(legacy_head_path)), "conversion head path");
+        test::files[legacy_head_path] = {legacy_header.begin(), legacy_header.end()};
+    }
+    const gc::MutationView one_change{2, {a.data(), a.size()}, {a_value.data(), a_size}, false};
+    sd::SdIndexedCommit conversion(volume);
+    require(conversion.begin(root, copy, &one_change, 1, frame.data(), frame.size(), roots[1 - copy]) &&
+                pump(conversion, sd::IndexedCommitStep::Working) == sd::IndexedCommitStep::Verified && conversion.committed(root),
+            "convert legacy head on update");
+    copy = 1 - copy;
+    sd::SdIndexHeadReader converted_head(volume, root.slot, root.epoch, root.sequence);
+    require(converted_head.beginBucket(2, bucket) && pump(converted_head, sd::IndexHeadReadStep::Working) == sd::IndexHeadReadStep::Ready &&
+                converted_head.selected(current) && current.current_only && current.length == 2 * gc::kIndexEntrySize,
+            "legacy conversion retained obsolete references or lost colliding key");
+    current_commit(true);
+    sd::SdIndexGet erased_read(volume), kept_read(volume);
+    require(erased_read.begin(root, 2, {a.data(), a.size()}, frame.data(), frame.size()) &&
+                pump(erased_read, sd::IndexGetStep::Working) == sd::IndexGetStep::NotFound,
+            "current erase resurrected key");
+    require(kept_read.begin(root, 2, {b.data(), b.size()}, frame.data(), frame.size()) &&
+                pump(kept_read, sd::IndexGetStep::Working) == sd::IndexGetStep::Ready,
+            "current erase lost colliding key");
+    current_commit(true, true);
+    sd::SdIndexHeadReader empty_head(volume, root.slot, root.epoch, root.sequence);
+    require(empty_head.beginBucket(2, bucket) && pump(empty_head, sd::IndexHeadReadStep::Working) == sd::IndexHeadReadStep::Ready &&
+                empty_head.selected(current) && current.current_only && current.length == 0,
+            "last deletion did not publish empty generation");
+    sd::SdIndexScan empty_committed(volume);
+    require(empty_committed.begin(root, 2, frame.data(), frame.size()) &&
+                pump(empty_committed, sd::IndexScanStep::Working) == sd::IndexScanStep::End,
+            "committed empty generation scanned history");
+    // A failed read-back must not publish the new generation or disturb either
+    // committed shard head. The journal suffix remains recovery evidence.
+    char first_head[80], second_head[80];
+    require(sd::indexShardHeadPathForBucket(root.slot, 2, bucket, 0, first_head, sizeof(first_head)) &&
+                sd::indexShardHeadPathForBucket(root.slot, 2, bucket, 1, second_head, sizeof(second_head)),
+            "failure head paths");
+    const auto first_before = test::files.at(first_head), second_before = test::files.at(second_head);
+    auto pending_head = current;
+    ++pending_head.sequence;
+    require(sd::indexShardDataPath(root.slot, pending_head, current_path, sizeof(current_path)), "failure generation path");
+    test::fail_read_path = current_path;
+    const gc::MutationView failed_changes[] = {{2, {a.data(), a.size()}, {a_value.data(), a_size}, false},
+                                               {2, {b.data(), b.size()}, {b_value.data(), b_size}, false}};
+    sd::SdIndexedCommit failed_commit(volume);
+    require(failed_commit.begin(root, copy, failed_changes, 2, frame.data(), frame.size(), roots[1 - copy]) &&
+                pump(failed_commit, sd::IndexedCommitStep::Working) == sd::IndexedCommitStep::RecoveryRequired,
+            "failed replacement verification was accepted");
+    require(test::files.at(first_head) == first_before && test::files.at(second_head) == second_before,
+            "failed replacement modified committed shard heads");
+    sd::SdIndexGet after_failure(volume);
+    require(after_failure.begin(root, 2, {a.data(), a.size()}, frame.data(), frame.size()) &&
+                pump(after_failure, sd::IndexGetStep::Working) == sd::IndexGetStep::NotFound,
+            "failed replacement changed parent view");
+    require(!test::open_files && !test::open_dirs, "current writer leaked handles");
     std::printf("Colliding keys, 60 obsolete versions, tombstone and old CRC fault: fallback=%u optimized=%u steps\n", fallback, optimized);
 }

@@ -1,5 +1,6 @@
 #pragma once
 #include "platform/esp/arduino_common/geocaching/sd_index_append.h"
+#include "platform/esp/arduino_common/geocaching/sd_index_current_write.h"
 #include "platform/esp/arduino_common/geocaching/sd_index_head_reader.h"
 #include "platform/esp/arduino_common/geocaching/sd_index_head_writer.h"
 #include "platform/esp/arduino_common/geocaching/sd_index_root_writer.h"
@@ -116,6 +117,11 @@ class SdIndexTransaction
                 phase_ = Phase::Root;
                 return result_;
             }
+            if (entry_.table == 2 && shardAlreadyProcessed())
+            {
+                ++completed_entries_;
+                return result_;
+            }
             const auto bucket = static_cast<uint8_t>(::sys::crc32(entry_.key.data, entry_.key.size));
             baseline_ = {parent_.epoch, 0, 0, entry_.table, bucket};
             if (indexHasShard(parent_, entry_.table, bucket))
@@ -160,6 +166,17 @@ class SdIndexTransaction
             phase_ = Phase::Next;
             return result_;
         }
+        if (phase_ == Phase::Current)
+        {
+            auto& writer = std::get<CurrentWritePtr>(operation_);
+            const auto status = writer->step();
+            if (status == IndexAppendStep::Working) return result_;
+            IndexShardHead next;
+            if (status != IndexAppendStep::Verified || !writer->committedHead(next)) return error(status);
+            if (!startHead(head_copy_, next)) return fail(IndexTransactionStep::Invalid);
+            phase_ = Phase::Head;
+            return result_;
+        }
         if (phase_ == Phase::Append)
         {
             auto& writer = std::get<SdIndexAppend>(operation_);
@@ -192,6 +209,7 @@ class SdIndexTransaction
         InitializeFirst,
         InitializeSecond,
         Append,
+        Current,
         Head,
         Root
     };
@@ -201,12 +219,32 @@ class SdIndexTransaction
     }
     IndexTransactionStep startAppend()
     {
-        // An append writer cannot update an immutable current generation.
-        // Reject it until the replacement writer owns the complete shard.
+        if (entry_.table == 2)
+        {
+            auto& writer = operation_.emplace<CurrentWritePtr>();
+            writer.reset(::platform::memory::createPsram<SdIndexCurrentWrite>(volume_, parent_.slot));
+            if (!writer || !writer->begin(baseline_, frame_, parent_.sequence, segment_first_, frame_offset_)) return fail(IndexTransactionStep::Invalid);
+            phase_ = Phase::Current;
+            return result_;
+        }
+        // Tables not yet using replacement writes must not append to one.
         if (baseline_.current_only) return fail(IndexTransactionStep::Invalid);
         if (!operation_.emplace<SdIndexAppend>(volume_, parent_.slot).begin(entry_)) return fail(IndexTransactionStep::Invalid);
         phase_ = Phase::Append;
         return result_;
+    }
+    bool shardAlreadyProcessed() const
+    {
+        ::geocaching::storage::TransactionIndexCursor cursor;
+        ::geocaching::storage::IndexedMutation previous;
+        if (!cursor.open(frame_, parent_.sequence, segment_first_, frame_offset_)) return false;
+        const auto bucket = static_cast<uint8_t>(::sys::crc32(entry_.key.data, entry_.key.size));
+        while (cursor.next(previous))
+        {
+            if (previous.key.data == entry_.key.data) return false;
+            if (previous.table == entry_.table && static_cast<uint8_t>(::sys::crc32(previous.key.data, previous.key.size)) == bucket) return true;
+        }
+        return false;
     }
     template <class Status>
     IndexTransactionStep error(Status status)
@@ -226,7 +264,8 @@ class SdIndexTransaction
     ::geocaching::storage::TransactionIndexCursor cursor_;
     ::geocaching::storage::IndexedMutation entry_;
     ::geocaching::storage::IndexShardHead baseline_;
-    std::variant<std::monostate, SdIndexHeadReader, SdIndexHeadWriter, SdIndexAppend, SdIndexRootWriter> operation_;
+    using CurrentWritePtr = ::platform::memory::PsramPtr<SdIndexCurrentWrite>;
+    std::variant<std::monostate, SdIndexHeadReader, SdIndexHeadWriter, SdIndexAppend, SdIndexRootWriter, CurrentWritePtr> operation_;
     std::array<uint8_t, 4> frame_crc_{};
     uint64_t segment_first_ = 0;
     uint32_t frame_offset_ = 0, parent_crc_ = 0;

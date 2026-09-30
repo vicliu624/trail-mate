@@ -1,6 +1,6 @@
 # Geocaching local-read performance reproduction
 
-## Current evidence (2026-09-30, after committed-root local reads)
+## Current evidence (2026-09-30, after current cache-head writes)
 
 With `TRAIL_MATE_TEST_IO_DELAY_MS=25` and
 `TRAIL_MATE_TEST_IO_PROFILE=1`, the production-default overlay polling interval
@@ -9,13 +9,26 @@ The current browse runtime test passes its unchanged three-second gates:
 
 | Scenario | Simulated elapsed | I/O operations | Result |
 | --- | ---: | ---: | --- |
-| Two local markers, direct Map cold start | 2,120 ms | 60 | Passed |
-| Local cold-start acceptance | 2,820 ms | — | Passed |
+| Two local markers, direct Map cold start | 2,020 ms | 58 | Passed |
+| Local cold-start acceptance | 2,760 ms | — | Passed |
 
 This is a simulated storage sensitivity result, not an L2 device measurement.
 The older measurements below describe intermediate implementations.
 
-### History growth remains unresolved
+### Current cache-head generations and legacy history
+
+The production writer now replaces table 2 shards with current-only generations.
+The history test also exercises two colliding cache heads in one transaction,
+40 repeated updates, retention of the preceding committed generation, deletion
+of one and then both keys, legacy conversion while retaining an unchanged key,
+and failed read-back that must leave both committed shard heads intact. After
+repeated updates, scanning two live heads reads exactly two 152-byte references
+from the selected generation and none from older generations. A current-only
+single-row fixture reads 152 bytes even when its obsolete append file is corrupt.
+
+Untouched legacy cache-head buckets are not converted on read. They still need
+conversion, and obsolete generation files currently await exclusive slot cleanup.
+These remain incomplete parts of history-independent operation on existing cards.
 
 Run `geocaching_index_scan_history_test` to reproduce two colliding keys,
 60 obsolete versions and a tombstone, leaving one live row. It exercises the
@@ -27,7 +40,7 @@ is not a direct measurement of a Downloaded page.
 | 144 bytes, lookup fallback | 1 | 413 | 25,688 | 741 |
 | 8,192 bytes, adjacent-reference optimization | 1 | 236 | 16,720 | 269 |
 
-The scanner still reads obsolete references and validates their CRCs.
+The legacy scanner still reads obsolete references and validates their CRCs.
 Consequently the two-marker latency gate does not prove history-independent
 pagination. Changing only the page size, timer or adjacent-reference shortcut
 cannot satisfy that requirement. A current-record traversal needs a committed

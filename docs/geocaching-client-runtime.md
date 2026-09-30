@@ -17,11 +17,20 @@ valid. A nonempty generation must have exactly the length in its head; malformed
 references and CRC failures are still rejected. Legacy heads and readers retain
 their existing checks.
 
-This is the read-side foundation, not an enabled migration. The production
-transaction writer still emits legacy append shards and rejects attempts to
-append to a current-only shard. Replacement writes, old-card conversion, and
-generation cleanup must be integrated before current-only Downloaded reads are
-enabled on devices. Opening a list does not create or rebuild these generations.
+The production transaction writer maintains current-only cache-head shards
+(table 2). It folds all mutations for the same bucket in a transaction into one
+replacement, verifies the flushed file by read-back CRC, then publishes the
+shard head through the existing root commit. Failed verification leaves the
+parent head unchanged and requires journal recovery. The bounded writer and its
+optional legacy lookup are allocated in PSRAM only; neither retains a complete
+shard or GPX payload.
+
+Updating a legacy cache-head bucket converts that bucket during the write.
+Opening a local list does not create or rebuild generations, and untouched
+legacy buckets still use their original reader. Other tables retain append
+shards. Exclusive index-slot cleanup recognizes generation filenames; older
+generations remain until their retired index slot is cleaned. Full conversion
+of untouched old-card buckets and earlier reclamation remain unfinished.
 
 Local lists and the standalone Map can open a CRC-checked committed index root
 before journal inventory or suffix replay. The read lease is not a write-ready
