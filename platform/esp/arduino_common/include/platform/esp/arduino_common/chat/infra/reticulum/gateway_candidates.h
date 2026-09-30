@@ -12,6 +12,8 @@ class GatewayCandidates
   public:
     using Endpoint = NativeGatewayDiscovery::Endpoint;
     static constexpr int kCapacity = 4;
+    static constexpr uint32_t kDayMs = 86400000U;
+    static constexpr uint32_t kExpireMs = 7 * kDayMs;
     struct Entry
     {
         Endpoint endpoint{};
@@ -23,6 +25,7 @@ class GatewayCandidates
     bool observe(const Endpoint& endpoint, uint32_t now, bool restored = false)
     {
         if (!endpoint.port || !endpoint.host[0]) return false;
+        maintain(now);
         int slot = -1;
         for (int i = 0; i < kCapacity; ++i)
         {
@@ -58,8 +61,9 @@ class GatewayCandidates
     }
 
     template <typename CanInstall>
-    int select(uint32_t now, CanInstall can_install) const
+    int select(uint32_t now, CanInstall can_install)
     {
+        maintain(now);
         // Keep a connected uplink. An expired cooldown is only permission to
         // retry, not evidence that a repeatedly failing endpoint is healthy.
         if (active_ >= 0 && entries_[active_].retry.online()) return -1;
@@ -69,7 +73,9 @@ class GatewayCandidates
             const auto& entry = entries_[i];
             if (i == active_ || !entry.endpoint.port || !entry.retry.ready(now) || !can_install(entry.endpoint)) continue;
             if (selected < 0 || entry.retry.failures() < entries_[selected].retry.failures() ||
-                (entry.retry.failures() == entries_[selected].retry.failures() && entry.preferred && !entries_[selected].preferred)) selected = i;
+                (entry.retry.failures() == entries_[selected].retry.failures() &&
+                 (ageRank(entry, now) < ageRank(entries_[selected], now) ||
+                  (ageRank(entry, now) == ageRank(entries_[selected], now) && entry.preferred && !entries_[selected].preferred)))) selected = i;
         }
         return selected == active_ ? -1 : selected;
     }
@@ -83,6 +89,24 @@ class GatewayCandidates
     }
 
   private:
+    static unsigned ageRank(const Entry& entry, uint32_t now)
+    {
+        const auto age = uint32_t(now - entry.seen);
+        return age >= 3 * kDayMs ? 2 : age >= kDayMs ? 1
+                                                     : 0;
+    }
+    void maintain(uint32_t now)
+    {
+        for (int i = 0; i < kCapacity; ++i)
+        {
+            auto& entry = entries_[i];
+            if (!entry.endpoint.port || uint32_t(now - entry.seen) < kExpireMs) continue;
+            if (i != active_ && !entry.preferred && entry.retry.ready(now)) entry = {};
+            // Keep protected entries stale across the millisecond clock wrap.
+            // Only a verified live announcement makes them fresh again.
+            else entry.seen = now - kExpireMs;
+        }
+    }
     void prefer(int index)
     {
         for (int i = 0; i < kCapacity; ++i) entries_[i].preferred = i == index;

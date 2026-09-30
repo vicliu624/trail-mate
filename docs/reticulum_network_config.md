@@ -143,6 +143,16 @@ preferred nor cooling down. If no such entry exists, the new observation is
 discarded. This prevents announcement churn from clearing endpoint backoff.
 Only the last stable endpoint is persisted; the other observations are transient.
 
+Within equal failure scores, discovery observations heard within 24 hours rank
+above older observations; those older than three days rank last. The persisted
+preference breaks ties within the same age band. After seven days without a
+verified announcement, an unused, non-preferred candidate is removed once its
+cooldown has expired. The installed and last stable candidates are retained.
+Repeated restoration from SD does not refresh announcement age. Age is measured
+with the monotonic device clock, without SNTP; a restored endpoint starts its
+age interval at boot because this cache does not persist wall-clock timestamps.
+These rules do not allocate memory or launch additional network probes.
+
 The discovery parser is available in `chat/infra/reticulum/interface_discovery.h`
 as groundwork for native `rnstransport.discovery.interface` announcements. Its
 wire reference is [Reticulum Discovery.py](https://github.com/markqvist/Reticulum/blob/7f2b3b9b524c9386316379af1313b43a5e4f7a5d/RNS/Discovery.py).

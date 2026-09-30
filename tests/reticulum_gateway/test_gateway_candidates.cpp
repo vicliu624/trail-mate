@@ -106,4 +106,46 @@ int main()
     pool.sync(retry);
     // If every alternative is worse, retain the now-eligible active slot.
     assert(pool.select(100000, allow) == -1);
+    pool.reset();
+    assert(pool.observe(old, 0, true));
+    assert(pool.observe(fresh, GatewayCandidates::kDayMs));
+    next = pool.select(GatewayCandidates::kDayMs, allow);
+    assert(next >= 0 && !std::strcmp(pool.entry(next).endpoint.host, fresh.host));
+    // Restoring the same SD record does not pretend a new announce arrived.
+    assert(pool.observe(old, GatewayCandidates::kDayMs, true));
+    assert(pool.select(GatewayCandidates::kDayMs, allow) == next);
+    // Transient entries expire; the last known stable endpoint remains usable.
+    stable = pool.select(GatewayCandidates::kExpireMs + GatewayCandidates::kDayMs, allow);
+    assert(stable >= 0 && !std::strcmp(pool.entry(stable).endpoint.host, old.host));
+    assert(!pool.entry(next).endpoint.port);
+    // Expiry must not erase a failed endpoint's outstanding cooldown.
+    assert(pool.observe(fresh, 0));
+    next = pool.select(0, [&](const auto& ep)
+                       { return std::strcmp(ep.host, fresh.host) == 0; });
+    assert(next >= 0);
+    pool.installed(next);
+    retry.reset();
+    retry.failed(GatewayCandidates::kExpireMs - 1);
+    pool.sync(retry);
+    pool.installed(stable);
+    pool.select(GatewayCandidates::kExpireMs, allow);
+    assert(pool.entry(next).endpoint.port && !pool.entry(next).retry.ready(GatewayCandidates::kExpireMs));
+    pool.select(GatewayCandidates::kExpireMs + 10000, allow);
+    assert(!pool.entry(next).endpoint.port);
+    pool.installed(stable);
+    retry.reset();
+    retry.connected(GatewayCandidates::kExpireMs);
+    pool.sync(retry);
+    assert(pool.select(2 * GatewayCandidates::kExpireMs, allow) == -1);
+    // Fresh observations win equal-score comparisons across uint32_t wrap.
+    pool.reset();
+    const uint32_t near_wrap = UINT32_MAX - GatewayCandidates::kDayMs / 2;
+    assert(pool.observe(old, near_wrap, true));
+    const uint32_t later = near_wrap + GatewayCandidates::kDayMs;
+    assert(pool.observe(fresh, later));
+    next = pool.select(later, allow);
+    assert(next >= 0 && !std::strcmp(pool.entry(next).endpoint.host, fresh.host));
+    assert(pool.observe(old, later));
+    stable = pool.select(later, allow);
+    assert(stable >= 0 && !std::strcmp(pool.entry(stable).endpoint.host, old.host));
 }
