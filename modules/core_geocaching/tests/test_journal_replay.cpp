@@ -79,8 +79,10 @@ bool exceeded_budget = false;
 bool flush_ok = true;
 size_t write_limit = SIZE_MAX;
 unsigned flush_calls = 0;
+uint32_t media_session = 1;
 namespace platform::esp::arduino_common::storage
 {
+uint32_t sd_media_session() { return media_session; }
 bool sd_card_ready() { return true; }
 bool sd_external_block_owner_active() { return false; }
 bool sd_is_directory(const char* path)
@@ -3791,7 +3793,7 @@ int main(int argc, char** argv)
         std::memcmp(file.data() + located.location.value_offset, large_value.data(), large_value.size())) return 22;
     const auto saved_location = located;
     if (!indexed.acknowledgeApplied(1) || indexed.pendingIndex(index) || index.next(located)) return 23;
-    for (unsigned scenario = 0; scenario < 5; ++scenario)
+    for (unsigned scenario = 0; scenario < 6; ++scenario)
     {
         auto hint = saved_location;
         uint8_t wrong_key = 0xee;
@@ -3804,10 +3806,13 @@ int main(int argc, char** argv)
         for (unsigned step = 0; step < 128 && result == IndexedReadStep::Working; ++step)
         {
             if (reader.value().data) return 25;
-            if (scenario == 4 && step == 8)
+            if (scenario >= 4 && step == 8)
             {
+                // A remount or USB handoff changes the session even if the
+                // same card returns with an identical volume header.
+                ++media_session;
                 auto changed = volume;
-                changed[0] = 1;
+                if (scenario == 4) changed[0] = 1;
                 const auto changed_header = ::geocaching::storage::encodeVolumeHeader(changed);
                 files["/trailmate/geocaching/.state/format.bin"] = {changed_header.begin(), changed_header.end()};
             }
@@ -3821,7 +3826,7 @@ int main(int argc, char** argv)
             if (result != IndexedReadStep::Ready || reader.value().size != large_value.size() ||
                 std::memcmp(reader.value().data, large_value.data(), large_value.size())) return 27;
         }
-        else if (reader.value().data || result != (scenario == 3 ? IndexedReadStep::WorkspaceTooSmall : scenario == 4 ? IndexedReadStep::VolumeChanged
+        else if (reader.value().data || result != (scenario == 3 ? IndexedReadStep::WorkspaceTooSmall : scenario >= 4 ? IndexedReadStep::VolumeChanged
                                                                                                                       : IndexedReadStep::Invalid)) return 28;
     }
     auto deletion = saved_location;

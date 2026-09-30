@@ -17,6 +17,7 @@ bool fileBusy(unsigned operation)
     return false;
 }
 bool sd_card_ready() { return card_ready; }
+uint32_t sd_media_session() { return 1; }
 bool sd_external_block_owner_active() { return external_owner; }
 bool sd_is_directory(const char* path) { return access() && directories.count(path); }
 bool sd_exists(const char* path) { return access() && (files.count(path) || directories.count(path)); }

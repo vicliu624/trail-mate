@@ -45,14 +45,15 @@ class SdIndexedValueReader
     IndexedReadStep step()
     {
         if (result_ != IndexedReadStep::Working) return result_;
-        if (phase_ == Phase::Volume || phase_ == Phase::VerifyVolume)
+        if (phase_ == Phase::Volume)
         {
+            media_session_ = storage::sd_media_session();
             ::geocaching::storage::VolumeInstance current;
             const auto status = inspectSdVolume(current);
             if (status == SdVolumeResult::Busy) return result_;
             if (status != SdVolumeResult::Ready) return fail(IndexedReadStep::IoError);
             if (current != volume_) return fail(IndexedReadStep::VolumeChanged);
-            if (phase_ == Phase::VerifyVolume) return result_ = erase_ ? IndexedReadStep::Erased : IndexedReadStep::Ready;
+            if (storage::sd_media_session() != media_session_) return fail(IndexedReadStep::VolumeChanged);
             phase_ = Phase::Open;
             return result_;
         }
@@ -132,12 +133,14 @@ class SdIndexedValueReader
             const auto size = file_.size();
             if (file_.read_busy()) return result_;
             if (size != length_) return fail(IndexedReadStep::Invalid);
-            phase_ = Phase::Close;
-            return result_;
         }
         file_.close();
-        phase_ = Phase::VerifyVolume;
-        return result_;
+        // The format is immutable during a mounted storage session. Mount
+        // and USB ownership transitions invalidate the session even when
+        // both happen between worker ticks; do not reopen format.bin here.
+        if (storage::sd_media_session() != media_session_) return fail(IndexedReadStep::VolumeChanged);
+        if (!storage::sd_card_ready() || storage::sd_external_block_owner_active()) return fail(IndexedReadStep::IoError);
+        return result_ = erase_ ? IndexedReadStep::Erased : IndexedReadStep::Ready;
     }
 
   private:
@@ -149,9 +152,7 @@ class SdIndexedValueReader
         Seek,
         Read,
         Validate,
-        CheckSize,
-        Close,
-        VerifyVolume
+        CheckSize
     };
     IndexedReadStep fail(IndexedReadStep result)
     {
@@ -169,6 +170,7 @@ class SdIndexedValueReader
     bool erase_ = false;
     uint8_t* bytes_ = nullptr;
     uint64_t length_ = 0, offset_ = 0;
+    uint32_t media_session_ = 0;
     ::geocaching::ByteView value_;
     storage::SdRuntimeFile file_;
     SdRecordReadCursor read_cursor_;

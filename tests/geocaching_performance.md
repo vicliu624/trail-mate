@@ -25,3 +25,10 @@ The two-marker run performed 199 I/O operations and read 2,296 bytes from the
 28-byte volume header: 82 header reads. The current 5 ms regression passing
 does not establish acceptable device performance. Repeated volume checks are
 an optimization target, but media replacement detection must remain intact.
+
+The first session-based value-reader optimization reduces this run to 195 I/O
+operations and 76 volume-header reads (2,128 bytes), taking 6,130 ms in the same
+25 ms model. This remains a failed performance gate. The reader validates the
+volume before reading and rejects completion after a media-session change,
+including a remount with an identical header. It no longer reopens the header
+to complete that same value read. No global volume cache is introduced.
