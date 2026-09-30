@@ -21,6 +21,7 @@ struct Item
     uint64_t edit_generation = 0;
     uint32_t publication_revision = 0;
     bool publication_confirmed = false;
+    uint8_t state = 0;
     std::array<std::uint8_t, 32> id{};
     std::array<std::uint8_t, 32> revision_hash{};
     std::array<char, 97> name{};

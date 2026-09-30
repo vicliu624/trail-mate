@@ -1,5 +1,19 @@
 # Geocaching client runtime
 
+## Archive a published cache
+
+Open the cache in **My caches**, save any edits, and choose **Archive cache**.
+The device first saves an archived draft, then asks for confirmation before
+publishing the next signed revision with the original author identity.
+The local copy remains available. Saving the draft alone does not withdraw
+the public cache: the list shows **Archive not confirmed** until the directory
+accepts that revision. Reopen it and choose **Archive** to retry an interrupted
+publication. **Delete local cache** only removes this device's copy.
+
+Archival is a terminal record state. A directory receiving the signed revision
+can exclude it from active results; it does not erase signed history or copies
+held by other devices and independent directories.
+
 Device discovery and browsing use a disposable RAM session. Opening Discover,
 checking directory capabilities, querying, refreshing and paging do not open SD
 storage or recover previous queries. A response is displayed after the existing

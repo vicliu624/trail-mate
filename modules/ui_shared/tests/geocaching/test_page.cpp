@@ -128,6 +128,8 @@ struct TestSource : ui::geocaching::Source
         {
             if (!has_draft || index) return false;
             out.is_draft = true;
+            out.state = draft.state;
+            out.publication_revision = publications ? 1 : 0;
             out.edit_generation = draft.generation;
             std::memcpy(out.id.data(), draft.id.data(), 16);
             std::snprintf(out.name.data(), out.name.size(), "%s", draft_name.c_str());
@@ -483,6 +485,27 @@ int main(int argc, char** argv)
     lv_obj_send_event(lv_obj_get_child(footer, 2), LV_EVENT_CLICKED, nullptr);
     lv_obj_send_event(lv_obj_get_child(footer, 3), LV_EVENT_CLICKED, nullptr);
     if (source.publications != 1 || lv_obj_get_child_count(list) != 1) return 32;
+    // Archiving retains the local copy and requires a separate signed publication.
+    lv_obj_send_event(lv_obj_get_child(list, 0), LV_EVENT_CLICKED, nullptr);
+    lv_tick_inc(600);
+    lv_timer_handler();
+    auto* archive = lv_obj_get_child(list, lv_obj_get_child_count(list) - 4);
+    if (std::strcmp(lv_label_get_text(lv_obj_get_child(archive, 0)), "Archive cache")) return 74;
+    lv_obj_send_event(archive, LV_EVENT_CLICKED, nullptr);
+    for (unsigned poll = 0; poll < 3; ++poll)
+    {
+        lv_tick_inc(600);
+        lv_timer_handler();
+    }
+    if (!source.has_draft || source.draft.state != 2 || source.publications != 1 ||
+        !std::strstr(lv_label_get_text(lv_obj_get_child(list, 0)), "Archive this public cache?")) return 75;
+    lv_obj_send_event(lv_obj_get_child(footer, 3), LV_EVENT_CLICKED, nullptr);
+    if (source.publications != 2 || !source.has_draft || lv_obj_get_child_count(list) != 1) return 76;
+    // Restore the active fixture for the existing edit/delete checks.
+    source.draft.state = 0;
+    ++source.generation;
+    lv_tick_inc(600);
+    lv_timer_handler();
     source.pending_reads = 20;
     lv_obj_send_event(lv_obj_get_child(list, 0), LV_EVENT_CLICKED, nullptr);
     lv_obj_update_layout(root);

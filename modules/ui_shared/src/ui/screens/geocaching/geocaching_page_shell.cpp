@@ -30,11 +30,13 @@ struct Editor
     lv_obj_t* publication_notice = nullptr;
     lv_obj_t* remove = nullptr;
     lv_obj_t* cancel_remove = nullptr;
+    lv_obj_t* archive = nullptr;
     std::array<uint8_t, 64> publication_author{};
     uint32_t previous_revision = 0, publication_revision = 0;
     bool public_confirmation = false;
     bool dirty = false, saving = false, confirming = false, loading = false;
     bool deleting = false, delete_confirmation = false;
+    bool archiving = false, archive_reload = false;
 };
 struct PageState
 {
@@ -323,10 +325,29 @@ void refreshView()
             setEnabled(editor.remove, !editor.saving && !editor.public_confirmation && !editor.confirming);
             setEnabled(editor.cancel_remove, !editor.saving);
         }
+        if (editor.archive) setEnabled(editor.archive, !editor.loading && !editor.saving && !editor.public_confirmation && !editor.dirty);
+        if (editor.archive_reload && source)
+        {
+            const auto read = source->readDraft(
+                editor.input.id,
+                [](const ::ui::geocaching::DraftInput& input, void* context)
+                { static_cast<Editor*>(context)->input.generation = input.generation; },
+                &editor);
+            if (read == ::ui::geocaching::DraftReadStatus::Pending) return;
+            editor.archive_reload = false;
+            editor.archiving = false;
+            editor.dirty = false;
+            for (auto* field : editor.fields) lv_obj_remove_state(field, LV_STATE_DISABLED);
+            lv_obj_remove_state(editor.container, LV_STATE_DISABLED);
+            setEnabled(page->next, true);
+            if (read == ::ui::geocaching::DraftReadStatus::Ready) previewPublication();
+            else lv_label_set_text(page->status, "Archive retained locally; reopen to retry publication");
+            return;
+        }
         if (!editor.confirming && !editor.public_confirmation && !editor.saving && editor.input.generation)
         {
             lv_obj_remove_flag(page->previous, LV_OBJ_FLAG_HIDDEN);
-            lv_label_set_text(lv_obj_get_child(page->previous, 0), "Publish");
+            lv_label_set_text(lv_obj_get_child(page->previous, 0), editor.input.state == 2 ? "Archive" : "Publish");
             if (lv_obj_has_state(page->previous, LV_STATE_DISABLED) != editor.dirty) setEnabled(page->previous, !editor.dirty);
         }
         if (editor.saving && source)
@@ -334,6 +355,13 @@ void refreshView()
             const auto status = source->draftSaveStatus(editor.input.id, editor.input.generation);
             if (status == ::ui::geocaching::DraftSaveStatus::Saved)
             {
+                if (editor.archiving)
+                {
+                    editor.saving = false;
+                    editor.archive_reload = true;
+                    lv_label_set_text(page->status, "Archive saved locally; preparing publication...");
+                    return;
+                }
                 closeEditor();
                 return;
             }
@@ -680,7 +708,10 @@ void previewPublication()
     editor.publication_notice = lv_label_create(page->list);
     lv_obj_set_width(editor.publication_notice, LV_PCT(100));
     lv_label_set_long_mode(editor.publication_notice, LV_LABEL_LONG_WRAP);
-    if (editor.previous_revision)
+    if (editor.input.state == 2)
+        lv_label_set_text_fmt(editor.publication_notice, "Archive this public cache?\nThis is permanent once accepted by the directory.\nThe local copy is retained.\nv%lu -> v%lu\nAuthor public identity:\n%s",
+                              static_cast<unsigned long>(editor.previous_revision), static_cast<unsigned long>(editor.publication_revision), author);
+    else if (editor.previous_revision)
         lv_label_set_text_fmt(editor.publication_notice, "Publish this cache publicly on Reticulum?\nv%lu -> v%lu\nAuthor public identity:\n%s",
                               static_cast<unsigned long>(editor.previous_revision), static_cast<unsigned long>(editor.publication_revision), author);
     else
@@ -693,7 +724,7 @@ void previewPublication()
     lv_obj_scroll_to_y(page->list, 0, LV_ANIM_OFF);
     lv_label_set_text(page->status, "Review author and saved fields before publishing");
     lv_label_set_text(lv_obj_get_child(page->refresh, 0), "Cancel");
-    lv_label_set_text(lv_obj_get_child(page->next, 0), "Publish");
+    lv_label_set_text(lv_obj_get_child(page->next, 0), editor.input.state == 2 ? "Confirm archive" : "Publish");
     setEnabled(page->previous, false);
     lv_obj_add_flag(page->previous, LV_OBJ_FLAG_HIDDEN);
     if (page->group) lv_group_focus_obj(page->refresh);
@@ -818,6 +849,20 @@ void openEditor(const ::ui::geocaching::Item* item)
             LV_EVENT_VALUE_CHANGED, nullptr);
         if (item)
         {
+            if (item->publication_revision && item->state != 2)
+            {
+                editor.archive = button(page->list, "Archive cache", ::ui::page_profile::current().control_button_height);
+                lv_obj_add_event_cb(
+                    editor.archive, [](lv_event_t*)
+                    {
+                    if (!page || !page->editor || !source) return;
+                    auto& e = *page->editor;
+                    if (e.loading || e.saving || e.public_confirmation || e.dirty) return;
+                    e.input.state = 2;
+                    e.archiving = true;
+                    saveEditor(); },
+                    LV_EVENT_CLICKED, nullptr);
+            }
             detailBody(page->list, "Delete this device's copy only. Published directory records remain public.");
             editor.remove = button(page->list, "Delete local cache", ::ui::page_profile::current().control_button_height);
             editor.cancel_remove = button(page->list, "Cancel delete", ::ui::page_profile::current().control_button_height);

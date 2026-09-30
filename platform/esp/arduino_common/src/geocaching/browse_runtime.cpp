@@ -1494,6 +1494,7 @@ class Facade final : public ::ui::geocaching::Source
             if ((generation ^ (epoch << 32)) != catalog.generation || index < catalog.page.offset || index - catalog.page.offset >= catalog.page.count) return false;
             const auto& draft = catalog.page.rows[index - catalog.page.offset];
             out.is_draft = true;
+            out.state = draft.state;
             out.has_coordinates = draft.has_coordinates;
             out.edit_generation = draft.generation;
             std::memcpy(out.id.data(), draft.id.data(), 16);
@@ -1509,9 +1510,17 @@ class Facade final : public ::ui::geocaching::Source
             std::snprintf(out.detail.data(), out.detail.size(), "Local draft - not published\n%s\n%s", draft.has_coordinates ? "Location set" : "Location not set", draft.has_author ? "Author selected" : "Author not selected");
             const auto& publication = draft.publication;
             out.publication_revision = publication.latest_revision;
-            out.publication_confirmed = publication.latest_revision && publication.confirmed_revision == publication.latest_revision;
+            out.publication_confirmed = publication.latest_revision && publication.confirmed_revision == publication.latest_revision && !publication.local_changes;
             if (publication.latest_revision)
             {
+                if (draft.state == 2)
+                {
+                    std::snprintf(out.detail.data(), out.detail.size(), "%s\n%s",
+                                  out.publication_confirmed && !publication.local_changes ? "Archived - confirmed by directory" : "Archive not confirmed",
+                                  publication.local_changes ? "Local archive saved; publish to withdraw the public cache" : publication.pending ? "Awaiting directory confirmation"
+                                                                                                                                                : "Retained locally; retry publication if needed");
+                    return true;
+                }
                 std::snprintf(out.detail.data(), out.detail.size(), publication.confirmed_revision ? "v%lu %s%s\nLast directory-confirmed version: %lu" : "v%lu %s%s\nNo directory confirmation recorded",
                               static_cast<unsigned long>(publication.latest_revision), out.publication_confirmed ? "accepted by directory" : publication.pending ? "awaiting confirmation"
                                                                                                                                                                  : "stopped; result unconfirmed",
