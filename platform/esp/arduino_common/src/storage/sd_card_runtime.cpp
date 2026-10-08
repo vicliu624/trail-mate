@@ -1893,6 +1893,8 @@ class SdRuntimeDir::Impl
     FsFile entry_scratch;
     SdCardBackend backend = SdCardBackend::None;
     char path[128]{};
+    uint64_t retry_position = 0;
+    bool retry_pending = false;
 };
 
 SdRuntimeDir::SdRuntimeDir()
@@ -1935,12 +1937,33 @@ bool SdRuntimeDir::open(const char* path)
     return false;
 }
 
+SdFileReadStatus SdRuntimeDir::open_read_status(const char* path, uint32_t expected_session)
+{
+    close();
+    if (!impl_ || path_empty(path)) return SdFileReadStatus::Invalid;
+    const char* normalized = normalize_sd_path(path);
+    copy_path(impl_->path, sizeof(impl_->path), normalized);
+    SdRuntimeOperationGuard guard("sd_tmap_dir_open");
+    if (!guard.locked()) return SdFileReadStatus::Busy;
+    if (expected_session != sd_media_session() || expected_session == s_faulted_media_session.load() ||
+        sd_external_block_owner_active() || s_info.backend != SdCardBackend::SdFat) return SdFileReadStatus::Unavailable;
+    const SdIoErrorScope io_error;
+    impl_->sdfat_dir = s_sdfat.open(normalized, O_RDONLY);
+    if (guard.busStatus() == sys::runtime::BusAcquireStatus::Busy || guard.busStatus() == sys::runtime::BusAcquireStatus::TimedOut) return SdFileReadStatus::Busy;
+    if (io_error.error()) return SdFileReadStatus::IoError;
+    if (!impl_->sdfat_dir) return SdFileReadStatus::Missing;
+    if (!impl_->sdfat_dir.isDir()) return SdFileReadStatus::Invalid;
+    impl_->backend = SdCardBackend::SdFat;
+    return SdFileReadStatus::Ready;
+}
+
 void SdRuntimeDir::close()
 {
     if (impl_ == nullptr)
     {
         return;
     }
+    impl_->retry_pending = false;
     if (impl_->backend == SdCardBackend::SdFat)
     {
         const uint32_t start_ms = sd_io_begin("dir_close", impl_->path);
@@ -1995,12 +2018,30 @@ SdDirReadStatus SdRuntimeDir::read_next_status(char* name, std::size_t name_size
             sd_io_end("dir_read", impl_->path, start_ms, false, 0, -2);
             return SdDirReadStatus::Busy;
         }
+        if (impl_->retry_pending)
+        {
+            // Reopen to clear SdFat's sticky read-error bit, then restore the
+            // position preceding the interrupted name (including LFN entries).
+            impl_->sdfat_dir = s_sdfat.open(impl_->path, O_RDONLY);
+            const bool restored = impl_->sdfat_dir && impl_->sdfat_dir.seekSet(impl_->retry_position);
+            if (guard.busStatus() == sys::runtime::BusAcquireStatus::Busy || guard.busStatus() == sys::runtime::BusAcquireStatus::TimedOut)
+                return SdDirReadStatus::Busy;
+            if (!restored) return SdDirReadStatus::IoError;
+            impl_->retry_pending = false;
+        }
+        const auto position = impl_->sdfat_dir.curPosition();
         if (impl_->entry_scratch)
         {
             (void)impl_->entry_scratch.close();
         }
         impl_->entry_scratch = impl_->sdfat_dir.openNextFile(O_RDONLY);
         FsFile& entry = impl_->entry_scratch;
+        if (guard.busStatus() == sys::runtime::BusAcquireStatus::Busy || guard.busStatus() == sys::runtime::BusAcquireStatus::TimedOut)
+        {
+            impl_->retry_position = position;
+            impl_->retry_pending = true;
+            return SdDirReadStatus::Busy;
+        }
         if (!entry)
         {
             const bool failed = impl_->sdfat_dir.getError() != 0;
@@ -2008,6 +2049,13 @@ SdDirReadStatus SdRuntimeDir::read_next_status(char* name, std::size_t name_size
             return failed ? SdDirReadStatus::IoError : SdDirReadStatus::End;
         }
         entry.getName(name, name_size);
+        if (guard.busStatus() == sys::runtime::BusAcquireStatus::Busy || guard.busStatus() == sys::runtime::BusAcquireStatus::TimedOut)
+        {
+            impl_->retry_position = position;
+            impl_->retry_pending = true;
+            name[0] = 0;
+            return SdDirReadStatus::Busy;
+        }
         if (is_dir != nullptr)
         {
             *is_dir = entry.isDir();

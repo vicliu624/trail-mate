@@ -202,6 +202,8 @@ class SdRuntimeDir
     SdRuntimeDir& operator=(const SdRuntimeDir&) = delete;
 
     bool open(const char* path);
+    // Distinguishes a missing package directory from temporary bus contention.
+    SdFileReadStatus open_read_status(const char* path, uint32_t expected_session);
     void close();
     bool is_open() const;
     bool read_next(char* name, std::size_t name_size, bool* is_dir);

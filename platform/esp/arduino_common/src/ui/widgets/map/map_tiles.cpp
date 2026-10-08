@@ -9,6 +9,7 @@
 #include "freertos/task.h"
 #include "lvgl.h"
 #include "platform/esp/arduino_common/map_tiles/lvgl_tile_image.h"
+#include "platform/esp/arduino_common/map_tiles/sd_tmap_storage.h"
 #include "platform/esp/arduino_common/map_tiles/map_tile_command_queue.h"
 #include "platform/esp/arduino_common/map_tiles/map_tile_event_queue.h"
 #include "platform/esp/arduino_common/storage/sd_card_runtime.h"
@@ -25,6 +26,7 @@
 #include "ui_map_runtime/map_tiles/map_tile_geometry.h"
 #include "ui_map_runtime/map_tiles/map_tile_pipeline_metrics.h"
 #include "ui_map_runtime/map_tiles/map_tile_types.h"
+#include "ui_map_runtime/map_tiles/native_pixel_buffer.h"
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
 #include "platform/esp/arduino_common/map_poi/cjson_poi_parser.h"
 #include "ui_map_runtime/map_poi/annotation_layout.h"
@@ -138,6 +140,7 @@ static bool g_missing_tile_notice_pending = false;
 static bool g_missing_tile_notice_emitted = false;
 static uint8_t g_missing_tile_notice_source = 0;
 static uint32_t g_map_tile_runtime_generation = 1;
+static uint32_t g_active_map_media_session = 0;
 
 namespace
 {
@@ -226,7 +229,16 @@ class SdMapTileFileSystem final : public ui::map_tiles::IMapTileFileSystem
 };
 #endif
 
-constexpr std::size_t kMapTileWorkerScratchBytes = 192U * 1024U;
+// One reusable PSRAM buffer also covers the largest v1 native RGBA tile.
+constexpr std::size_t kMapTileWorkerScratchBytes = 256U * 1024U;
+constexpr std::size_t kNativeTilePixelBudgetBytes = 3U * 1024U * 1024U;
+std::atomic<std::size_t> g_native_tile_pixel_bytes{0};
+std::atomic<uint32_t> g_map_worker_stack_low_bytes{UINT32_MAX};
+
+bool native_tile_format(ui::map_tiles::MapTileFormat format)
+{
+    return format == ui::map_tiles::MapTileFormat::Rgb565 || format == ui::map_tiles::MapTileFormat::Rgba8888;
+}
 constexpr std::size_t kMapTileWorkerTaskStackBytes = 4U * 1024U;
 constexpr int kMapTileEventsPerUiDrain = 1;
 constexpr int kMapTileRequestsPerUiStep = 2;
@@ -264,6 +276,10 @@ const char* map_tile_format_name(ui::map_tiles::MapTileFormat format)
         return "jsonl";
     case ui::map_tiles::MapTileFormat::PoiRecords:
         return "poi-records";
+    case ui::map_tiles::MapTileFormat::Rgb565:
+        return "rgb565";
+    case ui::map_tiles::MapTileFormat::Rgba8888:
+        return "rgba8888";
     case ui::map_tiles::MapTileFormat::Unknown:
     default:
         return "unknown";
@@ -406,17 +422,17 @@ uint8_t* allocate_tile_payload(std::size_t size)
         return nullptr;
     }
     return static_cast<uint8_t*>(
-        heap_caps_malloc_prefer(size,
-                                2,
-                                MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT,
-                                MALLOC_CAP_8BIT));
+        heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
 }
 
 void release_tile_payload(ui::map_tiles::MapTileAsyncEvent& event)
 {
     if (event.payload.data != nullptr)
     {
-        heap_caps_free(const_cast<uint8_t*>(event.payload.data));
+        if (native_tile_format(event.payload.format))
+            ui::map_tiles::NativePixelBuffer::release(event.payload.data);
+        else
+            heap_caps_free(const_cast<uint8_t*>(event.payload.data));
     }
     event.payload = {};
     event.payload_size = 0;
@@ -434,6 +450,17 @@ lv_image_dsc_t* decode_payload_to_image_desc(const ui::map_tiles::MapTileRef& re
         payload.format == ui::map_tiles::MapTileFormat::Unknown
             ? ui::map_tiles::mapTileFormatForLayer(ref.layer)
             : payload.format;
+    if (native_tile_format(payload_format))
+    {
+        const bool rgba = payload_format == ui::map_tiles::MapTileFormat::Rgba8888;
+        auto* image = platform::esp::map_tiles::LvglTileImage::captureNative(
+            payload.data, payload.size, rgba ? LV_COLOR_FORMAT_ARGB8888 : LV_COLOR_FORMAT_RGB565,
+            ui::map_tiles::NativePixelBuffer::retain, ui::map_tiles::NativePixelBuffer::release,
+            [](size_t bytes) -> void*
+            { return heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT); });
+        if (image && rgba) ui::map_tiles::NativePixelBuffer::convertRgbaToBgra(payload.data, payload.size);
+        return image;
+    }
     const lv_color_format_t source_format = lvgl_source_format_for_tile(payload_format);
     if (source_format == LV_COLOR_FORMAT_UNKNOWN)
     {
@@ -553,7 +580,8 @@ class MapTileAvailabilityMemory final
             {
                 continue;
             }
-            missing = static_cast<int32_t>(entry.expires_ms - now_ms) > 0;
+            missing = entry.media_session == ::platform::esp::arduino_common::storage::sd_media_session() &&
+                      static_cast<int32_t>(entry.expires_ms - now_ms) > 0;
             break;
         }
         xSemaphoreGive(mutex_);
@@ -589,6 +617,7 @@ class MapTileAvailabilityMemory final
         slot->used = true;
         slot->ref = ref;
         slot->expires_ms = now_ms + kMapTileMissingCacheTtlMs;
+        slot->media_session = ::platform::esp::arduino_common::storage::sd_media_session();
         xSemaphoreGive(mutex_);
     }
 
@@ -616,6 +645,7 @@ class MapTileAvailabilityMemory final
         bool used = false;
         ui::map_tiles::MapTileRef ref{};
         uint32_t expires_ms = 0;
+        uint32_t media_session = 0;
     };
 
     bool ensureMutex()
@@ -647,8 +677,18 @@ ui::map_tiles::MapTileAsyncEvent copy_map_tile_event(const ui::map_tiles::MapTil
     {
         uint8_t* payload = nullptr;
         int allocation_error = -12;
+        if (native_tile_format(event.payload.format))
+        {
+            payload = ui::map_tiles::NativePixelBuffer::create(
+                event.payload.size, g_native_tile_pixel_bytes,
+                kNativeTilePixelBudgetBytes,
+                [](size_t alignment, size_t bytes) -> void*
+                { return heap_caps_aligned_alloc(alignment, bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT); },
+                heap_caps_free);
+        }
+        else
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
-        if (event.payload.format == ui::map_tiles::MapTileFormat::PoiRecords)
+            if (event.payload.format == ui::map_tiles::MapTileFormat::PoiRecords)
         {
             if (ui::map_poi::validPayload(event.payload.data, event.payload.size))
                 payload = static_cast<uint8_t*>(heap_caps_aligned_alloc(alignof(ui::map_poi::TileHeader), event.payload.size,
@@ -661,7 +701,7 @@ ui::map_tiles::MapTileAsyncEvent copy_map_tile_event(const ui::map_tiles::MapTil
         if (payload == nullptr)
         {
             log_map_tile_event_failure("payload_alloc", owned, allocation_error);
-            owned.kind = ui::map_tiles::MapTileAsyncEventKind::Failed;
+            owned.kind = native_tile_format(event.payload.format) ? ui::map_tiles::MapTileAsyncEventKind::RetryLater : ui::map_tiles::MapTileAsyncEventKind::Failed;
             owned.error = allocation_error;
             owned.payload = {};
             owned.payload_size = 0;
@@ -712,6 +752,10 @@ class EspMapTileWorkerBackend final : public ui::map_tiles::IMapTileWorkerBacken
         uint8_t* buffer,
         std::size_t capacity) override
     {
+        // Always try packages before the legacy missing cache. A new media
+        // session invalidates the package catalog inside this source.
+        auto packaged = tmap_source_.read(ref, buffer, capacity);
+        if (packaged.status != ui::map_tiles::MapTileReadStatus::Missing) return packaged;
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
         if (ref.layer == ui::map_tiles::MapTileLayer::Poi) return poi_source_.read(ref, buffer, capacity);
 #endif
@@ -753,6 +797,7 @@ class EspMapTileWorkerBackend final : public ui::map_tiles::IMapTileWorkerBacken
 
     void resetMetadata()
     {
+        tmap_source_.reset();
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
         poi_source_.reset();
 #endif
@@ -760,6 +805,8 @@ class EspMapTileWorkerBackend final : public ui::map_tiles::IMapTileWorkerBacken
 
   private:
     ui::map_tiles::IMapTileSource& source_;
+    platform::esp::map_tiles::SdTmapStorage tmap_storage_;
+    ui::map_tiles::TmapMapTileSource tmap_source_{tmap_storage_};
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
     SdMapTileFileSystem poi_files_;
     platform::esp::arduino_common::map_poi::CJsonPoiParser poi_parser_;
@@ -1104,6 +1151,16 @@ class MapTileAsyncHost final
                         static_cast<unsigned long long>(metrics_.block_sectors),
                         static_cast<unsigned long>(metrics_.block_max_sectors),
                         static_cast<unsigned long long>(metrics_.block_us));
+        const auto stack_low = g_map_worker_stack_low_bytes.load(std::memory_order_relaxed);
+        std::printf("[GPS][MAP][memory] native=%u/%u internal_free=%u internal_min=%u "
+                    "psram_free=%u psram_min=%u worker_stack_min_bytes=%u\n",
+                    static_cast<unsigned>(g_native_tile_pixel_bytes.load(std::memory_order_relaxed)),
+                    static_cast<unsigned>(kNativeTilePixelBudgetBytes),
+                    static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL)),
+                    static_cast<unsigned>(heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL)),
+                    static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM)),
+                    static_cast<unsigned>(heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM)),
+                    static_cast<unsigned>(stack_low == UINT32_MAX ? 0 : stack_low));
         metrics_ = {};
         last_metrics_ms_ = now;
     }
@@ -1134,6 +1191,9 @@ class MapTileAsyncHost final
                 if (worker_ != nullptr)
                 {
                     const auto result = worker_->execute(command, sys::millis_now());
+                    const auto stack_free = static_cast<uint32_t>(uxTaskGetStackHighWaterMark(nullptr) * sizeof(StackType_t));
+                    const auto old_low = g_map_worker_stack_low_bytes.load(std::memory_order_relaxed);
+                    g_map_worker_stack_low_bytes.store(std::min(old_low, stack_free), std::memory_order_relaxed);
                     if (result == ui::map_tiles::MapTileExecutionStatus::Backpressured)
                     {
 #if TRAIL_MATE_MAP_DIAGNOSTICS
@@ -1167,6 +1227,7 @@ class MapTileAsyncHost final
             if (idle)
             {
                 events_.clear();
+                backend_.resetMetadata();
                 delete worker_;
                 worker_ = nullptr;
                 if (scratch_ != nullptr)
@@ -2149,13 +2210,16 @@ static void sync_render_settings(TileContext& ctx)
 {
     uint8_t map_source = sanitize_map_source(g_requested_map_source);
     bool contour_enabled = g_requested_contour_enabled;
+    const auto media_session = ::platform::esp::arduino_common::storage::sd_media_session();
+    const bool media_changed = media_session != g_active_map_media_session;
 
-    if (map_source == g_active_map_source && contour_enabled == g_active_contour_enabled)
+    if (!media_changed && map_source == g_active_map_source && contour_enabled == g_active_contour_enabled)
     {
         return;
     }
 
-    bool source_changed = (map_source != g_active_map_source);
+    bool source_changed = media_changed || (map_source != g_active_map_source);
+    g_active_map_media_session = media_session;
     const uint32_t previous_generation = g_map_tile_runtime_generation;
     g_active_map_source = map_source;
     g_active_contour_enabled = contour_enabled;

@@ -1300,6 +1300,23 @@ bool SdRuntimeDir::open(const char* path)
     return false;
 }
 
+SdFileReadStatus SdRuntimeDir::open_read_status(const char* path, uint32_t expected_session)
+{
+    close();
+    if (!impl_ || path_empty(path)) return SdFileReadStatus::Invalid;
+    const char* normalized = normalize_sd_path(path);
+    copy_path(impl_->path, sizeof(impl_->path), normalized);
+    SdRuntimeBusGuard guard("sd_tmap_dir_open");
+    if (!guard.locked()) return SdFileReadStatus::Busy;
+    if (expected_session != sd_media_session() || sd_external_block_owner_active() ||
+        s_info.backend != SdCardBackend::SdFat) return SdFileReadStatus::Unavailable;
+    impl_->sdfat_dir = s_volume.open(normalized, O_RDONLY);
+    if (!impl_->sdfat_dir) return SdFileReadStatus::Missing;
+    if (!impl_->sdfat_dir.isDir()) return SdFileReadStatus::Invalid;
+    impl_->backend = SdCardBackend::SdFat;
+    return SdFileReadStatus::Ready;
+}
+
 void SdRuntimeDir::close()
 {
     if (impl_ == nullptr)
@@ -1367,6 +1384,22 @@ bool SdRuntimeDir::read_next(char* name, std::size_t name_size, bool* is_dir)
     }
 
     return false;
+}
+
+SdDirReadStatus SdRuntimeDir::read_next_status(char* name, std::size_t name_size, bool* is_dir)
+{
+    if (!name || !name_size) return SdDirReadStatus::Invalid;
+    name[0] = 0;
+    if (is_dir) *is_dir = false;
+    SdRuntimeBusGuard guard("sd_tmap_dir_read");
+    if (!guard.locked()) return SdDirReadStatus::Busy;
+    if (!is_open() || sd_external_block_owner_active()) return SdDirReadStatus::Unavailable;
+    FsFile entry = impl_->sdfat_dir.openNextFile(O_RDONLY);
+    if (!entry) return impl_->sdfat_dir.getError() ? SdDirReadStatus::IoError : SdDirReadStatus::End;
+    if (!entry.getName(name, name_size)) return SdDirReadStatus::IoError;
+    if (is_dir) *is_dir = entry.isDir();
+    entry.close();
+    return name[0] ? SdDirReadStatus::Entry : SdDirReadStatus::IoError;
 }
 
 bool sd_read_raw(uint32_t lba, uint8_t* buffer)

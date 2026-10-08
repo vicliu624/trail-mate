@@ -14,6 +14,28 @@ namespace platform::esp::map_tiles
 class LvglTileImage final : public lv_image_dsc_t
 {
   public:
+    // Callbacks share an already owned native event buffer. Allocation failure
+    // does not consume the caller's reference. RGB565 and BGRA need no decoder.
+    static lv_image_dsc_t* captureNative(const uint8_t* pixels, size_t bytes, lv_color_format_t format,
+                                         void (*retain)(const uint8_t*), void (*release)(const uint8_t*),
+                                         void* (*allocate_owner)(size_t) = lv_malloc)
+    {
+        const size_t stride = format == LV_COLOR_FORMAT_RGB565 ? 512 : format == LV_COLOR_FORMAT_ARGB8888 ? 1024
+                                                                                                          : 0;
+        if (!pixels || !stride || bytes != stride * 256 || !retain || !release) return nullptr;
+        auto* storage = allocate_owner(sizeof(LvglTileImage));
+        if (!storage) return nullptr;
+        auto* image = new (storage) LvglTileImage();
+        image->header.magic = LV_IMAGE_HEADER_MAGIC;
+        image->header.cf = format;
+        image->header.w = image->header.h = 256;
+        image->header.stride = stride;
+        image->data = pixels;
+        image->data_size = bytes;
+        image->native_release_ = release;
+        retain(pixels);
+        return image;
+    }
     // allocate_owner must return storage compatible with lv_free.
     static lv_image_dsc_t* capture(lv_image_decoder_dsc_t& decoder,
                                    void* (*allocate_owner)(size_t) = lv_malloc)
@@ -72,7 +94,9 @@ class LvglTileImage final : public lv_image_dsc_t
     LvglTileImage() : lv_image_dsc_t{} {}
     ~LvglTileImage()
     {
-        if (session_.decoder)
+        if (native_release_)
+            native_release_(data);
+        else if (session_.decoder)
             lv_image_decoder_close(&session_);
         else
             lv_free(const_cast<uint8_t*>(data));
@@ -96,6 +120,7 @@ class LvglTileImage final : public lv_image_dsc_t
 
     lv_image_decoder_dsc_t session_{};
     lv_image_dsc_t source_{};
+    void (*native_release_)(const uint8_t*) = nullptr;
 };
 
 } // namespace platform::esp::map_tiles

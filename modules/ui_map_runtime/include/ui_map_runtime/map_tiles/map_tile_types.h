@@ -33,6 +33,8 @@ enum class MapTileFormat : uint8_t
     Png,
     Jsonl,
     PoiRecords,
+    Rgb565,
+    Rgba8888,
 };
 
 enum class MapTileStatus : uint8_t
