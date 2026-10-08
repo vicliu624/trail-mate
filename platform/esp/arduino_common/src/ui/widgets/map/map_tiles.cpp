@@ -744,6 +744,12 @@ class EspMapTileWorkerBackend final : public ui::map_tiles::IMapTileWorkerBacken
     ui::map_tiles::MapTileLookupResult lookup(
         const ui::map_tiles::MapTileRef& ref) override
     {
+        if (media_session_ != ::platform::esp::arduino_common::storage::sd_media_session()) resetMetadata();
+        const auto packaged = tmap_source_.lookup(ref);
+        if (packaged.status != ui::map_tiles::MapTileStatus::Missing) return packaged;
+#if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
+        if (ref.layer == ui::map_tiles::MapTileLayer::Poi) return poi_source_.lookup(ref);
+#endif
         return source_.lookup(ref);
     }
 
@@ -754,6 +760,7 @@ class EspMapTileWorkerBackend final : public ui::map_tiles::IMapTileWorkerBacken
     {
         // Always try packages before the legacy missing cache. A new media
         // session invalidates the package catalog inside this source.
+        if (media_session_ != ::platform::esp::arduino_common::storage::sd_media_session()) resetMetadata();
         auto packaged = tmap_source_.read(ref, buffer, capacity);
         if (packaged.status != ui::map_tiles::MapTileReadStatus::Missing) return packaged;
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
@@ -801,12 +808,14 @@ class EspMapTileWorkerBackend final : public ui::map_tiles::IMapTileWorkerBacken
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
         poi_source_.reset();
 #endif
+        media_session_ = ::platform::esp::arduino_common::storage::sd_media_session();
     }
 
   private:
     ui::map_tiles::IMapTileSource& source_;
     platform::esp::map_tiles::SdTmapStorage tmap_storage_;
     ui::map_tiles::TmapMapTileSource tmap_source_{tmap_storage_};
+    uint32_t media_session_ = 0;
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
     SdMapTileFileSystem poi_files_;
     platform::esp::arduino_common::map_poi::CJsonPoiParser poi_parser_;

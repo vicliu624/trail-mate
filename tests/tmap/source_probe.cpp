@@ -133,9 +133,13 @@ int main(int argc, char** argv)
     assert(storage.opens == opens);
     auto second = source.read(china, pixels, 256 * 1024);
     assert(second.status == MapTileReadStatus::Ready && tmap::Reader::crc32c(pixels, second.size) == 0xa4e01293);
+    const auto located = source.lookup(china);
+    assert(located.status == MapTileStatus::Available && located.format == MapTileFormat::Rgb565 && located.size == 131072);
     auto poi = china;
     poi.layer = MapTileLayer::Poi;
     auto annotations = source.read(poi, pixels, 256 * 1024);
+    const auto poi_info = source.lookup(poi);
+    assert(poi_info.status == MapTileStatus::Available && poi_info.format == MapTileFormat::PoiRecords && poi_info.size == 0);
     assert(annotations.status == MapTileReadStatus::Ready && annotations.format == MapTileFormat::PoiRecords);
     assert(ui::map_poi::validPayload(pixels, annotations.size));
     const auto* header = reinterpret_cast<const ui::map_poi::TileHeader*>(pixels);

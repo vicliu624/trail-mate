@@ -258,11 +258,17 @@ MapTileLookupResult TmapMapTileSource::lookup(const MapTileRef& ref) const
 {
     tmap::Tile tile{};
     const auto status = select(ref, tile);
-    return {status == tmap::Status::Ok ? MapTileStatus::Available : status == tmap::Status::Missing ? MapTileStatus::Missing
-                                                                                                    : MapTileStatus::Error,
-            ref.layer == MapTileLayer::Poi ? MapTileFormat::PoiRecords : tile.codec == 1 ? MapTileFormat::Rgb565
-                                                                                         : MapTileFormat::Rgba8888,
-            tile.bytes};
+    MapTileLookupResult info{};
+    info.status = status == tmap::Status::Ok ? MapTileStatus::Available : status == tmap::Status::Missing ? MapTileStatus::Missing
+                                                                                                          : MapTileStatus::Error;
+    if (ref.layer == MapTileLayer::Poi)
+        info.format = MapTileFormat::PoiRecords; // Generated record count is known only after read.
+    else if (status == tmap::Status::Ok)
+    {
+        info.format = tile.codec == 1 ? MapTileFormat::Rgb565 : MapTileFormat::Rgba8888;
+        info.size = tile.bytes;
+    }
+    return info;
 }
 MapTileReadResult TmapMapTileSource::read(const MapTileRef& ref, uint8_t* output, size_t capacity) const
 {
