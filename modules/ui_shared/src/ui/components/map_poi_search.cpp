@@ -39,6 +39,7 @@ struct State
     char text[224]{};
     size_t page = 0;
     uint32_t font_refresh_at = 0;
+    bool fonts_pending = false;
     double latitude = 0, longitude = 0;
     Selection selection = nullptr;
     void* context = nullptr;
@@ -55,6 +56,7 @@ bool activate(lv_event_t* event)
 void render()
 {
     auto& state = *s_state;
+    state.fonts_pending = true;
     const auto& snapshot = state.snapshot;
     state.page = std::min(state.page, snapshot.count ? (snapshot.count - 1) / kPageRows : size_t{0});
     for (size_t row = 0; row < kPageRows; ++row)
@@ -86,22 +88,35 @@ void render()
     else if (snapshot.status == search::Status::NoMaps) message = "No searchable TMAP maps";
     else if (snapshot.status == search::Status::Error || snapshot.incomplete) message = "Some maps could not be searched";
     else if (snapshot.status == search::Status::Ready)
-        message = snapshot.count ? snapshot.limited ? "Best 24 results; refine your search" : "Select a place to show on map" : "No results";
+        message = snapshot.count ? snapshot.limited ? "Nearest 24 results; refine your search" : "Nearest places; select a result" : "No results";
     i18n::set_label_text(state.status, message);
 }
 void poll(lv_timer_t*)
 {
-    if (s_state && search::poll(s_state->snapshot, s_state->results, search::kMaxResults)) render();
-    if (!s_state || lv_tick_elaps(s_state->font_refresh_at) < 500) return;
+    if (s_state && search::poll(s_state->snapshot, s_state->results, search::kMaxResults))
+    {
+        // Keep the visible list immutable while it is browsed. Intermediate
+        // top-K snapshots are reordered/replaced as other packages are read.
+        if (s_state->snapshot.status == search::Status::Searching) s_state->snapshot.count = 0;
+        render();
+        lv_obj_update_layout(s_state->list);
+        lv_obj_scroll_to_y(s_state->list, 0, LV_ANIM_OFF);
+    }
+    if (!s_state || !s_state->fonts_pending || lv_tick_elaps(s_state->font_refresh_at) < 500) return;
     s_state->font_refresh_at = lv_tick_get();
     // Content fonts load after an LVGL frame and may retry when SD is busy.
     // Rebind visible names even when the search snapshot has not changed.
+    bool ready = true;
     for (size_t row = 0; row < kPageRows; ++row)
     {
         const size_t index = s_state->page * kPageRows + row;
         if (index < s_state->snapshot.count)
+        {
+            if (!i18n::ensure_content_font_for_text(s_state->results[index].name)) ready = false;
             fonts::apply_content_font(s_state->labels[row], s_state->results[index].name, &lv_font_montserrat_14);
+        }
     }
+    s_state->fonts_pending = !ready;
 }
 void run(lv_event_t* event)
 {
@@ -118,6 +133,7 @@ void run(lv_event_t* event)
         return;
     }
     s_state->page = 0;
+    lv_obj_scroll_to_y(s_state->list, 0, LV_ANIM_OFF);
     poll(nullptr);
 }
 void cancel_event(lv_event_t* event)
@@ -131,6 +147,8 @@ void page_event(lv_event_t* event)
     if (forward && (s_state->page + 1) * kPageRows < s_state->snapshot.count) ++s_state->page;
     else if (!forward && s_state->page) --s_state->page;
     render();
+    lv_obj_update_layout(s_state->list);
+    lv_obj_scroll_to_y(s_state->list, 0, LV_ANIM_OFF);
 }
 void selected(lv_event_t* event)
 {
@@ -245,6 +263,9 @@ bool open(lv_obj_t* parent, double latitude, double longitude, Selection selecti
     lv_obj_set_height(state.list, 0);
     lv_obj_set_flex_grow(state.list, 1);
     lv_obj_set_flex_flow(state.list, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(state.list, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    lv_obj_set_scroll_dir(state.list, LV_DIR_VER);
+    lv_obj_clear_flag(state.list, LV_OBJ_FLAG_SCROLL_ELASTIC | LV_OBJ_FLAG_SCROLL_MOMENTUM);
     lv_obj_set_style_pad_all(state.list, 2, 0);
     lv_obj_set_style_bg_opa(state.list, LV_OPA_COVER, 0);
     lv_obj_set_style_bg_color(state.list, lv_color_hex(0xfff8ee), 0);
@@ -255,6 +276,7 @@ bool open(lv_obj_t* parent, double latitude, double longitude, Selection selecti
         lv_obj_set_size(state.rows[row], LV_PCT(100), 50);
         lv_obj_set_style_pad_all(state.rows[row], 4, 0);
         lv_obj_set_flex_flow(state.rows[row], LV_FLEX_FLOW_COLUMN);
+        lv_obj_set_flex_align(state.rows[row], LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
         lv_obj_set_style_pad_row(state.rows[row], 2, 0);
         lv_obj_set_style_bg_color(state.rows[row], lv_color_hex(0xffffff), 0);
         state.labels[row] = lv_obj_get_child(state.rows[row], 0);

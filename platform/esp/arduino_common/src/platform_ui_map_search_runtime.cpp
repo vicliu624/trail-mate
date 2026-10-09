@@ -48,8 +48,8 @@ void copy_name(char* output, size_t capacity, const char* source)
 }
 bool better(const Result& a, const Result& b)
 {
-    if (a.match != b.match) return a.match < b.match;
     if (a.distance_m != b.distance_m) return a.distance_m < b.distance_m;
+    if (a.match != b.match) return a.match < b.match;
     if (a.importance != b.importance) return a.importance > b.importance;
     return a.id < b.id;
 }

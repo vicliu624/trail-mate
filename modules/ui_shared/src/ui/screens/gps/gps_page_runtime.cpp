@@ -586,7 +586,10 @@ void set_map_notice(const char* text, uint32_t duration_ms)
         return;
     }
 
-    std::snprintf(s_map_notice_text, sizeof(s_map_notice_text), "%s", text);
+    size_t bytes = std::min(std::strlen(text), sizeof(s_map_notice_text) - 1);
+    while (bytes && (static_cast<uint8_t>(text[bytes]) & 0xc0) == 0x80) --bytes;
+    std::memcpy(s_map_notice_text, text, bytes);
+    s_map_notice_text[bytes] = '\0';
     s_map_notice_until_ms = sys::millis_now() + duration_ms;
 }
 
@@ -1701,7 +1704,7 @@ void sync_map_notice_overlay()
     const uint32_t now = sys::millis_now();
     if (s_map_notice_text[0] != '\0' && now < s_map_notice_until_ms)
     {
-        set_compact_label(s_map_notice_label, s_map_notice_text);
+        ::ui::i18n::set_content_label_text_raw(s_map_notice_label, s_map_notice_text);
         lv_obj_set_style_bg_color(s_map_notice_panel, lv_color_hex(0x25170D), 0);
         lv_obj_clear_flag(s_map_notice_panel, LV_OBJ_FLAG_HIDDEN);
         lv_obj_move_foreground(s_map_notice_panel);
