@@ -91,7 +91,7 @@ constexpr lv_coord_t kMapControlButtonHeight = 20;
 constexpr lv_coord_t kMapControlButtonSmallWidth = 26;
 constexpr lv_coord_t kMapControlButtonMediumWidth = 36;
 constexpr lv_coord_t kMapControlButtonWideWidth = 44;
-constexpr lv_coord_t kMapControlButtonContourWidth = 56;
+constexpr lv_coord_t kMapControlButtonContourWidth = 36;
 constexpr lv_coord_t kMapControlButtonTrackerWidth = 42;
 constexpr lv_coord_t kMapSideRailWidth = 72;
 constexpr lv_coord_t kMapAltitudePanelHeight = 18;
@@ -1856,7 +1856,7 @@ void sync_map_control_labels(const ::ui::map::MapWorkspaceSnapshot& snapshot)
 
     const auto layers = ::ui::widgets::map::current_layer_state();
     set_button_label(s_map_layer_btn, compact_map_source_label(layers.map_source));
-    set_button_label(s_map_contour_btn, layers.contour_enabled ? "Contour*" : "Contour");
+    set_button_label(s_map_contour_btn, layers.contour_enabled ? "Ctr*" : "Ctr");
     sync_map_context_buttons(snapshot);
 
     char zoom_buf[8]{};
@@ -3714,7 +3714,7 @@ void open_map_help_modal()
     add_help_row("F", nullptr, "Find a place");
     add_help_row("P", nullptr, "Show/hide route photos");
     add_help_row("L", nullptr, "Change base layer");
-    add_help_row("O", "Contour", "Toggle contour overlay");
+    add_help_row("O", "Ctr", "Toggle contour overlay");
     add_help_row("T", "Track", "Select track file");
     add_help_row("V", nullptr, "Show/hide elevation profile");
     add_help_row("I", nullptr, "Hide info, keep route");
@@ -4335,7 +4335,10 @@ void create_map_control_bar(lv_obj_t* viewport)
     lv_obj_set_style_pad_top(s_map_control_bar, 2, 0);
     lv_obj_set_style_pad_bottom(s_map_control_bar, 2, 0);
     lv_obj_set_style_pad_column(s_map_control_bar, 3, 0);
-    lv_obj_clear_flag(s_map_control_bar, LV_OBJ_FLAG_SCROLLABLE);
+    // Fixed controls fit a 320px screen; route/team controls may extend it.
+    lv_obj_add_flag(s_map_control_bar, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scroll_dir(s_map_control_bar, LV_DIR_HOR);
+    lv_obj_set_scrollbar_mode(s_map_control_bar, LV_SCROLLBAR_MODE_OFF);
     bind_map_key_handler(s_map_control_bar);
 
     s_map_zoom_out_btn = create_map_control_button(
@@ -4378,7 +4381,7 @@ void create_map_control_bar(lv_obj_t* viewport)
     s_map_contour_btn = create_map_control_button(
         s_map_control_bar,
         kMapControlButtonContourWidth,
-        "Contour",
+        "Ctr",
         MapControlAction::Contour);
     s_map_tracker_btn = create_map_control_button(
         s_map_control_bar,
@@ -4735,6 +4738,8 @@ void enter(const shell::Host* host, lv_obj_t* parent, shell::Projection projecti
 
     ::ui::widgets::TopBarConfig top_bar_config{};
     top_bar_config.height = ::ui::page_profile::current().top_bar_height;
+    if (s_projection != Projection::GpsStatus && !::ui::page_profile::current().large_touch_hitbox)
+        top_bar_config.height = kMapControlBarHeight;
     ::ui::widgets::top_bar_init(s_top_bar, s_root, top_bar_config);
     ::ui::widgets::top_bar_set_title(
         s_top_bar,
