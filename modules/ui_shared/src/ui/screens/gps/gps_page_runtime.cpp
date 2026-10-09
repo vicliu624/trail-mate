@@ -3711,6 +3711,7 @@ void open_map_help_modal()
     add_help_row("WASD", nullptr, "Move map");
     add_help_row("Q", "E", "Zoom map");
     add_help_row("C", "Pos", "Center current position");
+    add_help_row("F", nullptr, "Find a place");
     add_help_row("P", nullptr, "Show/hide route photos");
     add_help_row("L", nullptr, "Change base layer");
     add_help_row("O", "Contour", "Toggle contour overlay");
@@ -4084,6 +4085,19 @@ void on_map_control_clicked(lv_event_t* e)
 
 bool handle_map_key(uint32_t key, lv_event_t* e)
 {
+    if (!s_location_request && (key == 'f' || key == 'F'))
+    {
+        const auto viewport = map_workspace_model().viewport();
+        ::ui::widgets::map::GeoPoint origin{};
+        origin.lat = viewport.center_lat;
+        origin.lon = viewport.center_lon;
+        if (::ui::widgets::map::screen_center(s_map_runtime, origin) && origin.valid)
+            (void)::ui::map_geo::inverse(origin.lat, origin.lon, app::configFacade().readConfig().map_coord_system, origin.lat, origin.lon);
+        consume_key_event(e);
+        if (!::ui::components::map_poi_search::open(s_root, origin.lat, origin.lon, selected_search_location))
+            set_map_notice("Search unavailable", 2000);
+        return true;
+    }
     if (s_map_target && (key == 'g' || key == 'G'))
     {
         auto* root = ::ui::widgets::map::widgets(s_map_runtime).root;
@@ -4360,7 +4374,7 @@ void create_map_control_bar(lv_obj_t* viewport)
         "OSM",
         MapControlAction::Layer);
     s_map_search_btn = create_map_control_button(
-        s_map_control_bar, kMapControlButtonSmallWidth, "S", MapControlAction::Search);
+        s_map_control_bar, kMapControlButtonSmallWidth, "F", MapControlAction::Search);
     s_map_contour_btn = create_map_control_button(
         s_map_control_bar,
         kMapControlButtonContourWidth,
