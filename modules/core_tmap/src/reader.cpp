@@ -538,7 +538,7 @@ Status Reader::lookupAnnotations(uint8_t zoom, uint32_t x, uint32_t y)
     const auto* fast = section(44);
     const auto* index = fast ? fast : section(40);
     if (!index) return Status::Invalid;
-    return find(*index, KeyKind::Number, nullptr, 0, key, workspace_.record.data(), fast ? 16 : 8);
+    return find(*index, KeyKind::Number, nullptr, 0, key, workspace_.record.data(), fast ? 16 : 24);
 }
 Status Reader::annotationStep(AnnotationCursor& c, size_t budget, AnnotationVisitor visitor, void* context)
 {
