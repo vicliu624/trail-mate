@@ -2671,6 +2671,11 @@ static void request_visible_poi_tile(TileContext& ctx)
 {
     if (!ctx.tiles || !ctx.anchor || !ctx.anchor->valid) return;
     if (ctx.poi_policy_known && (!ctx.poi_available || !ctx.poi_policy.enabled(ctx.anchor->z))) return;
+    // Match the three retained annotation slots; do not queue more partially
+    // processed tiles than can keep progress while raster requests interleave.
+    unsigned pending_count = 0;
+    for (const auto& tile : *ctx.tiles) pending_count += tile.poi_pending;
+    if (pending_count >= 3) return;
     MapTile* best = nullptr;
     const uint32_t now = sys::millis_now();
     for (auto& tile : *ctx.tiles)

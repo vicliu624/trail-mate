@@ -185,9 +185,10 @@ MapTileExecutionStatus MapTileWorker::execute(const LoadTileCommand& command, ui
     accumulated_timing_.lock_wait_ms += read_result.timing.lock_wait_ms;
     accumulated_timing_.open_ms += read_result.timing.open_ms;
     accumulated_timing_.read_ms += read_result.timing.read_ms;
-    // -115 is bounded in-progress work, distinct from a completed Busy retry.
-    // Release the reservation, yield the worker, and retain this command/scratch.
-    if (read_result.status == MapTileReadStatus::RetryLater && read_result.error == -115)
+    // Pixel progress borrows scratch and must retain the command. POI progress
+    // owns its PSRAM continuation: publish a retry so raster work can interleave.
+    if (read_result.status == MapTileReadStatus::RetryLater && read_result.error == -115 &&
+        read_result.format != MapTileFormat::PoiRecords)
         return MapTileExecutionStatus::Yielded;
     const bool ok = read_result.status == MapTileReadStatus::Ready;
     if (read_result.status == MapTileReadStatus::RetryLater)
