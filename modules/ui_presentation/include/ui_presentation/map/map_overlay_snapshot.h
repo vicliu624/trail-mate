@@ -11,6 +11,8 @@ namespace ui
 namespace map
 {
 
+inline constexpr uint32_t kSearchTargetOverlayId = 0x53454152U;
+
 enum class MapOverlayKind : uint8_t
 {
     CurrentPosition,

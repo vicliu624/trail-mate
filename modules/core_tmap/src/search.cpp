@@ -362,6 +362,68 @@ Status Reader::postingContains(const Posting& posting, uint64_t id, bool& found)
     }
     return Status::Ok;
 }
+Status Reader::postingSeek(const Posting& posting, uint64_t id, uint64_t& position, bool& found)
+{
+    found = false;
+    const auto* lists = section(32);
+    const auto* names = section(22);
+    if (!lists || !names || !id || id > names->count || position > posting.count ||
+        !validPosting(posting, *lists, names->count)) return Status::Invalid;
+    if (position == posting.count) return Status::Ok;
+    uint64_t value = 0;
+    auto status = postingValue(posting, position, value);
+    if (status != Status::Ok) return status;
+    if (value >= id)
+    {
+        found = value == id;
+        return Status::Ok;
+    }
+
+    // Candidate IDs increase. Gallop forward from the previous lower bound,
+    // then binary-search only the bracket; never rescan earlier list entries.
+    // Commit the continuation only on success, including an absent target.
+    const uint64_t start = position;
+    const uint64_t remaining = posting.count - 1 - start;
+    uint64_t low = start + 1, high = start, distance = 1;
+    while (low < posting.count)
+    {
+        const auto step = std::min(distance, remaining);
+        const auto probe = start + step;
+        status = postingValue(posting, probe, value);
+        if (status != Status::Ok) return status;
+        if (value >= id)
+        {
+            high = probe;
+            break;
+        }
+        low = probe + 1;
+        if (low == posting.count)
+        {
+            position = low;
+            return Status::Ok;
+        }
+        distance = step > remaining / 2 ? remaining : step * 2;
+    }
+    if (low == posting.count)
+    {
+        position = low;
+        return Status::Ok;
+    }
+    while (low < high)
+    {
+        const auto middle = low + (high - low) / 2;
+        status = postingValue(posting, middle, value);
+        if (status != Status::Ok) return status;
+        if (value < id) low = middle + 1;
+        else high = middle;
+    }
+    status = postingValue(posting, low, value);
+    if (status != Status::Ok) return status;
+    position = low;
+    found = value == id;
+    return Status::Ok;
+}
+
 Status Reader::searchStep(SearchCursor& cursor, size_t budget, SearchVisitor visitor, void* context)
 {
     if (!isOpen() || !visitor || !budget || cursor.build != package_.build) return Status::Invalid;
@@ -399,10 +461,38 @@ Status Reader::searchStep(SearchCursor& cursor, size_t budget, SearchVisitor vis
         auto status = postingValue(cursor.posting, cursor.position, name);
         if (status != Status::Ok) return status;
         bool accepted = true;
+        bool advanced = false;
         for (size_t i = 1; i < cursor.filter_count && accepted; ++i)
         {
-            status = postingContains(cursor.filters[i], name, accepted);
+            status = postingSeek(cursor.filters[i], name, cursor.filter_positions[i], accepted);
             if (status != Status::Ok) return status;
+            if (!accepted)
+            {
+                if (cursor.filter_positions[i] == cursor.filters[i].count)
+                {
+                    // No later base document can belong to an exhausted filter.
+                    cursor.position = cursor.posting.count;
+                }
+                else
+                {
+                    uint64_t next = 0;
+                    status = postingValue(cursor.filters[i], cursor.filter_positions[i], next);
+                    if (status != Status::Ok) return status;
+                    if (next <= name) return Status::Invalid;
+                    bool found = false;
+                    // Every base document below this next filter ID is absent
+                    // from the intersection. Retain the lower bound itself for
+                    // the next attempt; Busy leaves the current base untouched.
+                    status = postingSeek(cursor.posting, next, cursor.position, found);
+                    if (status != Status::Ok) return status;
+                }
+                advanced = true;
+            }
+        }
+        if (advanced)
+        {
+            ++processed;
+            continue;
         }
         if (accepted)
         {

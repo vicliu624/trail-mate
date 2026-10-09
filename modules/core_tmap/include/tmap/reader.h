@@ -129,6 +129,7 @@ struct SearchCursor
     char query[513]{};
     std::array<uint8_t, 16> build{};
     std::array<Posting, 8> filters{};
+    std::array<uint64_t, 8> filter_positions{};
     Posting posting{};
     uint64_t position = 0, leaf = 0, visited_leaves = 0;
     uint32_t slot = 0;
@@ -202,6 +203,7 @@ class Reader
     Status namePosting(SearchCursor& cursor);
     Status postingValue(const Posting& posting, uint64_t position, uint64_t& id);
     Status postingContains(const Posting& posting, uint64_t id, bool& found);
+    Status postingSeek(const Posting& posting, uint64_t id, uint64_t& position, bool& found);
     Status visitSpatial(const Section& section, uint64_t offset, unsigned depth, const Bounds& bounds,
                         PoiVisitor visitor, void* context);
 };

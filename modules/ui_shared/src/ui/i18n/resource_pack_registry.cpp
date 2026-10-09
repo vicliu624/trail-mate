@@ -2063,6 +2063,7 @@ bool content_supplement_is_idle(const FontPackRecord* pack)
 {
 #if LVGL_VERSION_MAJOR >= 9
     return pack && !pack->builtin && pack != s_active_ui_font_pack && pack != s_active_content_font_pack &&
+           !::ui::fonts::has_explicit_font_reference(pack->owned_font) &&
            (!pack->content_used || uint32_t(s_completed_lvgl_frame_count - pack->content_last_used_frame) > 2U);
 #else
     // Without glyph usage tracking, retaining fonts is safer than guessing.

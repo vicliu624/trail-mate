@@ -182,7 +182,6 @@ bool s_map_view_initialized = false;
 bool s_search_center_valid = false;
 int32_t s_search_target_latitude_e7 = 0;
 int32_t s_search_target_longitude_e7 = 0;
-constexpr uint32_t kSearchTargetOverlayId = 0x53454152U;
 bool s_map_info_visible = true;
 ::ui::map::MapOverlaySnapshot* s_overlay_snapshot = nullptr;
 const ::gps::ui::runtime::MapTarget* s_map_target = nullptr;
@@ -3042,7 +3041,7 @@ void keep_only_current_position_overlay(::ui::map::MapOverlaySnapshot& snapshot)
             // map chrome is hidden; this toggle only hides transient info.
             item.kind == ::ui::map::MapOverlayKind::Geocache ||
             (item.kind == ::ui::map::MapOverlayKind::SelectedTarget &&
-             item.stable_id == kSearchTargetOverlayId) ||
+             item.stable_id == ::ui::map::kSearchTargetOverlayId) ||
             (keep_route_points && item.kind == ::ui::map::MapOverlayKind::RoutePoint) ||
             (keep_selected_route_image &&
              item.kind == ::ui::map::MapOverlayKind::SelectedTarget);
@@ -3299,7 +3298,7 @@ void refresh_view()
         target.point.valid = true;
         target.point.lat = s_search_target_latitude_e7 / 10000000.0;
         target.point.lon = s_search_target_longitude_e7 / 10000000.0;
-        target.stable_id = kSearchTargetOverlayId;
+        target.stable_id = ::ui::map::kSearchTargetOverlayId;
         target.selected = target.visible = true;
     }
     if (!s_map_target)
