@@ -50,6 +50,8 @@ static lv_coord_t resolve_top_bar_height(const TopBarConfig& config)
 
 static const lv_font_t* resolve_top_bar_font(lv_coord_t height)
 {
+    if (height <= ::ui::kUnifiedTopBarHeight)
+        return &lv_font_montserrat_14;
 #if defined(ARDUINO_T_DECK_PRO)
     (void)height;
     return ::ui::page_profile::resolve_title_font();
@@ -78,15 +80,20 @@ void top_bar_init(TopBar& bar, lv_obj_t* parent, const TopBarConfig& config)
 {
     const auto& profile = ::ui::page_profile::current();
     const lv_coord_t resolved_height = resolve_top_bar_height(config);
-    const bool large_touch = profile.large_touch_hitbox || resolved_height >= 56;
+    const bool large_touch = resolved_height > ::ui::kUnifiedTopBarHeight &&
+                             (profile.large_touch_hitbox || resolved_height >= 56);
     const bool dense = !large_touch && resolved_height <= 24;
     const lv_coord_t side_pad = large_touch ? 18 : (dense ? 4 : (resolved_height >= 40 ? 14 : 10));
-    const lv_coord_t vertical_pad = large_touch ? 10 : (dense ? 3 : (resolved_height >= 40 ? 8 : 6));
+    const lv_coord_t vertical_pad = large_touch ? 10 : (dense ? 1 : (resolved_height >= 40 ? 8 : 6));
     const lv_coord_t back_btn_height = std::max<lv_coord_t>(
         large_touch ? 44 : (dense ? 16 : 20),
         resolved_height - (vertical_pad * 2));
     const lv_coord_t back_btn_width = std::max<lv_coord_t>(
+#if defined(ARDUINO_T_DECK_PRO)
+        52, // Keep the four-letter BACK label readable in the compact bar.
+#else
         large_touch ? 68 : (dense ? 28 : 44),
+#endif
         back_btn_height + (large_touch ? 24 : (dense ? 10 : (resolved_height >= 40 ? 16 : 10))));
 #if defined(ARDUINO_T_DECK_PRO)
     const lv_coord_t back_btn_radius = 0;
@@ -126,6 +133,7 @@ void top_bar_init(TopBar& bar, lv_obj_t* parent, const TopBarConfig& config)
         lv_obj_set_style_border_width(bar.back_btn, 1, LV_PART_MAIN);
         lv_obj_set_style_border_color(bar.back_btn, ui::theme::border(), LV_PART_MAIN);
         lv_obj_set_style_radius(bar.back_btn, back_btn_radius, LV_PART_MAIN);
+        if (dense) lv_obj_set_style_pad_all(bar.back_btn, 0, LV_PART_MAIN);
         lv_obj_set_style_bg_color(bar.back_btn, ui::theme::accent(), LV_STATE_FOCUSED);
         lv_obj_set_style_outline_width(bar.back_btn, 0, LV_STATE_FOCUSED);
         lv_obj_align(bar.back_btn, LV_ALIGN_LEFT_MID, 0, 0);

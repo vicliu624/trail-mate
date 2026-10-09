@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lvgl.h"
+#include "ui/top_bar_metrics.h"
 
 namespace ui::menu_profile
 {
@@ -45,13 +46,13 @@ struct MenuLayoutProfile
     lv_coord_t card_pad_row = 0;
 
     lv_coord_t grid_height_pct = 70;
-    lv_coord_t grid_top_offset = 30;
+    lv_coord_t grid_top_offset = ::ui::kUnifiedTopBarHeight;
     lv_coord_t grid_pad_row = 6;
     lv_coord_t grid_pad_column = 6;
     lv_coord_t grid_pad_left = 0;
     lv_coord_t grid_pad_right = 0;
 
-    lv_coord_t top_bar_height = 30;
+    lv_coord_t top_bar_height = ::ui::kUnifiedTopBarHeight;
     lv_coord_t top_bar_side_inset = 5;
     lv_coord_t top_bar_text_pad = 4;
     lv_coord_t status_row_gap = 2;

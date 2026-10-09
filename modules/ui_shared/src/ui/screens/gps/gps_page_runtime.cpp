@@ -4738,8 +4738,6 @@ void enter(const shell::Host* host, lv_obj_t* parent, shell::Projection projecti
 
     ::ui::widgets::TopBarConfig top_bar_config{};
     top_bar_config.height = ::ui::page_profile::current().top_bar_height;
-    if (s_projection != Projection::GpsStatus && !::ui::page_profile::current().large_touch_hitbox)
-        top_bar_config.height = kMapControlBarHeight;
     ::ui::widgets::top_bar_init(s_top_bar, s_root, top_bar_config);
     ::ui::widgets::top_bar_set_title(
         s_top_bar,

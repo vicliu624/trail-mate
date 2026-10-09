@@ -6,6 +6,7 @@
 #pragma once
 
 #include "lvgl.h"
+#include "ui/top_bar_metrics.h"
 #include <cstdint>
 
 namespace ui
@@ -32,7 +33,7 @@ struct TopBar
     void* back_user_data = nullptr;
 };
 
-constexpr uint16_t kTopBarHeight = 30;
+constexpr uint16_t kTopBarHeight = ::ui::kUnifiedTopBarHeight;
 
 /**
  * @brief Initialize a top bar on the given parent

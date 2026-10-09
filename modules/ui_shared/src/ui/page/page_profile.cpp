@@ -59,7 +59,7 @@ PageLayoutProfile make_pager_profile()
     PageLayoutProfile profile{};
     profile.name = "pager";
     profile.variant = LayoutVariant::EncoderCompact;
-    profile.top_bar_height = 30;
+    profile.top_bar_height = ::ui::kUnifiedTopBarHeight;
     profile.top_content_gap = 3;
     profile.title_font = &lv_font_montserrat_16;
     profile.body_font = &lv_font_montserrat_14;
@@ -96,7 +96,7 @@ PageLayoutProfile make_tdeck_profile()
     PageLayoutProfile profile{};
     profile.name = "tdeck";
     profile.variant = LayoutVariant::HybridCompact;
-    profile.top_bar_height = 30;
+    profile.top_bar_height = ::ui::kUnifiedTopBarHeight;
     profile.top_content_gap = 3;
     profile.title_font = &lv_font_montserrat_16;
     profile.body_font = &lv_font_montserrat_14;
@@ -133,7 +133,7 @@ PageLayoutProfile make_tdeck_pro_profile()
     PageLayoutProfile profile{};
     profile.name = "tdeck-pro-text";
     profile.variant = LayoutVariant::HybridCompact;
-    profile.top_bar_height = 26;
+    profile.top_bar_height = ::ui::kUnifiedTopBarHeight;
     profile.top_content_gap = 4;
 #if defined(ARDUINO_T_DECK_PRO)
     profile.title_font = ui::tdeck_pro::text_font();
@@ -182,7 +182,7 @@ PageLayoutProfile make_tab5_profile()
     PageLayoutProfile profile{};
     profile.name = "tab5";
     profile.variant = LayoutVariant::HybridTouchLarge;
-    profile.top_bar_height = 64;
+    profile.top_bar_height = ::ui::kUnifiedTopBarHeight;
     profile.top_content_gap = 12;
     profile.title_font = &lv_font_montserrat_16;
     profile.body_font = &lv_font_montserrat_16;
@@ -222,7 +222,7 @@ PageLayoutProfile make_t_display_p4_profile()
 {
     PageLayoutProfile profile = make_tab5_profile();
     profile.name = "t_display_p4";
-    profile.top_bar_height = 56;
+    profile.top_bar_height = ::ui::kUnifiedTopBarHeight;
     profile.top_content_gap = 10;
     profile.content_pad_left = 14;
     profile.content_pad_right = 14;
@@ -265,7 +265,7 @@ PageLayoutProfile make_cardputer_zero_profile()
     profile.name = "cardputer_zero";
     profile.variant = LayoutVariant::HybridCompact;
     profile.dense = true;
-    profile.top_bar_height = 22;
+    profile.top_bar_height = ::ui::kUnifiedTopBarHeight;
     profile.top_content_gap = 1;
     profile.title_font = &lv_font_montserrat_12;
     profile.body_font = &lv_font_montserrat_12;
