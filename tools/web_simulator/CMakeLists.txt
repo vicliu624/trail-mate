@@ -135,6 +135,7 @@ target_sources(${PREVIEW_TARGET} PRIVATE ${CHAT_VIEW_SOURCES}
   "${UI}/components/two_pane_layout.cpp"
   "${UI}/components/two_pane_nav.cpp"
   "${UI}/components/floating_search_box.cpp"
+  "${UI}/components/map_poi_search.cpp"
   "${UI}/components/air_status_footer.cpp"
   "${UI}/widgets/text_candidate_picker.cpp"
   "${UI}/widgets/ime/ime_widget.cpp"
