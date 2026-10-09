@@ -155,7 +155,17 @@ MapTileExecutionStatus MapTileWorker::execute(const LoadTileCommand& command, ui
 {
     const auto reservation = events_.reserve(command);
     if (reservation == MapTileReservationStatus::Backpressured) return MapTileExecutionStatus::Backpressured;
-    if (reservation == MapTileReservationStatus::Cancelled) return MapTileExecutionStatus::Cancelled;
+    if (reservation == MapTileReservationStatus::Cancelled)
+    {
+        retained_ = {};
+        return MapTileExecutionStatus::Cancelled;
+    }
+    if (!retained_.matches(command.runtime.generation, command.runtime.command_id))
+    {
+        retained_ = {command.runtime.generation, command.runtime.command_id};
+        started_ms_ = now_ms;
+        accumulated_timing_ = {};
+    }
     struct ReleaseReservation
     {
         IMapTileEventSink& sink;
@@ -166,11 +176,19 @@ MapTileExecutionStatus MapTileWorker::execute(const LoadTileCommand& command, ui
     event.command_id = command.runtime.command_id;
     event.generation = command.runtime.generation;
     event.tile = command.tile;
-    event.command_wait_ms = now_ms - command.runtime.created_at_ms;
-    event.worker_started_ms = now_ms;
+    event.command_wait_ms = started_ms_ - command.runtime.created_at_ms;
+    event.worker_started_ms = started_ms_;
 
     const MapTileReadResult read_result =
         backend_.read(command.tile, scratch_, scratch_size_);
+    accumulated_timing_.available |= read_result.timing.available;
+    accumulated_timing_.lock_wait_ms += read_result.timing.lock_wait_ms;
+    accumulated_timing_.open_ms += read_result.timing.open_ms;
+    accumulated_timing_.read_ms += read_result.timing.read_ms;
+    // -115 is bounded in-progress work, distinct from a completed Busy retry.
+    // Release the reservation, yield the worker, and retain this command/scratch.
+    if (read_result.status == MapTileReadStatus::RetryLater && read_result.error == -115)
+        return MapTileExecutionStatus::Yielded;
     const bool ok = read_result.status == MapTileReadStatus::Ready;
     if (read_result.status == MapTileReadStatus::RetryLater)
     {
@@ -182,6 +200,10 @@ MapTileExecutionStatus MapTileWorker::execute(const LoadTileCommand& command, ui
     }
     event.format = read_result.format;
     event.read_timing = read_result.timing;
+    event.read_timing.available = accumulated_timing_.available;
+    event.read_timing.lock_wait_ms = accumulated_timing_.lock_wait_ms;
+    event.read_timing.open_ms = accumulated_timing_.open_ms;
+    event.read_timing.read_ms = accumulated_timing_.read_ms;
     event.payload_size = read_result.size;
     if (ok)
     {
@@ -192,6 +214,7 @@ MapTileExecutionStatus MapTileWorker::execute(const LoadTileCommand& command, ui
     }
     event.error = ok ? 0 : read_result.error;
     const bool delivered = events_.publish(event);
+    retained_ = {};
     (void)now_ms;
     return delivered ? MapTileExecutionStatus::Completed : MapTileExecutionStatus::Cancelled;
 }

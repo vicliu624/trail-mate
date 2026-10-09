@@ -507,13 +507,19 @@ void translate_loaded_tiles(RuntimeImpl& impl, int dx, int dy)
 
     for (auto& tile : impl.tiles)
     {
-        if (!tile.img_obj || !lv_obj_is_valid(tile.img_obj))
+        if (!tile.img_obj || !lv_obj_is_valid(tile.img_obj) || tile.z != impl.model.zoom || tile.map_source != impl.model.map_source)
         {
             continue;
         }
         lv_obj_set_pos(tile.img_obj,
                        static_cast<lv_coord_t>(lv_obj_get_x(tile.img_obj) + dx),
                        static_cast<lv_coord_t>(lv_obj_get_y(tile.img_obj) + dy));
+        // Prefetched descriptors already own pixels. Reveal them immediately
+        // when a lightweight drag brings them into view, without new SD I/O.
+        const bool visible = tile_in_rect(lv_obj_get_x(tile.img_obj), lv_obj_get_y(tile.img_obj),
+                                          lv_obj_get_width(impl.widgets.tile_layer), lv_obj_get_height(impl.widgets.tile_layer), 0);
+        if (visible) lv_obj_clear_flag(tile.img_obj, LV_OBJ_FLAG_HIDDEN);
+        else lv_obj_add_flag(tile.img_obj, LV_OBJ_FLAG_HIDDEN);
     }
 }
 
@@ -839,7 +845,21 @@ void loader_timer_cb(lv_timer_t* timer)
     }
 
     tile_loader_maintenance(impl->tile_ctx);
-    if (impl->gesture_pressed || impl->gesture_dragging || impl->drag_preview_active) return;
+    if (impl->gesture_pressed || impl->gesture_dragging || impl->drag_preview_active)
+    {
+#if defined(ARDUINO_ARCH_ESP32)
+        // Bounded viewport planning and async event application continue while
+        // dragging. The UI never performs SD I/O; existing overlays translate.
+        const auto focus = transformed_focus(impl->model);
+        if (focus.valid)
+        {
+            calculate_required_tiles(impl->tile_ctx, focus.lat, focus.lon, impl->model.zoom,
+                                     impl->model.pan_x, impl->model.pan_y, true);
+            tile_loader_step(impl->tile_ctx);
+        }
+#endif
+        return;
+    }
     refresh_markers(*impl);
 
     const uint32_t now_ms = lv_tick_get();

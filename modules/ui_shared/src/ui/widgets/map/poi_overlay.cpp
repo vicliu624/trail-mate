@@ -217,7 +217,18 @@ bool PoiOverlay::measure_text(void* view, const char* text, std::size_t bytes, b
             codepoint = (codepoint << 6) | (next & 63U);
         }
         lv_font_glyph_dsc_t glyph{};
-        if (!lv_font_get_glyph_dsc(self->font_, &glyph, codepoint, 0) || glyph.is_placeholder) return false;
+        if (!lv_font_get_glyph_dsc(self->font_, &glyph, codepoint, 0) || glyph.is_placeholder)
+        {
+            static uint32_t last_missing_ms = 0;
+            const auto now = lv_tick_get();
+            if (!last_missing_ms || now - last_missing_ms >= 5000U)
+            {
+                last_missing_ms = now;
+                std::printf("[MapViewport][POI][font] missing_glyph=U+%04lX text=%.64s\n",
+                            static_cast<unsigned long>(codepoint), prefix);
+            }
+            return false;
+        }
     }
     lv_point_t size{};
     lv_text_get_size(&size, prefix, self->font_, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);

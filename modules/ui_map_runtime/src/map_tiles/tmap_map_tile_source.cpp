@@ -49,9 +49,12 @@ MapTileReadResult result(tmap::Status status)
         r.error = -2;
         break;
     case tmap::Status::Busy:
-    case tmap::Status::More:
         r.status = MapTileReadStatus::RetryLater;
         r.error = -11;
+        break;
+    case tmap::Status::More:
+        r.status = MapTileReadStatus::RetryLater;
+        r.error = -115;
         break;
     case tmap::Status::Invalid:
         r.status = MapTileReadStatus::Invalid;
@@ -155,6 +158,16 @@ struct TmapMapTileSource::State
     uint32_t session = 0;
     size_t count = 0, bytes = sizeof(State);
     bool complete = false, failed = false;
+    struct AnnotationSlot
+    {
+        tmap::AnnotationCursor cursor{};
+        uint8_t* payload = nullptr;
+        uint64_t key = 0;
+        uint32_t age = 0;
+        bool used = false;
+    };
+    AnnotationSlot annotation_slots[3]{};
+    uint32_t annotation_age = 0;
     // All zoom-mask bits, 256 packages: 1024 bytes, entirely in PSRAM.
     uint32_t zoom_candidates[32][kMaxPackages / 32]{};
     // A bounded offset plan shared by lookup/read and OSM/POI requests.
@@ -167,6 +180,8 @@ void TmapMapTileSource::reset()
     storage_.closePackage();
     storage_.resetEnumeration();
     if (!state_) return;
+    for (auto& slot : state_->annotation_slots)
+        if (slot.payload) storage_.release(slot.payload);
     for (auto* block = state_->blocks; block;)
     {
         auto* next = block->next;
@@ -181,6 +196,12 @@ void TmapMapTileSource::reset()
 size_t TmapMapTileSource::allocatedBytes() const { return state_ ? state_->bytes : 0; }
 size_t TmapMapTileSource::packageCount() const { return state_ ? state_->count : 0; }
 tmap::Status TmapMapTileSource::prepare() const { return catalog(); }
+const char* TmapMapTileSource::activePackagePath() const { return state_ && state_->active ? state_->active->path : "<unselected>"; }
+void TmapMapTileSource::cancelPendingAnnotations()
+{
+    if (!state_) return;
+    for (auto& slot : state_->annotation_slots) slot.used = false;
+}
 tmap::Status TmapMapTileSource::catalog() const
 {
     if (state_ && state_->session != storage_.session()) const_cast<TmapMapTileSource*>(this)->reset();
@@ -342,17 +363,67 @@ MapTileReadResult TmapMapTileSource::read(const MapTileRef& ref, uint8_t* output
 MapTileReadResult TmapMapTileSource::annotations(const MapTileRef& ref, uint8_t* output, size_t capacity) const
 {
     if (capacity < sizeof(ui::map_poi::TileHeader) || reinterpret_cast<uintptr_t>(output) % alignof(ui::map_poi::TileHeader)) return result(tmap::Status::Invalid);
-    auto* header = new (output) ui::map_poi::TileHeader{};
+    auto& s = *state_;
+    uint64_t key = 0;
+    if (!tmap::Reader::tileKey(ref.z, ref.x, ref.y, key)) return result(tmap::Status::Invalid);
+    State::AnnotationSlot* selected = nullptr;
+    for (auto& slot : s.annotation_slots)
+        if (slot.used && slot.key == key && slot.cursor.build == s.active->package.build) selected = &slot;
+    if (!selected)
+    {
+        for (auto& slot : s.annotation_slots)
+            if (!slot.used)
+            {
+                selected = &slot;
+                break;
+            }
+        if (!selected)
+            selected = &*std::min_element(std::begin(s.annotation_slots), std::end(s.annotation_slots),
+                                          [](const auto& a, const auto& b)
+                                          { return a.age < b.age; });
+        constexpr size_t bytes = sizeof(ui::map_poi::TileHeader) + ui::map_poi::TileHeader::kMaxRecords * sizeof(ui::map_poi::Record);
+        if (!selected->payload)
+        {
+            selected->payload = static_cast<uint8_t*>(storage_.allocate(bytes, alignof(ui::map_poi::TileHeader)));
+            if (!selected->payload) return result(tmap::Status::IoError);
+            s.bytes += bytes;
+        }
+        const auto status = s.reader.beginAnnotations(ref.z, ref.x, ref.y, selected->cursor);
+        if (status != tmap::Status::Ok) return result(status);
+        new (selected->payload) ui::map_poi::TileHeader{};
+        selected->key = key;
+        selected->used = true;
+    }
+    selected->age = ++s.annotation_age;
+    auto* header = reinterpret_cast<ui::map_poi::TileHeader*>(selected->payload);
     // Coverage belongs to the package catalog, not to the UI's session policy.
     // A world-package response must not disable later country/province requests.
     header->policy.enabled_levels = UINT32_MAX;
     header->manifest_valid = true;
-    AnnotationOutput context{header, output, std::min(ui::map_poi::TileHeader::kMaxRecords, (capacity - sizeof(*header)) / sizeof(ui::map_poi::Record)), ref};
-    auto status = state_->reader.visitAnnotations(ref.z, ref.x, ref.y, emitAnnotation, &context);
+    AnnotationOutput context{header, selected->payload, std::min(ui::map_poi::TileHeader::kMaxRecords, (capacity - sizeof(*header)) / sizeof(ui::map_poi::Record)), ref};
+    auto status = tmap::Status::More;
+    const auto started = storage_.nowMs();
+    for (unsigned stage = 0; stage < 64; ++stage)
+    {
+        status = s.reader.annotationStep(selected->cursor, 1, emitAnnotation, &context);
+        if (status != tmap::Status::More || storage_.nowMs() - started >= 20U) break;
+    }
+    if (status == tmap::Status::Busy || status == tmap::Status::More)
+    {
+        auto pending = result(status);
+        pending.format = MapTileFormat::PoiRecords;
+        if (status == tmap::Status::More) pending.error = -115; // Progress, not bus contention.
+        return pending;
+    }
     if (status == tmap::Status::Missing || (status == tmap::Status::Cancelled && header->truncated)) status = tmap::Status::Ok;
     auto r = result(status);
     r.format = MapTileFormat::PoiRecords;
-    if (status == tmap::Status::Ok) r.size = sizeof(*header) + header->count * sizeof(ui::map_poi::Record);
+    if (status == tmap::Status::Ok)
+    {
+        r.size = sizeof(*header) + header->count * sizeof(ui::map_poi::Record);
+        std::memcpy(output, selected->payload, r.size);
+    }
+    selected->used = false;
     return r;
 }
 } // namespace ui::map_tiles

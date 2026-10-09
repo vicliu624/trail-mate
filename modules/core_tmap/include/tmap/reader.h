@@ -71,6 +71,20 @@ struct Annotation
     std::array<int32_t, 16> path{};
 };
 
+// Caller-owned continuation, including the current POI/name. Store in PSRAM.
+// A completed stage is never repeated after Busy, even if another query runs.
+struct AnnotationCursor
+{
+    std::array<uint8_t, 16> build{};
+    uint64_t key = 0, offset = 0, next = 0, geometry = 0, name = 0, text = 0;
+    uint32_t expected = 0, seen = 0, slot = 0, count = 0;
+    Annotation annotation{};
+    Poi poi{};
+    uint8_t zoom = 0, stage = 0;
+    bool initialized = false, complete = true;
+};
+static_assert(sizeof(AnnotationCursor) <= 1024, "Annotation continuation must be bounded");
+
 // No allocations inside Reader. This storage belongs on heap/PSRAM, not a task stack.
 // 64 section slots cover all 13 raster semantics emitted by Center v1.
 struct Workspace
@@ -138,6 +152,8 @@ class Reader
     Status readPoi(uint64_t row, Poi& output);
     Status findPoi(const std::array<uint8_t, 16>& id, Poi& output);
     Status visitAnnotations(uint8_t zoom, uint32_t x, uint32_t y, AnnotationVisitor visitor, void* context);
+    Status beginAnnotations(uint8_t zoom, uint32_t x, uint32_t y, AnnotationCursor& cursor);
+    Status annotationStep(AnnotationCursor& cursor, size_t stage_budget, AnnotationVisitor visitor, void* context);
     Status categoryName(uint32_t id, char* output, size_t capacity);
     Status queryBounds(const Bounds& bounds, PoiVisitor visitor, void* context);
     Status beginSearch(const char* query, size_t bytes, SearchMode mode, SearchCursor& cursor);

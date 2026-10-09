@@ -13,6 +13,7 @@ class TmapStorage : public tmap::RandomAccessFile
     virtual void* allocate(size_t bytes, size_t alignment) = 0;
     virtual void release(void* memory) = 0;
     virtual uint32_t session() const = 0;
+    virtual uint32_t nowMs() const { return 0; }
     virtual tmap::Status nextPackage(char* path, size_t capacity) = 0;
     virtual tmap::Status openPackage(const char* path) = 0;
     virtual void closePackage() = 0;
@@ -37,6 +38,8 @@ class TmapMapTileSource final : public IMapTileSource
     // Finish catalog initialization before selecting the session's source mode.
     // Busy/More never authorize a switch to legacy storage.
     tmap::Status prepare() const;
+    void cancelPendingAnnotations();
+    const char* activePackagePath() const;
 
   private:
     struct State;

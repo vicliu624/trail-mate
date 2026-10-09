@@ -520,6 +520,141 @@ Status Reader::visitAnnotations(uint8_t zoom, uint32_t x, uint32_t y, Annotation
     }
     return seen == expected ? Status::Ok : Status::Invalid;
 }
+Status Reader::beginAnnotations(uint8_t zoom, uint32_t x, uint32_t y, AnnotationCursor& cursor)
+{
+    uint64_t key = 0;
+    if (!isOpen() || !tileKey(zoom, x, y, key)) return Status::Invalid;
+    new (&cursor) AnnotationCursor{};
+    cursor.key = key;
+    cursor.zoom = zoom;
+    cursor.build = package_.build;
+    cursor.complete = false;
+    return Status::Ok;
+}
+Status Reader::annotationStep(AnnotationCursor& c, size_t budget, AnnotationVisitor visitor, void* context)
+{
+    if (!isOpen() || !visitor || c.build != package_.build) return Status::Invalid;
+    if (c.complete) return Status::Ok;
+    const auto* index = section(40);
+    const auto* data = section(41);
+    const auto* geometry = section(42);
+    if (!index || !data || !geometry) return Status::Invalid;
+    auto& record = workspace_.record;
+    budget = std::min<size_t>(budget, 64);
+    while (budget--)
+    {
+        const uint8_t* p = nullptr;
+        Status status = Status::Ok;
+        switch (c.stage)
+        {
+        case 0: // Locate the tile's annotation list only once.
+            status = find(*index, KeyKind::Number, nullptr, 0, c.key, record.data(), 24);
+            if (status != Status::Ok) return status;
+            c.offset = u64(record.data());
+            c.expected = u32(record.data() + 8);
+            if (!c.offset || !c.expected || c.expected % 40 || c.expected > 8000) return Status::Invalid;
+            c.expected /= 40;
+            c.initialized = true;
+            c.stage = 1;
+            break;
+        case 1: // Copy a record before POI/name pages evict the list page.
+            status = page(*data, c.offset, p);
+            if (status != Status::Ok) return status;
+            c.count = u32(p + 16);
+            c.next = u64(p + 24);
+            if (u16(p + 4) != 15 || u16(p + 20) != 40 || !c.count || c.count > 100 ||
+                c.slot >= c.count || c.seen < c.slot || c.count > c.expected - (c.seen - c.slot)) return Status::Invalid;
+            std::memcpy(record.data(), p + 64 + c.slot * 40, 40);
+            new (&c.annotation) Annotation{};
+            c.annotation.poi_row = u64(record.data());
+            c.annotation.kind = u16(record.data() + 8);
+            c.annotation.priority = u16(record.data() + 12);
+            c.annotation.latitude = i32(record.data() + 16);
+            c.annotation.longitude = i32(record.data() + 20);
+            c.geometry = u64(record.data() + 24);
+            if (c.annotation.kind < 1 || c.annotation.kind > 3 || record[10] > c.zoom || record[11] < c.zoom ||
+                c.annotation.latitude < -900000000 || c.annotation.latitude > 900000000 ||
+                c.annotation.longitude < -1800000000 || c.annotation.longitude >= 1800000000) return Status::Invalid;
+            c.stage = c.geometry ? 2 : 3;
+            break;
+        case 2:
+        {
+            status = page(*geometry, c.geometry / 4096 * 4096, p);
+            if (status != Status::Ok) return status;
+            const auto at = c.geometry % 4096;
+            if (u16(p + 4) != 16 || at < 64 || at > 4080 || u16(p + at) != 1) return Status::Invalid;
+            const auto points = u32(p + at + 8);
+            if (points > 8 || u32(p + at + 4) != points * 8 || points * 8 > 4096 - at - 16) return Status::Invalid;
+            c.annotation.point_count = static_cast<uint8_t>(points);
+            for (size_t i = 0; i < points * 2; ++i) c.annotation.path[i] = i32(p + at + 16 + i * 4);
+            for (size_t i = 0; i < points; ++i)
+                if (c.annotation.path[2 * i] < -900000000 || c.annotation.path[2 * i] > 900000000 ||
+                    c.annotation.path[2 * i + 1] < -1800000000 || c.annotation.path[2 * i + 1] >= 1800000000) return Status::Invalid;
+            c.stage = 3;
+            break;
+        }
+        case 3: // POI row, name row, and text are separate resumable stages.
+        {
+            status = row(20, c.annotation.poi_row, 96, record.data());
+            if (status != Status::Ok) return status;
+            new (&c.poi) Poi{};
+            c.poi.row = c.annotation.poi_row;
+            std::memcpy(c.poi.id.data(), record.data(), 16);
+            c.poi.latitude = i32(record.data() + 16);
+            c.poi.longitude = i32(record.data() + 20);
+            c.poi.category = u32(record.data() + 24);
+            c.poi.kind = u32(record.data() + 28);
+            c.poi.importance = u16(record.data() + 56);
+            c.name = u64(record.data() + 32);
+            const auto first = u64(record.data() + 40);
+            const auto count = u32(record.data() + 48);
+            const auto* names = section(22);
+            if (c.poi.latitude < -900000000 || c.poi.latitude > 900000000 || c.poi.longitude < -1800000000 || c.poi.longitude >= 1800000000 ||
+                !names || (count && (!first || first > names->count || count > names->count - first + 1 || c.name < first || c.name - first >= count)) ||
+                (!count && (c.name || first))) return Status::Invalid;
+            c.stage = c.name ? 4 : 6;
+            break;
+        }
+        case 4:
+            status = row(22, c.name, 48, record.data());
+            if (status != Status::Ok) return status;
+            if (u64(record.data()) != c.poi.row) return Status::Invalid;
+            c.text = u64(record.data() + 8);
+            c.stage = 5;
+            break;
+        case 5:
+            status = string(c.text, c.poi.name, sizeof(c.poi.name));
+            if (status != Status::Ok) return status;
+            c.stage = 6;
+            break;
+        case 6:
+            ++c.seen;
+            ++c.slot;
+            if (!visitor(context, c.annotation, c.poi))
+            {
+                c.complete = true;
+                return Status::Cancelled;
+            }
+            if (c.slot == c.count)
+            {
+                if (c.seen == c.expected && c.next) return Status::Invalid;
+                if (!c.next)
+                {
+                    if (c.seen != c.expected) return Status::Invalid;
+                    c.complete = true;
+                    return Status::Ok;
+                }
+                c.offset = c.next;
+                c.slot = 0;
+            }
+            c.stage = 1;
+            break;
+        default:
+            return Status::Invalid;
+        }
+    }
+    return Status::More;
+}
 Status Reader::metadata()
 {
     const auto* s = section(1);

@@ -143,6 +143,7 @@ enum class MapTileExecutionStatus : uint8_t
     Completed,
     Backpressured,
     Cancelled,
+    Yielded, // Continue the same command; its borrowed scratch must stay intact.
 };
 
 class IMapTileEventSink
@@ -312,6 +313,9 @@ class MapTileWorker
     IMapTileEventSink& events_;
     uint8_t* scratch_ = nullptr;
     std::size_t scratch_size_ = 0;
+    TileRequestHandle retained_{};
+    uint32_t started_ms_ = 0;
+    MapTileReadTiming accumulated_timing_{};
 };
 
 } // namespace map_tiles

@@ -344,8 +344,10 @@ bool resolve_map_tile_log_path(const ui::map_tiles::MapTileRef& ref,
                                char* out_path,
                                std::size_t out_size)
 {
-    ui::map_tiles::MapTileResolver resolver("/");
-    return resolver.resolvePath(ref, out_path, out_size);
+    if (!out_path || !out_size) return false;
+    const int n = std::snprintf(out_path, out_size, "%s/%u/%lu/%lu", map_tile_layer_name(ref.layer),
+                                static_cast<unsigned>(ref.z), static_cast<unsigned long>(ref.x), static_cast<unsigned long>(ref.y));
+    return n >= 0 && static_cast<size_t>(n) < out_size;
 }
 
 lv_color_format_t lvgl_source_format_for_tile(ui::map_tiles::MapTileFormat format)
@@ -397,10 +399,10 @@ void log_map_tile_event_failure(const char* stage,
     }
     char path[160]{};
     (void)resolve_map_tile_log_path(event.tile, path, sizeof(path));
-    MAP_DIAG("[MAPD][event-fail] t=%lu stage=%s gen=%lu id=%lu kind=%u err=%ld path=%s\n",
+    MAP_DIAG("[MAPD][event-fail] t=%lu stage=%s gen=%lu id=%lu kind=%u err=%ld tile_id=%s\n",
              static_cast<unsigned long>(now_ms), stage, static_cast<unsigned long>(event.generation),
              static_cast<unsigned long>(event.command_id), static_cast<unsigned>(event.kind), error, path);
-    std::printf("[GPS][MAP][event] fail stage=%s kind=%s layer=%s(%u) z=%u x=%lu y=%lu gen=%lu active_gen=%lu err=%ld path=%s\n",
+    std::printf("[GPS][MAP][event] fail stage=%s kind=%s layer=%s(%u) z=%u x=%lu y=%lu gen=%lu active_gen=%lu err=%ld tile_id=%s\n",
                 stage ? stage : "unknown",
                 map_tile_event_kind_name(event.kind),
                 map_tile_layer_name(event.tile.layer),
@@ -736,6 +738,13 @@ using MapTileEventQueue = platform::esp::arduino_common::map_tiles::MapTileEvent
 class EspMapTileWorkerBackend final : public ui::map_tiles::IMapTileWorkerBackend
 {
   public:
+    void beginRequest(uint32_t generation)
+    {
+        if (request_generation_ == generation) return;
+        request_generation_ = generation;
+        tmap_source_.cancelPendingAnnotations();
+        tmap_storage_.cancelTransfers();
+    }
     explicit EspMapTileWorkerBackend(ui::map_tiles::IMapTileSource& source)
         : source_(source)
     {
@@ -779,7 +788,10 @@ class EspMapTileWorkerBackend final : public ui::map_tiles::IMapTileWorkerBacken
         }
         if (source_mode_ == SourceMode::Tmap)
         {
+            const auto read_start = sys::millis_now();
             auto packaged = tmap_source_.read(ref, buffer, capacity);
+            packaged.timing.available = true;
+            packaged.timing.read_ms = sys::millis_now() - read_start;
             // Separate annotation diagnostics from raster traffic, with at most
             // one message per five seconds for each group. No payload copies.
             static uint32_t source_log_ms[2]{};
@@ -792,7 +804,9 @@ class EspMapTileWorkerBackend final : public ui::map_tiles::IMapTileWorkerBacken
                                                                                                         : packaged.status == ui::map_tiles::MapTileReadStatus::RetryLater ? "busy"
                                                                                                         : packaged.status == ui::map_tiles::MapTileReadStatus::Invalid    ? "invalid"
                                                                                                                                                                           : "error";
-                std::printf("[GPS][MAP][source] mode=tmap layer=%s z=%u x=%lu y=%lu status=%s err=%ld bytes=%lu fallback_legacy=0\n",
+                if (packaged.error == -115) status = "progress";
+                std::printf("[GPS][MAP][source] mode=tmap package=%s layer=%s z=%u x=%lu y=%lu status=%s err=%ld bytes=%lu fallback_legacy=0\n",
+                            tmap_source_.activePackagePath(),
                             map_tile_layer_name(ref.layer), static_cast<unsigned>(ref.z),
                             static_cast<unsigned long>(ref.x), static_cast<unsigned long>(ref.y), status,
                             static_cast<long>(packaged.error), static_cast<unsigned long>(packaged.size));
@@ -872,6 +886,7 @@ class EspMapTileWorkerBackend final : public ui::map_tiles::IMapTileWorkerBacken
     platform::esp::map_tiles::SdTmapStorage tmap_storage_;
     ui::map_tiles::TmapMapTileSource tmap_source_{tmap_storage_};
     uint32_t media_session_ = 0;
+    uint32_t request_generation_ = 0;
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
     SdMapTileFileSystem poi_files_;
     platform::esp::arduino_common::map_poi::CJsonPoiParser poi_parser_;
@@ -1255,10 +1270,18 @@ class MapTileAsyncHost final
             {
                 if (worker_ != nullptr)
                 {
+                    backend_.beginRequest(command.runtime.generation);
                     const auto result = worker_->execute(command, sys::millis_now());
                     const auto stack_free = static_cast<uint32_t>(uxTaskGetStackHighWaterMark(nullptr) * sizeof(StackType_t));
                     const auto old_low = g_map_worker_stack_low_bytes.load(std::memory_order_relaxed);
                     g_map_worker_stack_low_bytes.store(std::min(old_low, stack_free), std::memory_order_relaxed);
+                    if (result == ui::map_tiles::MapTileExecutionStatus::Yielded)
+                    {
+                        // Keep the PSRAM scratch and command intact. Give the
+                        // display/radio a turn; reserve checks cancellation next.
+                        vTaskDelay(1);
+                        continue;
+                    }
                     if (result == ui::map_tiles::MapTileExecutionStatus::Backpressured)
                     {
 #if TRAIL_MATE_MAP_DIAGNOSTICS
@@ -2413,7 +2436,7 @@ static bool render_base_tile_from_cache(TileContext& ctx, MapTile& tile, Decoded
     const lv_coord_t screen_width = lv_obj_get_width(ctx.map_container);
     const lv_coord_t screen_height = lv_obj_get_height(ctx.map_container);
     tile.visible = tile_in_rect(screen_x, screen_y, screen_width, screen_height, 0);
-    if (!tile.visible)
+    if (!tile.visible && !tile.prefetch)
     {
         return false;
     }
@@ -2429,6 +2452,7 @@ static bool render_base_tile_from_cache(TileContext& ctx, MapTile& tile, Decoded
     style_tile_obj(tile.img_obj);
     lv_obj_move_background(tile.img_obj);
     lv_image_set_src(tile.img_obj, cache.img_dsc);
+    if (!tile.visible) lv_obj_add_flag(tile.img_obj, LV_OBJ_FLAG_HIDDEN);
     bind_tile_decoded_cache(tile, cache);
 
     tile.map_source = g_active_map_source;
@@ -2730,7 +2754,7 @@ static bool apply_map_tile_event(TileContext& ctx, ui::map_tiles::MapTileAsyncEv
     if (event.kind != ui::map_tiles::MapTileAsyncEventKind::Ready)
     {
         log_map_tile_event_failure("worker", event, event.error);
-        const bool confirmed_missing = map_tile_availability_memory().knownMissing(event.tile);
+        const bool confirmed_missing = event.error == -2 || map_tile_availability_memory().knownMissing(event.tile);
         if (is_contour)
         {
             if (confirmed_missing)
@@ -2860,7 +2884,7 @@ void tile_loader_maintenance(TileContext& ctx)
                                                             {
             if (candidate.generation != g_map_tile_runtime_generation) return true;
             const auto* tile = find_tile(ctx, candidate.tile.x, candidate.tile.y, candidate.tile.z);
-            return !tile || !tile->visible || !current_tile_request(*tile, candidate); });
+            return !tile || (!tile->visible && !tile->prefetch) || !current_tile_request(*tile, candidate); });
         if (!found) break;
         auto* tile = find_tile(ctx, event.tile.x, event.tile.y, event.tile.z);
         MAP_DIAG("[MAPD][discard] t=%lu gen=%lu active=%lu id=%lu exists=%d visible=%d matches=%d\n",
@@ -3021,6 +3045,7 @@ static void mark_all_invisible(TileContext& ctx, int target_zoom)
     for (auto& tile : *ctx.tiles)
     {
         tile.visible = false;
+        tile.prefetch = false;
         // Delete tile objects that don't match target zoom level immediately
         // This prevents memory buildup when switching zoom levels frequently
         if (tile.img_obj != NULL && tile.z != target_zoom)
@@ -3085,25 +3110,26 @@ static void collect_required_tiles(TileContext& ctx, double lat, double lng, int
     // Ensure GPS center tile exists
     ensure_tile(ctx, gps_tile_x, gps_tile_y, zoom, 0); // Priority 0 = center
 
-    // Dynamic tile collection based on screen viewport
-    // Calculate which tiles are needed to cover the entire screen (no preloading)
-    // Start from screen corners and work inward to find all tiles that intersect the viewport
-
-    // Calculate tile range needed to cover screen
-    // Convert screen coordinates to tile coordinates
-    // For each possible tile position, check if it intersects the screen
-
-    // Start from GPS tile and expand outward until we cover the entire screen
-    // Use a reasonable maximum range (e.g., 10 tiles in each direction)
-    const int MAX_TILE_RANGE = 10;
-
-    // Collect all tiles that intersect the viewport
-    for (int dy = -MAX_TILE_RANGE; dy <= MAX_TILE_RANGE; dy++)
+    // Exact viewport range plus one neighboring ring; no 441-position scan.
+    const auto floor_tile = [](int pixels)
+    { return static_cast<int>(std::floor(pixels / 256.0)); };
+    const int min_dx = floor_tile(-ctx.anchor->gps_tile_screen_x);
+    const int max_dx = floor_tile(screen_width - 1 - ctx.anchor->gps_tile_screen_x);
+    const int min_dy = floor_tile(-ctx.anchor->gps_tile_screen_y);
+    const int max_dy = floor_tile(screen_height - 1 - ctx.anchor->gps_tile_screen_y);
+    struct Candidate
     {
-        for (int dx = -MAX_TILE_RANGE; dx <= MAX_TILE_RANGE; dx++)
+        int x = 0, y = 0, priority = 0;
+    };
+    Candidate ahead[4]{};
+    size_t ahead_count = 0, visible_count = 0;
+    for (int dy = min_dy - 1; dy <= max_dy + 1; dy++)
+    {
+        for (int dx = min_dx - 1; dx <= max_dx + 1; dx++)
         {
             int tile_x = gps_tile_x + dx;
             int tile_y = gps_tile_y + dy;
+            if (tile_y < 0 || tile_y >= (1 << zoom)) continue;
 
             // Normalize tile coordinates
             normalize_tile(zoom, tile_x, tile_y);
@@ -3129,8 +3155,34 @@ static void collect_required_tiles(TileContext& ctx, double lat, double lng, int
                 if (dy_px < 0) dy_px = -dy_px;
                 int priority = dx_px + dy_px;
                 ensure_tile(ctx, tile_x, tile_y, zoom, priority);
+                ++visible_count;
+            }
+            else
+            {
+                const int cx = screen_x + TILE_SIZE / 2 - screen_width / 2;
+                const int cy = screen_y + TILE_SIZE / 2 - screen_height / 2;
+                const int distance = std::abs(cx) + std::abs(cy);
+                const bool forward = cx * ctx.pan_direction_x + cy * ctx.pan_direction_y > 0;
+                const int priority = 100000 + distance + (forward ? 0 : 2048);
+                bool duplicate = false;
+                for (size_t i = 0; i < ahead_count; ++i) duplicate |= ahead[i].x == tile_x && ahead[i].y == tile_y;
+                if (duplicate) continue;
+                size_t at = 0;
+                while (at < ahead_count && ahead[at].priority <= priority) ++at;
+                if (at == 4) continue;
+                for (size_t i = std::min<size_t>(ahead_count, 3); i > at; --i) ahead[i] = ahead[i - 1];
+                ahead[at] = {tile_x, tile_y, priority};
+                ahead_count = std::min<size_t>(4, ahead_count + 1);
             }
         }
+    }
+    const auto limit = tile_object_cache_limit(ctx);
+    ahead_count = std::min(ahead_count, limit > visible_count ? limit - visible_count : 0);
+    for (size_t i = 0; i < ahead_count; ++i)
+    {
+        auto& tile = ensure_tile(ctx, ahead[i].x, ahead[i].y, zoom, ahead[i].priority);
+        tile.visible = false;
+        tile.prefetch = true;
     }
 }
 
@@ -3221,6 +3273,9 @@ static void layout_loaded_tile_objects(TileContext& ctx)
             // Hide invisible tiles
             if (tile.img_obj != NULL)
             {
+                // Keep prefetched/cached descriptors aligned with the current
+                // anchor so a later lightweight drag can reveal them correctly.
+                lv_obj_set_pos(tile.img_obj, screen_x, screen_y);
                 lv_obj_add_flag(tile.img_obj, LV_OBJ_FLAG_HIDDEN);
             }
             if (tile.contour_obj != NULL)
@@ -3413,6 +3468,31 @@ void calculate_required_tiles(TileContext& ctx, double lat, double lng, int zoom
     }
 
     sync_render_settings(ctx);
+    if (ctx.anchor->valid && ctx.anchor->z != zoom)
+    {
+        const auto previous = g_map_tile_runtime_generation;
+        if (++g_map_tile_runtime_generation == 0) g_map_tile_runtime_generation = kMapTileGenerationInitial;
+        map_tile_async_host().cancelGeneration(previous);
+        for (auto& tile : *ctx.tiles)
+        {
+            tile.base_request_pending = false;
+            tile.contour_request_pending = false;
+            tile.base_retry_not_before_ms = 0;
+            tile.contour_retry_not_before_ms = 0;
+#if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
+            tile.poi_pending = false;
+            tile.poi_retry_not_before_ms = 0;
+#endif
+        }
+        ctx.pan_direction_x = ctx.pan_direction_y = 0;
+    }
+    else
+    {
+        if (pan_x != ctx.previous_pan_x) ctx.pan_direction_x = pan_x > ctx.previous_pan_x ? -1 : 1;
+        if (pan_y != ctx.previous_pan_y) ctx.pan_direction_y = pan_y > ctx.previous_pan_y ? -1 : 1;
+    }
+    ctx.previous_pan_x = pan_x;
+    ctx.previous_pan_y = pan_y;
 
     GPS_LOG("[GPS] calculate_required_tiles: has_fix=%d, zoom=%d, lat=%.6f, lng=%.6f\n",
             has_fix, zoom, lat, lng);
@@ -3471,6 +3551,10 @@ void tile_loader_step(TileContext& ctx)
     const int max_tiles_per_step = kMapTileRequestsPerUiStep;
     MapTile* attempted[max_tiles_per_step] = {NULL};
     int attempted_count = 0;
+    const bool visible_loading = std::any_of(ctx.tiles->begin(), ctx.tiles->end(), [](const auto& tile)
+                                             { return tile.visible && !tile.has_png_file && !tile.base_missing; });
+    bool prefetch_pending = std::any_of(ctx.tiles->begin(), ctx.tiles->end(), [](const auto& tile)
+                                        { return tile.prefetch && !tile.visible && tile.base_request_pending; });
 
     while (attempted_count < max_tiles_per_step)
     {
@@ -3480,7 +3564,9 @@ void tile_loader_step(TileContext& ctx)
         MapTile* best = nullptr;
         for (auto& tile : *ctx.tiles)
         {
-            if (tile.visible &&
+            if (!tile.visible && (visible_loading || prefetch_pending ||
+                                  g_native_tile_pixel_bytes.load(std::memory_order_relaxed) > kNativeTilePixelBudgetBytes - 2U * 256U * 1024U)) continue;
+            if ((tile.visible || tile.prefetch) &&
                 tile.map_source == g_active_map_source &&
                 !tile.has_png_file &&
                 !tile.base_missing &&
@@ -3554,6 +3640,7 @@ void tile_loader_step(TileContext& ctx)
         else
         {
             (void)request_base_tile_async(*best);
+            if (!best->visible && best->base_request_pending) prefetch_pending = true;
         }
 
         int after_visible_total = 0;

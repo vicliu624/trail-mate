@@ -66,6 +66,7 @@ struct DecodedTileCache
 // Map tile structure
 struct MapTile
 {
+    bool prefetch = false;
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
     std::unique_ptr<uint8_t, MapPoiPayloadDeleter> poi;
     bool poi_checked = false;
@@ -105,6 +106,8 @@ struct MapTile
 // Tile management context (passed to functions instead of using global state)
 struct TileContext
 {
+    int previous_pan_x = 0, previous_pan_y = 0;
+    int pan_direction_x = 0, pan_direction_y = 0;
     lv_obj_t* map_container; // Only UI dependency - for creating objects and getting size
     MapAnchor* anchor;
     std::vector<MapTile>* tiles;
