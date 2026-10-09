@@ -13,13 +13,15 @@ struct Result
     std::array<uint8_t, 16> id{};
     int32_t latitude_e7 = 0, longitude_e7 = 0;
     char name[161]{};
+    char administrative_path[513]{};
+    uint8_t administrative_flags = 1;
     float distance_m = 0;
     uint16_t importance = 0;
     uint8_t match = 2;
     uint8_t minimum_zoom = 0, maximum_zoom = 0;
     uint32_t zoom_mask = 0;
 };
-static_assert(sizeof(Result) <= 208, "Search display records must remain bounded");
+static_assert(sizeof(Result) <= 728, "Search display records must remain bounded");
 enum class Status : uint8_t
 {
     Idle,

@@ -180,6 +180,9 @@ int s_map_pan_x = 0;
 int s_map_pan_y = 0;
 bool s_map_view_initialized = false;
 bool s_search_center_valid = false;
+int32_t s_search_target_latitude_e7 = 0;
+int32_t s_search_target_longitude_e7 = 0;
+constexpr uint32_t kSearchTargetOverlayId = 0x53454152U;
 bool s_map_info_visible = true;
 ::ui::map::MapOverlaySnapshot* s_overlay_snapshot = nullptr;
 const ::gps::ui::runtime::MapTarget* s_map_target = nullptr;
@@ -3038,6 +3041,8 @@ void keep_only_current_position_overlay(::ui::map::MapOverlaySnapshot& snapshot)
             // Saved places remain visible like Agenda markers and POIs when
             // map chrome is hidden; this toggle only hides transient info.
             item.kind == ::ui::map::MapOverlayKind::Geocache ||
+            (item.kind == ::ui::map::MapOverlayKind::SelectedTarget &&
+             item.stable_id == kSearchTargetOverlayId) ||
             (keep_route_points && item.kind == ::ui::map::MapOverlayKind::RoutePoint) ||
             (keep_selected_route_image &&
              item.kind == ::ui::map::MapOverlayKind::SelectedTarget);
@@ -3278,6 +3283,25 @@ void refresh_view()
     sync_workspace_layers_from_renderer();
     auto snapshot = map_workspace_model().snapshot();
     (void)map_overlay_source().buildMapOverlaySnapshot(*s_overlay_snapshot);
+    if (s_search_center_valid && !s_map_target && !s_target_request && !s_location_request)
+    {
+        // Reuse the PSRAM snapshot; reserve a visible marker for the chosen
+        // search result even when ordinary POI labels are limited at this zoom.
+        if (s_overlay_snapshot->item_count == ::ui::map::MapOverlaySnapshot::kMaxItems)
+        {
+            --s_overlay_snapshot->item_count;
+            s_overlay_snapshot->truncated = true;
+        }
+        auto& target = s_overlay_snapshot->items[s_overlay_snapshot->item_count++];
+        target = ::ui::map::MapOverlayItem{};
+        target.kind = ::ui::map::MapOverlayKind::SelectedTarget;
+        target.style = ::ui::map::MapOverlayStyle::Warning;
+        target.point.valid = true;
+        target.point.lat = s_search_target_latitude_e7 / 10000000.0;
+        target.point.lon = s_search_target_longitude_e7 / 10000000.0;
+        target.stable_id = kSearchTargetOverlayId;
+        target.selected = target.visible = true;
+    }
     if (!s_map_target)
         ::geocaching::ui::shell::appendMapOverlays(*s_overlay_snapshot, snapshot.viewport.center_lat, snapshot.viewport.center_lon, current_map_zoom());
     if (s_map_target && s_overlay_snapshot->item_count < ::ui::map::MapOverlaySnapshot::kMaxItems)
@@ -4017,6 +4041,8 @@ void selected_search_location(const platform::ui::map_search::Result& result, vo
     if (!model.setViewport(viewport).ok) return;
     s_map_zoom = selected_zoom;
     s_search_center_valid = true;
+    s_search_target_latitude_e7 = result.latitude_e7;
+    s_search_target_longitude_e7 = result.longitude_e7;
     s_map_pan_x = s_map_pan_y = 0;
     set_map_notice(result.name, 3000);
     request_refresh_view();

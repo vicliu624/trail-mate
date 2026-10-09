@@ -73,7 +73,9 @@ bool accept(void* context, const tmap::Poi& poi, tmap::SearchMode match)
             candidate.maximum_zoom = zoom;
         }
     if (mask & 1U) candidate.minimum_zoom = 0;
-    copy_name(candidate.name, sizeof(candidate.name), poi.name);
+    copy_name(candidate.name, sizeof(candidate.name), state.reader.searchMatchedName());
+    copy_name(candidate.administrative_path, sizeof(candidate.administrative_path), state.reader.searchAdministrativePath());
+    candidate.administrative_flags = state.reader.searchAdministrativeFlags();
     constexpr double radians = 3.14159265358979323846 / 180;
     const double latitude = poi.latitude / 1e7;
     const double longitude = poi.longitude / 1e7;

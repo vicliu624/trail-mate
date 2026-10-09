@@ -102,6 +102,8 @@ struct Workspace
     std::array<Section, kMaxSections> sections{};
     std::array<Page, kCachePages> pages{};
     std::array<char, 513> matched_name{};
+    std::array<char, 513> matched_display{}, administrative_path{};
+    uint8_t administrative_levels = 0, administrative_flags = 1;
     std::array<uint8_t, 96> record{};
     Poi poi{};
 };
@@ -158,6 +160,11 @@ class Reader
     Status beginAnnotations(uint8_t zoom, uint32_t x, uint32_t y, AnnotationCursor& cursor);
     Status annotationStep(AnnotationCursor& cursor, size_t stage_budget, AnnotationVisitor visitor, void* context);
     Status categoryName(uint32_t id, char* output, size_t capacity);
+    Status administrativeLocation(uint64_t row, char* output, size_t capacity, uint8_t& levels, uint8_t& flags);
+    // Valid only during the SearchVisitor callback, owned by caller Workspace.
+    const char* searchMatchedName() const { return workspace_.matched_display.data(); }
+    const char* searchAdministrativePath() const { return workspace_.administrative_path.data(); }
+    uint8_t searchAdministrativeFlags() const { return workspace_.administrative_flags; }
     Status queryBounds(const Bounds& bounds, PoiVisitor visitor, void* context);
     Status beginSearch(const char* query, size_t bytes, SearchMode mode, SearchCursor& cursor);
     // More preserves cursor. Busy retries the current candidate; already visited results remain valid.
@@ -186,7 +193,7 @@ class Reader
     Status read(uint64_t offset, uint8_t* output, size_t size);
     Status page(const Section& section, uint64_t offset, const uint8_t*& output);
     Status row(uint32_t section, uint64_t id, size_t bytes, uint8_t* output);
-    Status string(uint64_t reference, char* output, size_t capacity);
+    Status string(uint64_t reference, char* output, size_t capacity, uint32_t section_id = 23);
     Status find(const Section& section, KeyKind kind, const uint8_t* key, size_t key_bytes,
                 uint64_t number, uint8_t* value, size_t value_bytes);
     Status metadata();

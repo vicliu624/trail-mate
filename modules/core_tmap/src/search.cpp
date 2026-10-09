@@ -409,7 +409,7 @@ Status Reader::searchStep(SearchCursor& cursor, size_t budget, SearchVisitor vis
             auto& record = workspace_.record;
             status = row(22, name, 48, record.data());
             if (status != Status::Ok) return status;
-            const auto poi = u64(record.data()), normalized = u64(record.data() + 16);
+            const auto poi = u64(record.data()), display = u64(record.data() + 8), normalized = u64(record.data() + 16);
             status = string(normalized, workspace_.matched_name.data(), workspace_.matched_name.size());
             if (status != Status::Ok) return status;
             const auto* text = workspace_.matched_name.data();
@@ -420,6 +420,11 @@ Status Reader::searchStep(SearchCursor& cursor, size_t budget, SearchVisitor vis
             if (accepted)
             {
                 status = readPoi(poi, workspace_.poi);
+                if (status != Status::Ok) return status;
+                status = string(display, workspace_.matched_display.data(), workspace_.matched_display.size());
+                if (status != Status::Ok) return status;
+                status = administrativeLocation(poi, workspace_.administrative_path.data(), workspace_.administrative_path.size(),
+                                                workspace_.administrative_levels, workspace_.administrative_flags);
                 if (status != Status::Ok) return status;
                 if (!visitor(context, workspace_.poi, match)) return Status::Cancelled;
             }

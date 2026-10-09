@@ -36,7 +36,7 @@ struct State
     widgets::ImeWidget ime;
     search::Snapshot snapshot{};
     search::Result results[search::kMaxResults]{};
-    char text[224]{};
+    char text[640]{};
     size_t page = 0;
     uint32_t font_refresh_at = 0;
     bool fonts_pending = false;
@@ -69,11 +69,14 @@ void render()
         }
         const auto& result = state.results[index];
         i18n::set_content_label_text_raw(state.labels[row], result.name);
+        const char* area = result.administrative_path[0] ? result.administrative_path : "Administrative area unavailable";
+        const char* quality = (result.administrative_flags & 2) ? " [ambiguous]" : (result.administrative_path[0] && (result.administrative_flags & 1)) ? " [partial]"
+                                                                                                                                                        : "";
         if (result.distance_m < 1000)
-            std::snprintf(state.text, sizeof(state.text), "%.0f m from map center", result.distance_m);
+            std::snprintf(state.text, sizeof(state.text), "%s%s\n%.0f m from map center", area, quality, result.distance_m);
         else
-            std::snprintf(state.text, sizeof(state.text), "%.1f km from map center", result.distance_m / 1000);
-        i18n::set_label_text_raw(state.details[row], state.text);
+            std::snprintf(state.text, sizeof(state.text), "%s%s\n%.1f km from map center", area, quality, result.distance_m / 1000);
+        i18n::set_content_label_text_raw(state.details[row], state.text);
         lv_obj_clear_flag(state.rows[row], LV_OBJ_FLAG_HIDDEN);
     }
     if (state.page) lv_obj_clear_state(state.previous, LV_STATE_DISABLED);
@@ -113,7 +116,9 @@ void poll(lv_timer_t*)
         if (index < s_state->snapshot.count)
         {
             if (!i18n::ensure_content_font_for_text(s_state->results[index].name)) ready = false;
+            if (!i18n::ensure_content_font_for_text(s_state->results[index].administrative_path)) ready = false;
             fonts::apply_content_font(s_state->labels[row], s_state->results[index].name, &lv_font_montserrat_14);
+            fonts::apply_content_font(s_state->details[row], s_state->results[index].administrative_path, &lv_font_montserrat_14);
         }
     }
     s_state->fonts_pending = !ready;
@@ -274,7 +279,8 @@ bool open(lv_obj_t* parent, double latitude, double longitude, Selection selecti
     for (size_t row = 0; row < kPageRows; ++row)
     {
         state.rows[row] = button(state.list, "", selected, row);
-        lv_obj_set_size(state.rows[row], LV_PCT(100), 50);
+        lv_obj_set_size(state.rows[row], LV_PCT(100), LV_SIZE_CONTENT);
+        lv_obj_set_style_min_height(state.rows[row], 68, 0);
         lv_obj_set_style_pad_all(state.rows[row], 4, 0);
         lv_obj_set_flex_flow(state.rows[row], LV_FLEX_FLOW_COLUMN);
         lv_obj_set_flex_align(state.rows[row], LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
@@ -286,7 +292,7 @@ bool open(lv_obj_t* parent, double latitude, double longitude, Selection selecti
         lv_label_set_long_mode(state.labels[row], LV_LABEL_LONG_DOT);
         state.details[row] = lv_label_create(state.rows[row]);
         lv_obj_set_width(state.details[row], LV_PCT(100));
-        lv_label_set_long_mode(state.details[row], LV_LABEL_LONG_DOT);
+        lv_label_set_long_mode(state.details[row], LV_LABEL_LONG_WRAP);
         lv_obj_set_style_text_font(state.details[row], &lv_font_montserrat_14, 0);
         lv_obj_set_style_text_color(state.details[row], lv_color_hex(0x75695e), 0);
         lv_obj_add_flag(state.rows[row], LV_OBJ_FLAG_HIDDEN);

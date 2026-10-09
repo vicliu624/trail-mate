@@ -18,7 +18,7 @@ bool bounded(uint64_t offset, uint64_t length, uint64_t size) { return offset <=
 bool knownSection(uint32_t type)
 {
     return type == 1 || type == 2 || type == 10 || type == 11 || (type >= 20 && type <= 24) ||
-           (type >= 30 && type <= 32) || (type >= 40 && type <= 44);
+           (type >= 30 && type <= 32) || (type >= 40 && type <= 44) || (type >= 50 && type <= 54);
 }
 constexpr std::array<uint32_t, 256> crcTable()
 {
@@ -403,11 +403,11 @@ Status Reader::row(uint32_t section_id, uint64_t id, size_t size, uint8_t* outpu
     std::memcpy(output, p + 64 + slot * size, size);
     return Status::Ok;
 }
-Status Reader::string(uint64_t reference, char* output, size_t capacity)
+Status Reader::string(uint64_t reference, char* output, size_t capacity, uint32_t section_id)
 {
     if (!output || !capacity) return Status::Invalid;
     output[0] = 0;
-    const auto* strings = section(23);
+    const auto* strings = section(section_id);
     const uint8_t* p = nullptr;
     if (!strings) return Status::Invalid;
     auto status = page(*strings, reference / 4096 * 4096, p);
@@ -419,6 +419,25 @@ Status Reader::string(uint64_t reference, char* output, size_t capacity)
     std::memcpy(output, p + at + 4, length);
     output[length] = 0;
     return Status::Ok;
+}
+Status Reader::administrativeLocation(uint64_t id, char* output, size_t capacity, uint8_t& levels, uint8_t& flags)
+{
+    if (!isOpen() || !output || !capacity || !id || id > poiCount()) return Status::Invalid;
+    output[0] = 0;
+    levels = 0;
+    flags = 1;
+    const auto* references = section(50);
+    const auto* strings = section(51);
+    if (!references && !strings) return Status::Ok; // Legacy package, explicitly unknown.
+    if (!references || !strings || references->count != poiCount()) return Status::Invalid;
+    auto& record = workspace_.record;
+    auto status = row(50, id, 16, record.data());
+    if (status != Status::Ok) return status;
+    const uint64_t text = u64(record.data());
+    levels = record[8];
+    flags = record[9];
+    if ((levels & ~63U) || (flags & ~3U) || record[13] || record[14] || record[15]) return Status::Invalid;
+    return text ? string(text, output, capacity, 51) : Status::Ok;
 }
 Status Reader::readPoi(uint64_t id, Poi& output)
 {
