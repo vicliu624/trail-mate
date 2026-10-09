@@ -44,6 +44,7 @@ struct alignas(8) TileHeader
     uint16_t invalid_rows = 0;
     bool truncated = false;
     bool manifest_valid = false;
+    bool partial = false; // Valid snapshot; more records are still being read.
 };
 
 static_assert(sizeof(TileHeader) <= 32, "POI metadata must stay small");

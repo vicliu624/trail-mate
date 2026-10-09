@@ -2624,7 +2624,7 @@ static bool apply_poi_tile_event(TileContext& ctx, ui::map_tiles::MapTileAsyncEv
     tile->poi_retry_not_before_ms = 0;
     if (event.kind == ui::map_tiles::MapTileAsyncEventKind::RetryLater)
     {
-        tile->poi_retry_not_before_ms = sys::millis_now() + kMapTileLayerBusyBackoffMs;
+        tile->poi_retry_not_before_ms = event.error == -115 ? 0 : sys::millis_now() + kMapTileLayerBusyBackoffMs;
         release_tile_payload(event);
         return false;
     }
@@ -2648,6 +2648,8 @@ static bool apply_poi_tile_event(TileContext& ctx, ui::map_tiles::MapTileAsyncEv
         return false;
     }
     const auto* header = reinterpret_cast<const ui::map_poi::TileHeader*>(event.payload.data);
+    tile->poi_checked = !header->partial;
+    if (header->partial) tile->poi_retry_not_before_ms = 0;
     // Failed reads must not discard a previously valid tile payload. Replace
     // only after a new typed payload has passed validation (including empty).
     tile->poi.reset();
@@ -2663,10 +2665,10 @@ static bool apply_poi_tile_event(TileContext& ctx, ui::map_tiles::MapTileAsyncEv
         event.payload.data = nullptr;
         event.payload.size = 0;
     }
-    std::printf("[MapViewport][POI] z=%u x=%lu y=%lu available=%d enabled=%d records=%u\n",
+    std::printf("[MapViewport][POI] z=%u x=%lu y=%lu available=%d enabled=%d records=%u partial=%d\n",
                 static_cast<unsigned>(event.tile.z), static_cast<unsigned long>(event.tile.x),
                 static_cast<unsigned long>(event.tile.y), ctx.poi_available, ctx.poi_policy.enabled(event.tile.z),
-                tile->poi ? count : 0);
+                tile->poi ? count : 0, header->partial);
     release_tile_payload(event);
     return true;
 }
@@ -3476,6 +3478,14 @@ void calculate_required_tiles(TileContext& ctx, double lat, double lng, int zoom
         return;
     }
 
+    const bool had_anchor = ctx.anchor->valid;
+    const int previous_zoom = had_anchor ? ctx.anchor->z : zoom;
+    const int previous_left = had_anchor ? ctx.anchor->gps_tile_x + static_cast<int>(std::floor(-ctx.anchor->gps_tile_screen_x / 256.0)) : 0;
+    const int previous_top = had_anchor ? ctx.anchor->gps_tile_y + static_cast<int>(std::floor(-ctx.anchor->gps_tile_screen_y / 256.0)) : 0;
+    const int width = lv_obj_get_width(ctx.map_container);
+    const int height = lv_obj_get_height(ctx.map_container);
+    const int previous_right = had_anchor ? ctx.anchor->gps_tile_x + static_cast<int>(std::floor((width - 1 - ctx.anchor->gps_tile_screen_x) / 256.0)) : 0;
+    const int previous_bottom = had_anchor ? ctx.anchor->gps_tile_y + static_cast<int>(std::floor((height - 1 - ctx.anchor->gps_tile_screen_y) / 256.0)) : 0;
     sync_render_settings(ctx);
     if (ctx.anchor->valid && ctx.anchor->z != zoom)
     {
@@ -3510,6 +3520,27 @@ void calculate_required_tiles(TileContext& ctx, double lat, double lng, int zoom
     mark_all_invisible(ctx, zoom);
 
     update_map_anchor(ctx, lat, lng, zoom, pan_x, pan_y, has_fix);
+    const int next_left = ctx.anchor->valid ? ctx.anchor->gps_tile_x + static_cast<int>(std::floor(-ctx.anchor->gps_tile_screen_x / 256.0)) : previous_left;
+    const int next_top = ctx.anchor->valid ? ctx.anchor->gps_tile_y + static_cast<int>(std::floor(-ctx.anchor->gps_tile_screen_y / 256.0)) : previous_top;
+    const int next_right = ctx.anchor->valid ? ctx.anchor->gps_tile_x + static_cast<int>(std::floor((width - 1 - ctx.anchor->gps_tile_screen_x) / 256.0)) : previous_right;
+    const int next_bottom = ctx.anchor->valid ? ctx.anchor->gps_tile_y + static_cast<int>(std::floor((height - 1 - ctx.anchor->gps_tile_screen_y) / 256.0)) : previous_bottom;
+    if (had_anchor && previous_zoom == zoom && (previous_left != next_left || previous_top != next_top || previous_right != next_right || previous_bottom != next_bottom))
+    {
+        const auto previous = g_map_tile_runtime_generation;
+        if (++g_map_tile_runtime_generation == 0) g_map_tile_runtime_generation = kMapTileGenerationInitial;
+        map_tile_async_host().cancelGeneration(previous);
+        for (auto& tile : *ctx.tiles)
+        {
+            tile.base_request_pending = false;
+            tile.contour_request_pending = false;
+            tile.base_retry_not_before_ms = 0;
+            tile.contour_retry_not_before_ms = 0;
+#if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
+            tile.poi_pending = false;
+            tile.poi_retry_not_before_ms = 0;
+#endif
+        }
+    }
 
     collect_required_tiles(ctx, lat, lng, zoom, pan_x, pan_y, has_fix);
 

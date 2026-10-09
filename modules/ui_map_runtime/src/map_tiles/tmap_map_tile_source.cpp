@@ -2,6 +2,7 @@
 #include "ui_map_runtime/map_poi/poi_types.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <new>
 
@@ -164,6 +165,8 @@ struct TmapMapTileSource::State
         uint8_t* payload = nullptr;
         uint64_t key = 0;
         uint32_t age = 0;
+        uint32_t published_ms = 0;
+        uint16_t published_count = 0;
         bool used = false;
     };
     AnnotationSlot annotation_slots[3]{};
@@ -378,9 +381,13 @@ MapTileReadResult TmapMapTileSource::annotations(const MapTileRef& ref, uint8_t*
                 break;
             }
         if (!selected)
-            selected = &*std::min_element(std::begin(s.annotation_slots), std::end(s.annotation_slots),
-                                          [](const auto& a, const auto& b)
-                                          { return a.age < b.age; });
+        {
+            // Admission backpressure must never destroy another tile's cursor.
+            // A viewport generation change explicitly releases obsolete slots.
+            auto pending = result(tmap::Status::Busy);
+            pending.format = MapTileFormat::PoiRecords;
+            return pending;
+        }
         constexpr size_t bytes = sizeof(ui::map_poi::TileHeader) + ui::map_poi::TileHeader::kMaxRecords * sizeof(ui::map_poi::Record);
         if (!selected->payload)
         {
@@ -391,6 +398,8 @@ MapTileReadResult TmapMapTileSource::annotations(const MapTileRef& ref, uint8_t*
         const auto status = s.reader.beginAnnotations(ref.z, ref.x, ref.y, selected->cursor);
         if (status != tmap::Status::Ok) return result(status);
         new (selected->payload) ui::map_poi::TileHeader{};
+        selected->published_count = 0;
+        selected->published_ms = storage_.nowMs();
         selected->key = key;
         selected->used = true;
     }
@@ -410,6 +419,31 @@ MapTileReadResult TmapMapTileSource::annotations(const MapTileRef& ref, uint8_t*
     }
     if (status == tmap::Status::Busy || status == tmap::Status::More)
     {
+        // Publish the first complete record immediately, then coalesce updates
+        // to four new records or one second. The cursor/accumulator stay owned.
+        const auto now = storage_.nowMs();
+        if (header->count > selected->published_count &&
+            (!selected->published_count || header->count - selected->published_count >= 4 || now - selected->published_ms >= 1000U))
+        {
+            header->partial = true;
+            auto snapshot = result(tmap::Status::Ok);
+            snapshot.format = MapTileFormat::PoiRecords;
+            snapshot.size = sizeof(*header) + header->count * sizeof(ui::map_poi::Record);
+            std::memcpy(output, selected->payload, snapshot.size);
+            selected->published_count = header->count;
+            selected->published_ms = now;
+            return snapshot;
+        }
+        static uint32_t last_progress_ms = 0;
+        if (!last_progress_ms || now - last_progress_ms >= 5000U)
+        {
+            last_progress_ms = now;
+            std::printf("[TMAP][POI][progress] z=%u x=%lu y=%lu stage=%u seen=%lu expected=%lu records=%u status=%s\n",
+                        static_cast<unsigned>(ref.z), static_cast<unsigned long>(ref.x), static_cast<unsigned long>(ref.y),
+                        static_cast<unsigned>(selected->cursor.stage), static_cast<unsigned long>(selected->cursor.seen),
+                        static_cast<unsigned long>(selected->cursor.expected), static_cast<unsigned>(header->count),
+                        status == tmap::Status::Busy ? "busy" : "more");
+        }
         auto pending = result(status);
         pending.format = MapTileFormat::PoiRecords;
         if (status == tmap::Status::More) pending.error = -115; // Progress, not bus contention.
@@ -420,6 +454,7 @@ MapTileReadResult TmapMapTileSource::annotations(const MapTileRef& ref, uint8_t*
     r.format = MapTileFormat::PoiRecords;
     if (status == tmap::Status::Ok)
     {
+        header->partial = false;
         r.size = sizeof(*header) + header->count * sizeof(ui::map_poi::Record);
         std::memcpy(output, selected->payload, r.size);
     }
