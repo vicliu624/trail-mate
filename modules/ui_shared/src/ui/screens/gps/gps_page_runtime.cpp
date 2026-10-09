@@ -15,6 +15,7 @@ using Projection = gps::ui::shell::Projection;
 #include "platform/ui/tracker_runtime.h"
 #include "sys/clock.h"
 #include "ui/app_runtime.h"
+#include "ui/components/map_poi_search.h"
 #include "ui/formatters.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
@@ -161,6 +162,7 @@ enum class MapControlAction : uint8_t
     TeamMember,
     PickLocation,
     CancelLocation,
+    Search,
 };
 
 const Host* s_host = nullptr;
@@ -177,6 +179,7 @@ int s_map_zoom = kCardputerZeroMapDefaultZoom;
 int s_map_pan_x = 0;
 int s_map_pan_y = 0;
 bool s_map_view_initialized = false;
+bool s_search_center_valid = false;
 bool s_map_info_visible = true;
 ::ui::map::MapOverlaySnapshot* s_overlay_snapshot = nullptr;
 const ::gps::ui::runtime::MapTarget* s_map_target = nullptr;
@@ -194,6 +197,7 @@ lv_obj_t* s_map_zoom_label = nullptr;
 lv_obj_t* s_map_zoom_out_btn = nullptr;
 lv_obj_t* s_map_zoom_in_btn = nullptr;
 lv_obj_t* s_map_center_btn = nullptr;
+lv_obj_t* s_map_search_btn = nullptr;
 lv_obj_t* s_map_layer_btn = nullptr;
 lv_obj_t* s_map_contour_btn = nullptr;
 lv_obj_t* s_map_help_btn = nullptr;
@@ -404,7 +408,7 @@ bool has_valid_viewport_center(const ::ui::map::MapViewport& viewport)
 {
     return std::isfinite(viewport.center_lat) &&
            std::isfinite(viewport.center_lon) &&
-           (s_map_target || viewport.center_lat != 0.0 || viewport.center_lon != 0.0);
+           (s_search_center_valid || s_map_target || viewport.center_lat != 0.0 || viewport.center_lon != 0.0);
 }
 
 void sync_workspace_layers_from_renderer()
@@ -612,6 +616,8 @@ void set_button_label(lv_obj_t* btn, const char* text)
 
 void clear_map_controls()
 {
+    ::ui::components::map_poi_search::close();
+    s_map_search_btn = nullptr;
     s_map_pick_btn = s_map_cancel_btn = nullptr;
     s_map_viewport = nullptr;
     s_map_control_bar = nullptr;
@@ -3988,6 +3994,30 @@ void show_team_overlay_notice()
     request_refresh_view();
 }
 
+void selected_search_location(const platform::ui::map_search::Result& result, void*)
+{
+    auto& model = map_workspace_model();
+    auto viewport = model.viewport();
+    // The workspace owns WGS84; the viewport renderer applies the configured
+    // display transform once. Avoid converting here and shifting the map twice.
+    viewport.center_lat = result.latitude_e7 / 1e7;
+    viewport.center_lon = result.longitude_e7 / 1e7;
+    int selected_zoom = std::max<int>(result.minimum_zoom, std::min<int>(current_map_zoom(), result.maximum_zoom));
+    while (selected_zoom >= 0 && !(result.zoom_mask & (uint32_t{1} << selected_zoom))) --selected_zoom;
+    if (selected_zoom < 0)
+        for (selected_zoom = 0; selected_zoom <= 18 && !(result.zoom_mask & (uint32_t{1} << selected_zoom)); ++selected_zoom)
+        {
+        }
+    if (selected_zoom > 18) return;
+    viewport.zoom = static_cast<uint8_t>(selected_zoom);
+    if (!model.setViewport(viewport).ok) return;
+    s_map_zoom = selected_zoom;
+    s_search_center_valid = true;
+    s_map_pan_x = s_map_pan_y = 0;
+    set_map_notice(result.name, 3000);
+    request_refresh_view();
+}
+
 void on_map_control_clicked(lv_event_t* e)
 {
     if (lv_event_get_code(e) != LV_EVENT_CLICKED)
@@ -4008,6 +4038,18 @@ void on_map_control_clicked(lv_event_t* e)
     case MapControlAction::Center:
         center_map_on_self();
         break;
+    case MapControlAction::Search:
+    {
+        const auto viewport = map_workspace_model().viewport();
+        ::ui::widgets::map::GeoPoint origin{};
+        origin.lat = viewport.center_lat;
+        origin.lon = viewport.center_lon;
+        if (::ui::widgets::map::screen_center(s_map_runtime, origin) && origin.valid)
+            (void)::ui::map_geo::inverse(origin.lat, origin.lon, app::configFacade().readConfig().map_coord_system, origin.lat, origin.lon);
+        if (!::ui::components::map_poi_search::open(s_root, origin.lat, origin.lon, selected_search_location))
+            set_map_notice("Search unavailable", 2000);
+        break;
+    }
     case MapControlAction::Layer:
         cycle_map_layer();
         break;
@@ -4244,6 +4286,7 @@ void add_map_controls_to_group(lv_group_t* group)
     if (s_map_zoom_out_btn) lv_group_add_obj(group, s_map_zoom_out_btn);
     if (s_map_zoom_in_btn) lv_group_add_obj(group, s_map_zoom_in_btn);
     if (s_map_center_btn) lv_group_add_obj(group, s_map_center_btn);
+    if (s_map_search_btn) lv_group_add_obj(group, s_map_search_btn);
     if (s_map_layer_btn) lv_group_add_obj(group, s_map_layer_btn);
     if (s_map_contour_btn) lv_group_add_obj(group, s_map_contour_btn);
     if (s_map_tracker_btn) lv_group_add_obj(group, s_map_tracker_btn);
@@ -4316,6 +4359,8 @@ void create_map_control_bar(lv_obj_t* viewport)
         kMapControlButtonMediumWidth,
         "OSM",
         MapControlAction::Layer);
+    s_map_search_btn = create_map_control_button(
+        s_map_control_bar, kMapControlButtonSmallWidth, "S", MapControlAction::Search);
     s_map_contour_btn = create_map_control_button(
         s_map_control_bar,
         kMapControlButtonContourWidth,
