@@ -77,6 +77,8 @@ struct AnnotationCursor
 {
     std::array<uint8_t, 16> build{};
     uint64_t key = 0, offset = 0, next = 0, geometry = 0, name = 0, text = 0;
+    uint64_t fast_first = 0;
+    std::array<uint8_t, 176> fast_record{};
     uint32_t expected = 0, seen = 0, slot = 0, count = 0;
     Annotation annotation{};
     Poi poi{};
@@ -148,6 +150,7 @@ class Reader
     const Package& package() const { return package_; }
     uint64_t poiCount() const;
     Status lookupTile(uint32_t semantic, uint8_t zoom, uint32_t x, uint32_t y, Tile& tile);
+    Status lookupAnnotations(uint8_t zoom, uint32_t x, uint32_t y);
     Status readTile(const Tile& tile, uint8_t* output, size_t capacity);
     Status readPoi(uint64_t row, Poi& output);
     Status findPoi(const std::array<uint8_t, 16>& id, Poi& output);

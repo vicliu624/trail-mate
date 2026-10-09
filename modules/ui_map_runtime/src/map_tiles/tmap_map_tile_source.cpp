@@ -290,7 +290,8 @@ tmap::Status TmapMapTileSource::select(const MapTileRef& ref, tmap::Tile& tile) 
     auto status = catalog();
     if (status != tmap::Status::Ok) return status;
     auto& s = *state_;
-    const auto layer = ref.layer == MapTileLayer::Poi ? 1U : semantic(ref.layer);
+    // Annotation availability is indexed independently of OSM pixel presence.
+    const auto layer = ref.layer == MapTileLayer::Poi ? UINT32_C(0x80000000) : semantic(ref.layer);
     for (const auto& located : s.located)
     {
         if (!located.valid || located.key != key || located.semantic != layer) continue;
@@ -313,7 +314,8 @@ tmap::Status TmapMapTileSource::select(const MapTileRef& ref, tmap::Tile& tile) 
             if (!s.entries[i]->package.bounds.intersects(bounds)) continue;
             status = activate(i);
             if (status != tmap::Status::Ok) return status;
-            status = s.reader.lookupTile(layer, ref.z, ref.x, ref.y, tile);
+            status = ref.layer == MapTileLayer::Poi ? s.reader.lookupAnnotations(ref.z, ref.x, ref.y)
+                                                    : s.reader.lookupTile(layer, ref.z, ref.x, ref.y, tile);
             if (status == tmap::Status::Ok)
             {
                 auto& located = s.located[s.next_location++ % 16];

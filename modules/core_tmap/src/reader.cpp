@@ -18,7 +18,7 @@ bool bounded(uint64_t offset, uint64_t length, uint64_t size) { return offset <=
 bool knownSection(uint32_t type)
 {
     return type == 1 || type == 2 || type == 10 || type == 11 || (type >= 20 && type <= 24) ||
-           (type >= 30 && type <= 32) || (type >= 40 && type <= 42);
+           (type >= 30 && type <= 32) || (type >= 40 && type <= 44);
 }
 constexpr std::array<uint32_t, 256> crcTable()
 {
@@ -531,6 +531,15 @@ Status Reader::beginAnnotations(uint8_t zoom, uint32_t x, uint32_t y, Annotation
     cursor.complete = false;
     return Status::Ok;
 }
+Status Reader::lookupAnnotations(uint8_t zoom, uint32_t x, uint32_t y)
+{
+    uint64_t key = 0;
+    if (!isOpen() || !tileKey(zoom, x, y, key)) return Status::Invalid;
+    const auto* fast = section(44);
+    const auto* index = fast ? fast : section(40);
+    if (!index) return Status::Invalid;
+    return find(*index, KeyKind::Number, nullptr, 0, key, workspace_.record.data(), fast ? 16 : 8);
+}
 Status Reader::annotationStep(AnnotationCursor& c, size_t budget, AnnotationVisitor visitor, void* context)
 {
     if (!isOpen() || !visitor || c.build != package_.build) return Status::Invalid;
@@ -548,6 +557,20 @@ Status Reader::annotationStep(AnnotationCursor& c, size_t budget, AnnotationVisi
         switch (c.stage)
         {
         case 0: // Locate the tile's annotation list only once.
+            if (const auto* fast_index = section(44))
+            {
+                const auto* fast_data = section(43);
+                if (!fast_data || fast_index->type != 44 || fast_data->type != 43 || !fast_data->paged || !fast_index->paged) return Status::Invalid;
+                status = find(*fast_index, KeyKind::Number, nullptr, 0, c.key, record.data(), 16);
+                if (status != Status::Ok) return status;
+                c.fast_first = u64(record.data());
+                c.expected = u32(record.data() + 8);
+                if (!c.fast_first || !c.expected || c.expected > 200 || c.fast_first > fast_data->count ||
+                    c.expected > fast_data->count - c.fast_first + 1 || u32(record.data() + 12)) return Status::Invalid;
+                c.initialized = true;
+                c.stage = 7;
+                break;
+            }
             status = find(*index, KeyKind::Number, nullptr, 0, c.key, record.data(), 24);
             if (status != Status::Ok) return status;
             c.offset = u64(record.data());
@@ -649,6 +672,42 @@ Status Reader::annotationStep(AnnotationCursor& c, size_t budget, AnnotationVisi
             }
             c.stage = 1;
             break;
+        case 7: // Optional display rows: one contiguous table, no name joins.
+        {
+            status = row(43, c.fast_first + c.seen, 176, c.fast_record.data());
+            if (status != Status::Ok) return status;
+            const auto* r = c.fast_record.data();
+            new (&c.annotation) Annotation{};
+            new (&c.poi) Poi{};
+            std::memcpy(c.poi.id.data(), r, 16);
+            c.annotation.latitude = c.poi.latitude = i32(r + 16);
+            c.annotation.longitude = c.poi.longitude = i32(r + 20);
+            c.annotation.kind = u16(r + 24);
+            c.annotation.priority = u16(r + 26);
+            c.annotation.point_count = r[28];
+            const auto length = r[29];
+            if (c.annotation.kind < 1 || c.annotation.kind > 3 || c.annotation.point_count > 8 || length > 79 ||
+                u16(r + 30) || r[32 + length] || (length && !validUtf8(r + 32, length)) ||
+                c.annotation.latitude < -900000000 || c.annotation.latitude > 900000000 ||
+                c.annotation.longitude < -1800000000 || c.annotation.longitude >= 1800000000) return Status::Invalid;
+            std::memcpy(c.poi.name, r + 32, length);
+            for (size_t i = 0; i < c.annotation.point_count * 2; ++i) c.annotation.path[i] = i32(r + 112 + i * 4);
+            for (size_t i = 0; i < c.annotation.point_count; ++i)
+                if (c.annotation.path[2 * i] < -900000000 || c.annotation.path[2 * i] > 900000000 ||
+                    c.annotation.path[2 * i + 1] < -1800000000 || c.annotation.path[2 * i + 1] >= 1800000000) return Status::Invalid;
+            ++c.seen;
+            if (!visitor(context, c.annotation, c.poi))
+            {
+                c.complete = true;
+                return Status::Cancelled;
+            }
+            if (c.seen == c.expected)
+            {
+                c.complete = true;
+                return Status::Ok;
+            }
+            break;
+        }
         default:
             return Status::Invalid;
         }

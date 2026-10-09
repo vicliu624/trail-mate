@@ -185,10 +185,11 @@ MapTileExecutionStatus MapTileWorker::execute(const LoadTileCommand& command, ui
     accumulated_timing_.lock_wait_ms += read_result.timing.lock_wait_ms;
     accumulated_timing_.open_ms += read_result.timing.open_ms;
     accumulated_timing_.read_ms += read_result.timing.read_ms;
-    // Pixel progress borrows scratch and must retain the command. POI progress
-    // owns its PSRAM continuation: publish a retry so raster work can interleave.
+    // Continue short POI segments without a UI roundtrip per stage. Partial
+    // snapshots finish the command; a bounded 100 ms dispatch also allows
+    // raster work to interleave when a slow annotation needs several joins.
     if (read_result.status == MapTileReadStatus::RetryLater && read_result.error == -115 &&
-        read_result.format != MapTileFormat::PoiRecords)
+        (read_result.format != MapTileFormat::PoiRecords || now_ms - started_ms_ < 100))
         return MapTileExecutionStatus::Yielded;
     const bool ok = read_result.status == MapTileReadStatus::Ready;
     if (read_result.status == MapTileReadStatus::RetryLater)

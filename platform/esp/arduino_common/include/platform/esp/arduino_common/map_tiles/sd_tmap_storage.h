@@ -29,19 +29,22 @@ class SdTmapStorage final : public ui::map_tiles::TmapStorage
     tmap::Status nextPackage(char* path, size_t capacity) override
     {
         if (ended_) return tmap::Status::Missing;
+        static constexpr const char* roots[] = {"/maps/tmap/osm", "/maps/tmap/terrain", "/maps/tmap/satellite", "/maps/tmap"};
+        const auto* root = roots[root_index_];
         if (!directory_.is_open())
         {
-            const auto status = directory_.open_read_status("/maps/tmap", session());
+            const auto status = directory_.open_read_status(root, session());
             if (status == OpenStatus::Missing)
             {
-                ended_ = true;
-                return tmap::Status::Missing;
+                path[0] = 0;
+                ended_ = ++root_index_ == sizeof(roots) / sizeof(roots[0]);
+                return ended_ ? tmap::Status::Missing : tmap::Status::More;
             }
             if (status == OpenStatus::Busy || status == OpenStatus::Unavailable) return tmap::Status::Busy;
             if (status != OpenStatus::Ready) return tmap::Status::IoError;
         }
         // Limit non-package enumeration too. Use caller's PSRAM pending path.
-        constexpr size_t prefix = sizeof("/maps/tmap/") - 1;
+        const size_t prefix = std::strlen(root) + 1;
         if (capacity <= prefix + 6) return tmap::Status::Invalid;
         for (unsigned visited = 0; visited < 32; ++visited)
         {
@@ -50,9 +53,10 @@ class SdTmapStorage final : public ui::map_tiles::TmapStorage
             if (status == DirStatus::Busy) return tmap::Status::Busy;
             if (status == DirStatus::End)
             {
-                ended_ = true;
                 directory_.close();
-                return tmap::Status::Missing;
+                path[0] = 0;
+                ended_ = ++root_index_ == sizeof(roots) / sizeof(roots[0]);
+                return ended_ ? tmap::Status::Missing : tmap::Status::More;
             }
             if (status != DirStatus::Entry) return tmap::Status::IoError;
             const auto length = std::strlen(path + prefix);
@@ -61,7 +65,8 @@ class SdTmapStorage final : public ui::map_tiles::TmapStorage
             if (extension[0] != '.' || (extension[1] | 32) != 't' || (extension[2] | 32) != 'm' ||
                 (extension[3] | 32) != 'a' || (extension[4] | 32) != 'p') continue;
             if (length == capacity - prefix - 1) return tmap::Status::Invalid;
-            std::memcpy(path, "/maps/tmap/", prefix);
+            std::memcpy(path, root, prefix - 1);
+            path[prefix - 1] = '/';
             return tmap::Status::Ok;
         }
         path[0] = 0;
@@ -105,6 +110,7 @@ class SdTmapStorage final : public ui::map_tiles::TmapStorage
     {
         directory_.close();
         ended_ = false;
+        root_index_ = 0;
     }
     uint64_t size() const override { return size_; }
     void cancelTransfers() { raw_output_ = nullptr; }
@@ -231,5 +237,6 @@ class SdTmapStorage final : public ui::map_tiles::TmapStorage
     uint64_t size_ = 0;
     uint32_t file_session_ = 0;
     bool ended_ = false;
+    uint8_t root_index_ = 0;
 };
 } // namespace platform::esp::map_tiles
