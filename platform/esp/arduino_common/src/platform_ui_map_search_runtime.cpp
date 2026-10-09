@@ -105,7 +105,9 @@ bool accept(void* context, const tmap::Poi& poi, tmap::SearchMode match)
 }
 void publish(State& state, uint32_t generation, Status status)
 {
-    if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(10)) != pdTRUE) return;
+    // A terminal snapshot must reach the UI before the task exits.
+    const TickType_t wait = status == Status::Searching ? pdMS_TO_TICKS(10) : portMAX_DELAY;
+    if (xSemaphoreTake(s_mutex, wait) != pdTRUE) return;
     if (state.generation.load() == generation && !state.cancelled)
     {
         std::memcpy(state.published, state.working, state.count * sizeof(Result));
@@ -157,6 +159,10 @@ void worker(void* context)
         state.storage.resetEnumeration();
         const uint32_t media = state.storage.session();
         uint32_t busy_since = 0, last_publish = 0;
+        const uint32_t started = state.storage.nowMs();
+        uint32_t last_diagnostic = started, busy_retries = 0;
+        std::printf("[TMAP][SEARCH] begin generation=%lu media=%lu query=%s\n",
+                    static_cast<unsigned long>(generation), static_cast<unsigned long>(media), state.query);
         uint16_t files = 0;
         bool active = false, finished = false;
         Status status = Status::Searching;
@@ -172,6 +178,8 @@ void worker(void* context)
             if (!state.path[0])
             {
                 step = state.storage.nextPackage(state.path, sizeof(state.path));
+                if (step == tmap::Status::Ok)
+                    std::printf("[TMAP][SEARCH] package generation=%lu path=%s\n", static_cast<unsigned long>(generation), state.path);
                 if (step == tmap::Status::Missing)
                 {
                     status = state.packages ? Status::Ready : state.incomplete ? Status::Error
@@ -213,6 +221,10 @@ void worker(void* context)
                 step = state.reader.searchStep(state.cursor, 4, accept, &state);
                 if (step == tmap::Status::Ok)
                 {
+                    std::printf("[TMAP][SEARCH] package_done generation=%lu path=%s candidates=%llu/%llu retained=%u reads=%llu\n",
+                                static_cast<unsigned long>(generation), state.path,
+                                static_cast<unsigned long long>(state.cursor.position), static_cast<unsigned long long>(state.cursor.posting.count),
+                                state.count, static_cast<unsigned long long>(state.reader.pageReads()));
                     active = false;
                     state.path[0] = 0;
                     state.reader.close();
@@ -222,6 +234,7 @@ void worker(void* context)
             const uint32_t now = state.storage.nowMs();
             if (step == tmap::Status::Busy)
             {
+                ++busy_retries;
                 if (!busy_since) busy_since = now;
                 if (now - busy_since >= 30000)
                 {
@@ -253,8 +266,21 @@ void worker(void* context)
                 publish(state, generation, status);
                 last_publish = now;
             }
+            if (now - last_diagnostic >= 1000)
+            {
+                std::printf("[TMAP][SEARCH] progress generation=%lu phase=%s path=%s step=%u elapsed_ms=%lu initialized=%u query_offset=%u candidates=%llu/%llu retained=%u reads=%llu busy=%lu stack_min_bytes=%u\n",
+                            static_cast<unsigned long>(generation), active ? "query" : state.path[0] ? "open"
+                                                                                                     : "enumerate",
+                            state.path, static_cast<unsigned>(step), static_cast<unsigned long>(now - started),
+                            state.cursor.initialized, state.cursor.query_offset,
+                            static_cast<unsigned long long>(state.cursor.position), static_cast<unsigned long long>(state.cursor.posting.count),
+                            state.count, static_cast<unsigned long long>(state.reader.pageReads()), static_cast<unsigned long>(busy_retries),
+                            static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
+                last_diagnostic = now;
+            }
             vTaskDelay(pdMS_TO_TICKS(step == tmap::Status::Busy ? 20 : 5));
         }
+        publish(state, generation, status);
         state.reader.close();
         state.storage.closePackage();
         state.storage.resetEnumeration();

@@ -265,7 +265,8 @@ bool open(lv_obj_t* parent, double latitude, double longitude, Selection selecti
     lv_obj_set_flex_flow(state.list, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(state.list, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
     lv_obj_set_scroll_dir(state.list, LV_DIR_VER);
-    lv_obj_clear_flag(state.list, LV_OBJ_FLAG_SCROLL_ELASTIC | LV_OBJ_FLAG_SCROLL_MOMENTUM);
+    lv_obj_clear_flag(state.list, LV_OBJ_FLAG_SCROLL_ELASTIC);
+    lv_obj_clear_flag(state.list, LV_OBJ_FLAG_SCROLL_MOMENTUM);
     lv_obj_set_style_pad_all(state.list, 2, 0);
     lv_obj_set_style_bg_opa(state.list, LV_OPA_COVER, 0);
     lv_obj_set_style_bg_color(state.list, lv_color_hex(0xfff8ee), 0);

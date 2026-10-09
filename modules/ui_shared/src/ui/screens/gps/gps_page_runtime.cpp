@@ -4449,7 +4449,7 @@ void create_route_elevation_profile_overlay(lv_obj_t* viewport)
 void create_map_notice_overlay(lv_obj_t* viewport)
 {
     s_map_notice_panel = lv_obj_create(viewport);
-    lv_obj_set_size(s_map_notice_panel, LV_SIZE_CONTENT, 18);
+    lv_obj_set_size(s_map_notice_panel, LV_SIZE_CONTENT, 24);
     lv_obj_align(s_map_notice_panel, LV_ALIGN_TOP_LEFT, 4, 4);
     lv_obj_add_flag(s_map_notice_panel, LV_OBJ_FLAG_IGNORE_LAYOUT);
     lv_obj_add_flag(s_map_notice_panel, LV_OBJ_FLAG_HIDDEN);
@@ -4467,7 +4467,7 @@ void create_map_notice_overlay(lv_obj_t* viewport)
     s_map_notice_label = lv_label_create(s_map_notice_panel);
     lv_label_set_text(s_map_notice_label, "");
     lv_obj_set_width(s_map_notice_label, 154);
-    lv_obj_set_style_text_font(s_map_notice_label, &lv_font_montserrat_10, 0);
+    lv_obj_set_style_text_font(s_map_notice_label, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(s_map_notice_label, lv_color_hex(0xFFF3DF), 0);
     lv_label_set_long_mode(s_map_notice_label, LV_LABEL_LONG_DOT);
     lv_obj_center(s_map_notice_label);
