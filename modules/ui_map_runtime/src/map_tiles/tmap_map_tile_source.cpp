@@ -137,6 +137,14 @@ bool emitAnnotation(void* opaque, const tmap::Annotation& annotation, const tmap
 
 struct TmapMapTileSource::State
 {
+    struct LocatedTile
+    {
+        uint64_t key = 0;
+        tmap::Tile tile{};
+        uint32_t semantic = 0;
+        uint16_t package = 0;
+        bool valid = false, missing = false;
+    };
     tmap::Workspace workspace{};
     tmap::Reader reader{workspace};
     Entry* entries[kMaxPackages]{};
@@ -147,6 +155,11 @@ struct TmapMapTileSource::State
     uint32_t session = 0;
     size_t count = 0, bytes = sizeof(State);
     bool complete = false, failed = false;
+    // All zoom-mask bits, 256 packages: 1024 bytes, entirely in PSRAM.
+    uint32_t zoom_candidates[32][kMaxPackages / 32]{};
+    // A bounded offset plan shared by lookup/read and OSM/POI requests.
+    LocatedTile located[16]{};
+    size_t next_location = 0;
 };
 TmapMapTileSource::~TmapMapTileSource() { reset(); }
 void TmapMapTileSource::reset()
@@ -167,6 +180,7 @@ void TmapMapTileSource::reset()
 }
 size_t TmapMapTileSource::allocatedBytes() const { return state_ ? state_->bytes : 0; }
 size_t TmapMapTileSource::packageCount() const { return state_ ? state_->count : 0; }
+tmap::Status TmapMapTileSource::prepare() const { return catalog(); }
 tmap::Status TmapMapTileSource::catalog() const
 {
     if (state_ && state_->session != storage_.session()) const_cast<TmapMapTileSource*>(this)->reset();
@@ -189,6 +203,10 @@ tmap::Status TmapMapTileSource::catalog() const
             {
                 s.complete = true;
                 std::sort(s.entries, s.entries + s.count, before);
+                for (size_t i = 0; i < s.count; ++i)
+                    for (unsigned z = 0; z < 32; ++z)
+                        if (s.entries[i]->package.zoom_mask & (UINT32_C(1) << z))
+                            s.zoom_candidates[z][i / 32] |= UINT32_C(1) << (i % 32);
                 return tmap::Status::Ok;
             }
             if (status != tmap::Status::Ok) return status;
@@ -226,6 +244,21 @@ tmap::Status TmapMapTileSource::catalog() const
     }
     return tmap::Status::More;
 }
+tmap::Status TmapMapTileSource::activate(size_t index) const
+{
+    auto& s = *state_;
+    auto* entry = s.entries[index];
+    if (s.active == entry) return tmap::Status::Ok;
+    s.reader.close();
+    s.active = nullptr;
+    auto status = storage_.openPackage(entry->path);
+    if (status == tmap::Status::Ok) status = s.reader.open(storage_);
+    if (status != tmap::Status::Ok) return status;
+    // Do not reuse offsets when a file was replaced without a media refresh.
+    if (s.reader.package().build != entry->package.build) return tmap::Status::Invalid;
+    s.active = entry;
+    return tmap::Status::Ok;
+}
 tmap::Status TmapMapTileSource::select(const MapTileRef& ref, tmap::Tile& tile) const
 {
     uint64_t key = 0;
@@ -233,25 +266,41 @@ tmap::Status TmapMapTileSource::select(const MapTileRef& ref, tmap::Tile& tile) 
     auto status = catalog();
     if (status != tmap::Status::Ok) return status;
     auto& s = *state_;
-    const auto bounds = tileBounds(ref);
-    for (size_t i = 0; i < s.count; ++i)
+    const auto layer = ref.layer == MapTileLayer::Poi ? 1U : semantic(ref.layer);
+    for (const auto& located : s.located)
     {
-        auto* entry = s.entries[i];
-        if (!(entry->package.zoom_mask & (UINT32_C(1) << ref.z)) || !entry->package.bounds.intersects(bounds)) continue;
-        if (s.active != entry)
-        {
-            s.reader.close();
-            s.active = nullptr;
-            status = storage_.openPackage(entry->path);
-            if (status == tmap::Status::Ok) status = s.reader.open(storage_);
-            if (status != tmap::Status::Ok) return status;
-            // A package replaced within the same media session must not use old metadata.
-            if (s.reader.package().build != entry->package.build) return tmap::Status::Invalid;
-            s.active = entry;
-        }
-        status = s.reader.lookupTile(ref.layer == MapTileLayer::Poi ? 1 : semantic(ref.layer), ref.z, ref.x, ref.y, tile);
-        if (status != tmap::Status::Missing) return status;
+        if (!located.valid || located.key != key || located.semantic != layer) continue;
+        if (located.missing) return tmap::Status::Missing;
+        status = activate(located.package);
+        if (status != tmap::Status::Ok) return status;
+        tile = located.tile;
+        return tmap::Status::Ok;
     }
+    const auto bounds = tileBounds(ref);
+    for (size_t word = 0; word < kMaxPackages / 32; ++word)
+    {
+        auto candidates = s.zoom_candidates[ref.z][word];
+        while (candidates)
+        {
+            unsigned bit = 0;
+            while (!(candidates & (UINT32_C(1) << bit))) ++bit;
+            candidates &= ~(UINT32_C(1) << bit);
+            const size_t i = word * 32 + bit;
+            if (!s.entries[i]->package.bounds.intersects(bounds)) continue;
+            status = activate(i);
+            if (status != tmap::Status::Ok) return status;
+            status = s.reader.lookupTile(layer, ref.z, ref.x, ref.y, tile);
+            if (status == tmap::Status::Ok)
+            {
+                auto& located = s.located[s.next_location++ % 16];
+                located = {key, tile, layer, static_cast<uint16_t>(i), true, false};
+                return status;
+            }
+            if (status != tmap::Status::Missing) return status;
+        }
+    }
+    auto& located = s.located[s.next_location++ % 16];
+    located = {key, {}, layer, 0, true, true};
     return tmap::Status::Missing;
 }
 MapTileLookupResult TmapMapTileSource::lookup(const MapTileRef& ref) const
@@ -294,7 +343,9 @@ MapTileReadResult TmapMapTileSource::annotations(const MapTileRef& ref, uint8_t*
 {
     if (capacity < sizeof(ui::map_poi::TileHeader) || reinterpret_cast<uintptr_t>(output) % alignof(ui::map_poi::TileHeader)) return result(tmap::Status::Invalid);
     auto* header = new (output) ui::map_poi::TileHeader{};
-    header->policy.enabled_levels = state_->active->package.zoom_mask;
+    // Coverage belongs to the package catalog, not to the UI's session policy.
+    // A world-package response must not disable later country/province requests.
+    header->policy.enabled_levels = UINT32_MAX;
     header->manifest_valid = true;
     AnnotationOutput context{header, output, std::min(ui::map_poi::TileHeader::kMaxRecords, (capacity - sizeof(*header)) / sizeof(ui::map_poi::Record)), ref};
     auto status = state_->reader.visitAnnotations(ref.z, ref.x, ref.y, emitAnnotation, &context);

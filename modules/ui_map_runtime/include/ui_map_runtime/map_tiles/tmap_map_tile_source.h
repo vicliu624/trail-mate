@@ -34,6 +34,9 @@ class TmapMapTileSource final : public IMapTileSource
     void reset();
     size_t allocatedBytes() const;
     size_t packageCount() const;
+    // Finish catalog initialization before selecting the session's source mode.
+    // Busy/More never authorize a switch to legacy storage.
+    tmap::Status prepare() const;
 
   private:
     struct State;
@@ -41,6 +44,7 @@ class TmapMapTileSource final : public IMapTileSource
     mutable State* state_ = nullptr;
     tmap::Status catalog() const;
     tmap::Status select(const MapTileRef& ref, tmap::Tile& tile) const;
+    tmap::Status activate(size_t index) const;
     MapTileReadResult annotations(const MapTileRef& ref, uint8_t* output, size_t capacity) const;
 };
 } // namespace ui::map_tiles

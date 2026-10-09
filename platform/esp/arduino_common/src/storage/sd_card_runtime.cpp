@@ -1552,7 +1552,10 @@ int SdRuntimeFile::read(void* buffer, std::size_t bytes_to_read)
             const int current = impl_->sdfat_file.read(out + total_read, slice);
             if (current <= 0)
             {
-                read_busy_ = total_read == 0 && (guard.busStatus() == sys::runtime::BusAcquireStatus::Busy || guard.busStatus() == sys::runtime::BusAcquireStatus::TimedOut);
+                // A later slice can lose the shared bus after earlier slices
+                // succeeded. Preserve Busy even when returning partial data so
+                // random-access readers can retry instead of reporting I/O loss.
+                read_busy_ = guard.busStatus() == sys::runtime::BusAcquireStatus::Busy || guard.busStatus() == sys::runtime::BusAcquireStatus::TimedOut;
                 const int result =
                     total_read > 0 ? static_cast<int>(total_read) : current;
                 sd_io_end("file_read",
@@ -1568,6 +1571,7 @@ int SdRuntimeFile::read(void* buffer, std::size_t bytes_to_read)
             total_read += static_cast<std::size_t>(current);
             if (static_cast<std::size_t>(current) < slice)
             {
+                read_busy_ = guard.busStatus() == sys::runtime::BusAcquireStatus::Busy || guard.busStatus() == sys::runtime::BusAcquireStatus::TimedOut;
                 break;
             }
         }

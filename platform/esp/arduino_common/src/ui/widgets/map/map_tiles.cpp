@@ -745,8 +745,14 @@ class EspMapTileWorkerBackend final : public ui::map_tiles::IMapTileWorkerBacken
         const ui::map_tiles::MapTileRef& ref) override
     {
         if (media_session_ != ::platform::esp::arduino_common::storage::sd_media_session()) resetMetadata();
-        const auto packaged = tmap_source_.lookup(ref);
-        if (packaged.status != ui::map_tiles::MapTileStatus::Missing) return packaged;
+        const auto prepared = prepareSource();
+        if (prepared != tmap::Status::Ok)
+        {
+            ui::map_tiles::MapTileLookupResult pending{};
+            pending.status = ui::map_tiles::MapTileStatus::Error;
+            return pending;
+        }
+        if (source_mode_ == SourceMode::Tmap) return tmap_source_.lookup(ref);
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
         if (ref.layer == ui::map_tiles::MapTileLayer::Poi) return poi_source_.lookup(ref);
 #endif
@@ -758,11 +764,41 @@ class EspMapTileWorkerBackend final : public ui::map_tiles::IMapTileWorkerBacken
         uint8_t* buffer,
         std::size_t capacity) override
     {
-        // Always try packages before the legacy missing cache. A new media
-        // session invalidates the package catalog inside this source.
+        // Select a storage format once per runtime/media session. Missing
+        // coverage inside TMAP mode never probes legacy files.
         if (media_session_ != ::platform::esp::arduino_common::storage::sd_media_session()) resetMetadata();
-        auto packaged = tmap_source_.read(ref, buffer, capacity);
-        if (packaged.status != ui::map_tiles::MapTileReadStatus::Missing) return packaged;
+        const auto prepared = prepareSource();
+        if (prepared != tmap::Status::Ok)
+        {
+            ui::map_tiles::MapTileReadResult pending{};
+            pending.status = prepared == tmap::Status::Busy || prepared == tmap::Status::More ? ui::map_tiles::MapTileReadStatus::RetryLater : prepared == tmap::Status::Invalid ? ui::map_tiles::MapTileReadStatus::Invalid
+                                                                                                                                                                                 : ui::map_tiles::MapTileReadStatus::Error;
+            pending.error = pending.status == ui::map_tiles::MapTileReadStatus::RetryLater ? -11 : pending.status == ui::map_tiles::MapTileReadStatus::Invalid ? -22
+                                                                                                                                                               : -5;
+            return pending;
+        }
+        if (source_mode_ == SourceMode::Tmap)
+        {
+            auto packaged = tmap_source_.read(ref, buffer, capacity);
+            // Separate annotation diagnostics from raster traffic, with at most
+            // one message per five seconds for each group. No payload copies.
+            static uint32_t source_log_ms[2]{};
+            const unsigned group = ref.layer == ui::map_tiles::MapTileLayer::Poi ? 1U : 0U;
+            const uint32_t now = sys::millis_now();
+            if (source_log_ms[group] == 0 || now - source_log_ms[group] >= 5000U)
+            {
+                source_log_ms[group] = now;
+                const char* status = packaged.status == ui::map_tiles::MapTileReadStatus::Ready ? "ready" : packaged.status == ui::map_tiles::MapTileReadStatus::Missing  ? "missing"
+                                                                                                        : packaged.status == ui::map_tiles::MapTileReadStatus::RetryLater ? "busy"
+                                                                                                        : packaged.status == ui::map_tiles::MapTileReadStatus::Invalid    ? "invalid"
+                                                                                                                                                                          : "error";
+                std::printf("[GPS][MAP][source] mode=tmap layer=%s z=%u x=%lu y=%lu status=%s err=%ld bytes=%lu fallback_legacy=0\n",
+                            map_tile_layer_name(ref.layer), static_cast<unsigned>(ref.z),
+                            static_cast<unsigned long>(ref.x), static_cast<unsigned long>(ref.y), status,
+                            static_cast<long>(packaged.error), static_cast<unsigned long>(packaged.size));
+            }
+            return packaged;
+        }
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
         if (ref.layer == ui::map_tiles::MapTileLayer::Poi) return poi_source_.read(ref, buffer, capacity);
 #endif
@@ -804,6 +840,7 @@ class EspMapTileWorkerBackend final : public ui::map_tiles::IMapTileWorkerBacken
 
     void resetMetadata()
     {
+        source_mode_ = SourceMode::Undecided;
         tmap_source_.reset();
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
         poi_source_.reset();
@@ -812,6 +849,25 @@ class EspMapTileWorkerBackend final : public ui::map_tiles::IMapTileWorkerBacken
     }
 
   private:
+    enum class SourceMode : uint8_t
+    {
+        Undecided,
+        Tmap,
+        Legacy
+    };
+    tmap::Status prepareSource()
+    {
+        if (source_mode_ != SourceMode::Undecided) return tmap::Status::Ok;
+        const auto status = tmap_source_.prepare();
+        if (status != tmap::Status::Ok) return status;
+        source_mode_ = tmap_source_.packageCount() ? SourceMode::Tmap : SourceMode::Legacy;
+        std::printf("[GPS][MAP][source-mode] mode=%s packages=%lu session=%lu\n",
+                    source_mode_ == SourceMode::Tmap ? "tmap" : "legacy",
+                    static_cast<unsigned long>(tmap_source_.packageCount()),
+                    static_cast<unsigned long>(media_session_));
+        return tmap::Status::Ok;
+    }
+    SourceMode source_mode_ = SourceMode::Undecided;
     ui::map_tiles::IMapTileSource& source_;
     platform::esp::map_tiles::SdTmapStorage tmap_storage_;
     ui::map_tiles::TmapMapTileSource tmap_source_{tmap_storage_};
@@ -2550,10 +2606,14 @@ static bool apply_poi_tile_event(TileContext& ctx, ui::map_tiles::MapTileAsyncEv
         event.payload.format != ui::map_tiles::MapTileFormat::PoiRecords ||
         !ui::map_poi::validPayload(event.payload.data, event.payload.size))
     {
-        if (event.error == -12)
+        if (event.error == -12 || event.error == -5)
         {
             tile->poi_checked = false;
-            tile->poi_retry_not_before_ms = sys::millis_now() + kMapTileLayerTransientBackoffMs;
+            // A transient SD I/O failure must not permanently suppress labels
+            // while the raster layer continues recovering. Slow retries for
+            // persistent I/O errors; Missing/Invalid remain checked.
+            tile->poi_retry_not_before_ms = sys::millis_now() +
+                                            (event.error == -5 ? 5000U : kMapTileLayerTransientBackoffMs);
         }
         log_map_tile_event_failure("poi_payload", event, event.error);
         release_tile_payload(event);
