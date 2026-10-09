@@ -29,6 +29,6 @@ int main()
     assert(profile.max_columns == 4);
     assert(profile.card_width == 104);
     assert(profile.card_height == 112);
-    assert(profile.grid_top_offset == 52);
+    assert(profile.grid_top_offset == 34);
     return 0;
 }
