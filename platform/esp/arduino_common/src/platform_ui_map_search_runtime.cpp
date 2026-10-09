@@ -136,11 +136,35 @@ void publish(State& state, uint32_t generation, Status status)
 void worker(void* context)
 {
     auto& state = *static_cast<State*>(context);
+    using ReadCache = esp::map_tiles::SdTmapStorage::ReadCache;
+    void* memory = state.storage.allocate(sizeof(ReadCache), alignof(ReadCache));
+    if (!memory)
+    {
+        xSemaphoreTake(s_mutex, portMAX_DELAY);
+        state.snapshot.status = Status::Error;
+        state.snapshot.incomplete = true;
+        ++state.snapshot.revision;
+        state.running = false;
+        xSemaphoreGive(s_mutex);
+        vTaskDelete(nullptr);
+        return;
+    }
+    auto* cache = new (memory) ReadCache{};
+    state.storage.setReadCache(cache);
+    // Called while holding the state mutex, before another query can start
+    // a replacement worker using this same storage object.
+    auto release_cache = [&]()
+    {
+        state.storage.setReadCache(nullptr);
+        cache->~ReadCache();
+        state.storage.release(cache);
+    };
     for (;;)
     {
         xSemaphoreTake(s_mutex, portMAX_DELAY);
         if (state.cancelled)
         {
+            release_cache();
             state.running = false;
             xSemaphoreGive(s_mutex);
             break;
@@ -157,12 +181,13 @@ void worker(void* context)
         state.reader.close();
         state.storage.closePackage();
         state.storage.resetEnumeration();
+        cache->hits = cache->sd_bytes = 0;
         const uint32_t media = state.storage.session();
         uint32_t busy_since = 0, last_publish = 0;
         const uint32_t started = state.storage.nowMs();
         uint32_t last_diagnostic = started, busy_retries = 0;
-        std::printf("[TMAP][SEARCH] begin generation=%lu media=%lu query=%s\n",
-                    static_cast<unsigned long>(generation), static_cast<unsigned long>(media), state.query);
+        std::printf("[TMAP][SEARCH] begin generation=%lu media=%lu query=%s cache_psram_bytes=%u\n",
+                    static_cast<unsigned long>(generation), static_cast<unsigned long>(media), state.query, static_cast<unsigned>(sizeof(ReadCache)));
         uint16_t files = 0;
         bool active = false, finished = false;
         Status status = Status::Searching;
@@ -221,10 +246,11 @@ void worker(void* context)
                 step = state.reader.searchStep(state.cursor, 4, accept, &state);
                 if (step == tmap::Status::Ok)
                 {
-                    std::printf("[TMAP][SEARCH] package_done generation=%lu path=%s candidates=%llu/%llu retained=%u reads=%llu\n",
+                    std::printf("[TMAP][SEARCH] package_done generation=%lu path=%s candidates=%llu/%llu retained=%u reads=%llu cache_hits=%llu sd_bytes=%llu\n",
                                 static_cast<unsigned long>(generation), state.path,
                                 static_cast<unsigned long long>(state.cursor.position), static_cast<unsigned long long>(state.cursor.posting.count),
-                                state.count, static_cast<unsigned long long>(state.reader.pageReads()));
+                                state.count, static_cast<unsigned long long>(state.reader.pageReads()),
+                                static_cast<unsigned long long>(cache->hits), static_cast<unsigned long long>(cache->sd_bytes));
                     active = false;
                     state.path[0] = 0;
                     state.reader.close();
@@ -268,13 +294,14 @@ void worker(void* context)
             }
             if (now - last_diagnostic >= 1000)
             {
-                std::printf("[TMAP][SEARCH] progress generation=%lu phase=%s path=%s step=%u elapsed_ms=%lu initialized=%u query_offset=%u candidates=%llu/%llu retained=%u reads=%llu busy=%lu stack_min_bytes=%u\n",
+                std::printf("[TMAP][SEARCH] progress generation=%lu phase=%s path=%s step=%u elapsed_ms=%lu initialized=%u query_offset=%u candidates=%llu/%llu retained=%u reads=%llu busy=%lu cache_hits=%llu sd_bytes=%llu stack_min_bytes=%u\n",
                             static_cast<unsigned long>(generation), active ? "query" : state.path[0] ? "open"
                                                                                                      : "enumerate",
                             state.path, static_cast<unsigned>(step), static_cast<unsigned long>(now - started),
                             state.cursor.initialized, state.cursor.query_offset,
                             static_cast<unsigned long long>(state.cursor.position), static_cast<unsigned long long>(state.cursor.posting.count),
                             state.count, static_cast<unsigned long long>(state.reader.pageReads()), static_cast<unsigned long>(busy_retries),
+                            static_cast<unsigned long long>(cache->hits), static_cast<unsigned long long>(cache->sd_bytes),
                             static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
                 last_diagnostic = now;
             }
@@ -290,6 +317,7 @@ void worker(void* context)
         xSemaphoreTake(s_mutex, portMAX_DELAY);
         if (generation == state.generation.load() || state.cancelled)
         {
+            release_cache();
             state.running = false;
             xSemaphoreGive(s_mutex);
             break;

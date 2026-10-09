@@ -18,6 +18,21 @@ class SdTmapStorage final : public ui::map_tiles::TmapStorage
     using DirStatus = arduino_common::storage::SdDirReadStatus;
 
   public:
+    // Optional caller-owned search cache. Allocate in PSRAM, never on stack.
+    struct ReadCache
+    {
+        struct Page
+        {
+            uint8_t data[4096]{};
+            uint64_t offset = 0;
+            uint32_t age = 0;
+            bool valid = false;
+        };
+        Page pages[16]{};
+        uint32_t age = 0;
+        uint64_t hits = 0, sd_bytes = 0;
+    };
+    void setReadCache(ReadCache* cache) { read_cache_ = cache; }
     ~SdTmapStorage() override { closePackage(); }
     void* allocate(size_t bytes, size_t alignment) override
     {
@@ -83,6 +98,7 @@ class SdTmapStorage final : public ui::map_tiles::TmapStorage
         size_ = 0;
         position_valid_ = false;
         raw_output_ = nullptr;
+        clearReadCache();
         if (blocks_)
             for (auto& block : blocks_->pages) block.bytes = 0;
         file_session_ = session();
@@ -99,6 +115,7 @@ class SdTmapStorage final : public ui::map_tiles::TmapStorage
         current_path_[0] = 0;
         position_valid_ = false;
         raw_output_ = nullptr;
+        clearReadCache();
         if (blocks_)
         {
             blocks_->~Blocks();
@@ -123,6 +140,15 @@ class SdTmapStorage final : public ui::map_tiles::TmapStorage
             raw_output_ = nullptr;
             return tmap::Status::Invalid;
         }
+        if (read_cache_ && bytes == 4096 && offset % 4096 == 0)
+            for (auto& page : read_cache_->pages)
+                if (page.valid && page.offset == offset)
+                {
+                    page.age = ++read_cache_->age;
+                    ++read_cache_->hits;
+                    std::memcpy(output, page.data, bytes);
+                    return tmap::Status::Ok;
+                }
         if (bytes > 4096)
         {
             // The worker retains this command and borrowed PSRAM scratch on
@@ -194,6 +220,7 @@ class SdTmapStorage final : public ui::map_tiles::TmapStorage
                 if (!seekIfNeeded(at)) return file_.read_busy() ? tmap::Status::Busy : tmap::Status::IoError;
                 const auto requested = std::min<size_t>(512, bytes - selected->completed);
                 const int n = file_.read(selected->data + selected->completed, requested);
+                if (read_cache_ && n > 0) read_cache_->sd_bytes += static_cast<size_t>(n);
                 if (n > 0 && static_cast<size_t>(n) <= requested) selected->completed += static_cast<size_t>(n);
                 position_valid_ = n > 0 && !file_.read_busy();
                 position_ = at + (n > 0 ? static_cast<size_t>(n) : 0);
@@ -201,11 +228,27 @@ class SdTmapStorage final : public ui::map_tiles::TmapStorage
                 if (n <= 0 || static_cast<size_t>(n) > requested) return tmap::Status::IoError;
             }
             std::memcpy(output, selected->data, bytes);
+            if (read_cache_ && bytes == 4096 && offset % 4096 == 0 && file_session_ == session())
+            {
+                auto* target = &read_cache_->pages[0];
+                for (auto& page : read_cache_->pages)
+                    if (!page.valid || (target->valid && page.age < target->age)) target = &page;
+                std::memcpy(target->data, output, bytes);
+                target->offset = offset;
+                target->age = ++read_cache_->age;
+                target->valid = true;
+            }
         }
         return file_session_ == session() ? tmap::Status::Ok : tmap::Status::Busy;
     }
 
   private:
+    void clearReadCache()
+    {
+        if (read_cache_)
+            for (auto& page : read_cache_->pages) page.valid = false;
+    }
+    ReadCache* read_cache_ = nullptr;
     struct Block
     {
         uint8_t data[4096]{};
