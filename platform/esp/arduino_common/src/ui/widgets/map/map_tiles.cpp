@@ -738,12 +738,15 @@ using MapTileEventQueue = platform::esp::arduino_common::map_tiles::MapTileEvent
 class EspMapTileWorkerBackend final : public ui::map_tiles::IMapTileWorkerBackend
 {
   public:
-    void beginRequest(uint32_t generation)
+    void beginRequest(uint32_t generation, uint32_t command_id)
     {
-        if (request_generation_ == generation) return;
-        request_generation_ = generation;
-        tmap_source_.cancelPendingAnnotations();
+        if (request_generation_ == generation && request_command_id_ == command_id) return;
+        // Scratch ownership changes with every command, even within one zoom.
+        // Only repeated execution of this exact command may resume pixel bytes.
         tmap_storage_.cancelTransfers();
+        if (request_generation_ != generation) tmap_source_.cancelPendingAnnotations();
+        request_generation_ = generation;
+        request_command_id_ = command_id;
     }
     explicit EspMapTileWorkerBackend(ui::map_tiles::IMapTileSource& source)
         : source_(source)
@@ -887,6 +890,7 @@ class EspMapTileWorkerBackend final : public ui::map_tiles::IMapTileWorkerBacken
     ui::map_tiles::TmapMapTileSource tmap_source_{tmap_storage_};
     uint32_t media_session_ = 0;
     uint32_t request_generation_ = 0;
+    uint32_t request_command_id_ = 0;
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
     SdMapTileFileSystem poi_files_;
     platform::esp::arduino_common::map_poi::CJsonPoiParser poi_parser_;
@@ -1270,7 +1274,7 @@ class MapTileAsyncHost final
             {
                 if (worker_ != nullptr)
                 {
-                    backend_.beginRequest(command.runtime.generation);
+                    backend_.beginRequest(command.runtime.generation, command.runtime.command_id);
                     const auto result = worker_->execute(command, sys::millis_now());
                     const auto stack_free = static_cast<uint32_t>(uxTaskGetStackHighWaterMark(nullptr) * sizeof(StackType_t));
                     const auto old_low = g_map_worker_stack_low_bytes.load(std::memory_order_relaxed);

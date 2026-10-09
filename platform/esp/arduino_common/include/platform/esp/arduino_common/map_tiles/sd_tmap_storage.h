@@ -110,8 +110,13 @@ class SdTmapStorage final : public ui::map_tiles::TmapStorage
     void cancelTransfers() { raw_output_ = nullptr; }
     tmap::Status readAt(uint64_t offset, uint8_t* output, size_t bytes) override
     {
-        if (file_session_ != session() || arduino_common::storage::sd_external_block_owner_active()) return tmap::Status::Busy;
-        if (!file_.is_open() || offset > size_ || bytes > size_ - offset) return tmap::Status::Invalid;
+        if (file_session_ != session() || arduino_common::storage::sd_external_block_owner_active())
+            return raw_output_ == output && raw_offset_ == offset && raw_bytes_ == bytes ? tmap::Status::More : tmap::Status::Busy;
+        if (!file_.is_open() || offset > size_ || bytes > size_ - offset)
+        {
+            raw_output_ = nullptr;
+            return tmap::Status::Invalid;
+        }
         if (bytes > 4096)
         {
             // The worker retains this command and borrowed PSRAM scratch on
@@ -127,7 +132,12 @@ class SdTmapStorage final : public ui::map_tiles::TmapStorage
             for (unsigned batch = 0; batch < 4 && raw_completed_ < bytes; ++batch)
             {
                 const auto at = offset + raw_completed_;
-                if (!seekIfNeeded(at)) return file_.read_busy() ? tmap::Status::More : tmap::Status::IoError;
+                if (!seekIfNeeded(at))
+                {
+                    if (file_.read_busy()) return tmap::Status::More;
+                    raw_output_ = nullptr;
+                    return tmap::Status::IoError;
+                }
                 const auto requested = std::min<size_t>(4096, bytes - raw_completed_);
                 const int n = file_.read(output + raw_completed_, requested);
                 if (n > 0 && static_cast<size_t>(n) <= requested) raw_completed_ += static_cast<size_t>(n);
