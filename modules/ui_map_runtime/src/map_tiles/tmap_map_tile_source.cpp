@@ -451,11 +451,13 @@ MapTileReadResult TmapMapTileSource::annotations(const MapTileRef& ref, uint8_t*
     }
     if (status == tmap::Status::Busy || status == tmap::Status::More)
     {
-        // Publish the first complete record immediately, then coalesce updates
-        // to four new records or one second. The cursor/accumulator stay owned.
+        // Preserve the first preview, then coalesce another half tile or a
+        // one-second progress update. Every snapshot includes the prefix, so
+        // publishing tiny deltas repeatedly copies and relayouts old records.
         const auto now = storage_.nowMs();
+        const auto increment = std::max<uint32_t>(16, (selected->cursor.expected + 1) / 2);
         if (header->count > selected->published_count &&
-            (!selected->published_count || header->count - selected->published_count >= 4 || now - selected->published_ms >= 1000U))
+            (!selected->published_count || header->count - selected->published_count >= increment || now - selected->published_ms >= 1000U))
         {
             header->partial = true;
             auto snapshot = result(tmap::Status::Ok);

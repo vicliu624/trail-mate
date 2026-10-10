@@ -6,7 +6,8 @@
 
 namespace ui::map_tiles
 {
-// Only owned native events carry these buffers. Worker scratch never does.
+// Native readers, owned events and LVGL descriptors share these buffers.
+// Generic PNG/POI worker scratch never carries a native ownership header.
 // One allocation is shared by the event and LVGL descriptor; no pixel copy at
 // descriptor creation. The budget counts queued AND displayed allocations.
 class alignas(16) NativePixelBuffer

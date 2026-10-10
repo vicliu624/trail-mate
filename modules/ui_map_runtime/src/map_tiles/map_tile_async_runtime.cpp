@@ -211,7 +211,10 @@ MapTileExecutionStatus MapTileWorker::execute(const LoadTileCommand& command, ui
     {
         event.payload.ref = command.tile;
         event.payload.format = read_result.format;
-        event.payload.data = scratch_;
+        const auto* native = backend_.nativePayload();
+        event.native_payload_lease = native != nullptr &&
+                                     (read_result.format == MapTileFormat::Rgb565 || read_result.format == MapTileFormat::Rgba8888);
+        event.payload.data = event.native_payload_lease ? native : scratch_;
         event.payload.size = read_result.size;
     }
     event.error = ok ? 0 : read_result.error;

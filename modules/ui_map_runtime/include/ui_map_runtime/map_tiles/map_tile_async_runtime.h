@@ -81,6 +81,9 @@ class MapTileEvent
     uint32_t generation = 0;
     MapTileRef tile{};
     MapTileFormat format = MapTileFormat::Unknown;
+    // Borrowed managed native pixels; adapter must retain before publishing.
+    // Located in the format/payload alignment gap on ESP.
+    bool native_payload_lease = false;
     MapTilePayload payload{};
     std::size_t payload_size = 0;
     int32_t error = 0;
@@ -92,6 +95,10 @@ class MapTileEvent
 };
 
 using MapTileAsyncEvent = MapTileEvent;
+static_assert(offsetof(MapTileEvent, payload) ==
+                  (offsetof(MapTileEvent, format) + sizeof(MapTileFormat) + alignof(MapTilePayload) - 1) /
+                      alignof(MapTilePayload) * alignof(MapTilePayload),
+              "Native ownership marker must fit the existing alignment gap");
 
 struct MapTileDecodeInput
 {
@@ -169,6 +176,9 @@ class IMapTileWorkerBackend
     virtual MapTileReadResult read(const MapTileRef& ref,
                                    uint8_t* buffer,
                                    std::size_t capacity) = 0;
+    // Optional completed native lease, kept alive through synchronous publish.
+    // Other backends keep using the caller's borrowed scratch.
+    virtual const uint8_t* nativePayload() const { return nullptr; }
 };
 
 struct MapTileStateSnapshot
@@ -307,6 +317,12 @@ class MapTileWorker
                   std::size_t scratch_size);
 
     MapTileExecutionStatus execute(const LoadTileCommand& command, uint32_t now_ms);
+    // Only between terminal commands, never during a Yielded transfer.
+    void setScratch(uint8_t* data, std::size_t bytes)
+    {
+        scratch_ = data;
+        scratch_size_ = bytes;
+    }
 
   private:
     IMapTileWorkerBackend& backend_;

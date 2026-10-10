@@ -231,6 +231,10 @@ class SdMapTileFileSystem final : public ui::map_tiles::IMapTileFileSystem
 
 // One reusable PSRAM buffer also covers the largest v1 native RGBA tile.
 constexpr std::size_t kMapTileWorkerScratchBytes = 256U * 1024U;
+constexpr std::size_t kTmapWorkerScratchBytes = 48U * 1024U;
+#if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
+static_assert(sizeof(ui::map_poi::TileHeader) + ui::map_poi::TileHeader::kMaxRecords * sizeof(ui::map_poi::Record) <= kTmapWorkerScratchBytes);
+#endif
 constexpr std::size_t kNativeTilePixelBudgetBytes = 3U * 1024U * 1024U;
 std::atomic<std::size_t> g_native_tile_pixel_bytes{0};
 std::atomic<uint32_t> g_map_worker_stack_low_bytes{UINT32_MAX};
@@ -677,6 +681,13 @@ ui::map_tiles::MapTileAsyncEvent copy_map_tile_event(const ui::map_tiles::MapTil
         event.payload.data != nullptr &&
         event.payload.size > 0)
     {
+        if (native_tile_format(event.payload.format) && event.native_payload_lease)
+        {
+            ui::map_tiles::NativePixelBuffer::retain(event.payload.data);
+            owned.published_ms = sys::millis_now();
+            owned.timing_available = true;
+            return owned;
+        }
         uint8_t* payload = nullptr;
         int allocation_error = -12;
         if (native_tile_format(event.payload.format))
@@ -743,7 +754,7 @@ class EspMapTileWorkerBackend final : public ui::map_tiles::IMapTileWorkerBacken
         if (request_generation_ == generation && request_command_id_ == command_id) return;
         // Scratch ownership changes with every command, even within one zoom.
         // Only repeated execution of this exact command may resume pixel bytes.
-        tmap_storage_.cancelTransfers();
+        finishRequest();
         if (request_generation_ != generation) tmap_source_.cancelPendingAnnotations();
         request_generation_ = generation;
         request_command_id_ = command_id;
@@ -751,6 +762,16 @@ class EspMapTileWorkerBackend final : public ui::map_tiles::IMapTileWorkerBacken
     explicit EspMapTileWorkerBackend(ui::map_tiles::IMapTileSource& source)
         : source_(source)
     {
+    }
+    ~EspMapTileWorkerBackend() override { finishRequest(); }
+    const uint8_t* nativePayload() const override { return native_pixels_; }
+    bool tmapActive() const { return source_mode_ == SourceMode::Tmap; }
+    void finishRequest()
+    {
+        tmap_storage_.cancelTransfers();
+        if (native_pixels_) ui::map_tiles::NativePixelBuffer::release(native_pixels_);
+        native_pixels_ = nullptr;
+        native_bytes_ = 0;
     }
 
     ui::map_tiles::MapTileLookupResult lookup(
@@ -792,7 +813,36 @@ class EspMapTileWorkerBackend final : public ui::map_tiles::IMapTileWorkerBacken
         if (source_mode_ == SourceMode::Tmap)
         {
             const auto read_start = sys::millis_now();
-            auto packaged = tmap_source_.read(ref, buffer, capacity);
+            if (ref.layer != ui::map_tiles::MapTileLayer::Poi && !native_pixels_)
+            {
+                const auto info = tmap_source_.lookup(ref);
+                if (info.status == ui::map_tiles::MapTileStatus::Available && native_tile_format(info.format))
+                {
+                    native_pixels_ = ui::map_tiles::NativePixelBuffer::create(
+                        info.size, g_native_tile_pixel_bytes, kNativeTilePixelBudgetBytes,
+                        [](size_t alignment, size_t bytes) -> void*
+                        { return heap_caps_aligned_alloc(alignment, bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT); },
+                        heap_caps_free);
+                    if (!native_pixels_)
+                    {
+                        ui::map_tiles::MapTileReadResult pending{};
+                        pending.status = ui::map_tiles::MapTileReadStatus::RetryLater;
+                        pending.format = info.format;
+                        pending.error = -12;
+                        return pending;
+                    }
+                    native_bytes_ = info.size;
+                }
+            }
+            if (!native_pixels_ && (!buffer || !capacity))
+            {
+                ui::map_tiles::MapTileReadResult pending{};
+                pending.status = ui::map_tiles::MapTileReadStatus::RetryLater;
+                pending.error = -12;
+                return pending;
+            }
+            auto packaged = tmap_source_.read(ref, native_pixels_ ? native_pixels_ : buffer,
+                                              native_pixels_ ? native_bytes_ : capacity);
             packaged.timing.available = true;
             packaged.timing.read_ms = sys::millis_now() - read_start;
             // Separate annotation diagnostics from raster traffic, with at most
@@ -815,6 +865,14 @@ class EspMapTileWorkerBackend final : public ui::map_tiles::IMapTileWorkerBacken
                             static_cast<long>(packaged.error), static_cast<unsigned long>(packaged.size));
             }
             return packaged;
+        }
+        if (!buffer || !capacity)
+        {
+            ui::map_tiles::MapTileReadResult pending{};
+            pending.status = ui::map_tiles::MapTileReadStatus::RetryLater;
+            pending.format = ui::map_tiles::mapTileFormatForLayer(ref.layer);
+            pending.error = -12;
+            return pending;
         }
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
         if (ref.layer == ui::map_tiles::MapTileLayer::Poi) return poi_source_.read(ref, buffer, capacity);
@@ -857,6 +915,7 @@ class EspMapTileWorkerBackend final : public ui::map_tiles::IMapTileWorkerBacken
 
     void resetMetadata()
     {
+        finishRequest();
         source_mode_ = SourceMode::Undecided;
         tmap_source_.reset();
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
@@ -891,6 +950,8 @@ class EspMapTileWorkerBackend final : public ui::map_tiles::IMapTileWorkerBacken
     uint32_t media_session_ = 0;
     uint32_t request_generation_ = 0;
     uint32_t request_command_id_ = 0;
+    uint8_t* native_pixels_ = nullptr;
+    size_t native_bytes_ = 0;
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
     SdMapTileFileSystem poi_files_;
     platform::esp::arduino_common::map_poi::CJsonPoiParser poi_parser_;
@@ -1276,6 +1337,11 @@ class MapTileAsyncHost final
             {
                 if (worker_ != nullptr)
                 {
+                    if (!scratch_)
+                    {
+                        scratch_ = static_cast<uint8_t*>(heap_caps_aligned_alloc(8, scratch_bytes_, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+                        worker_->setScratch(scratch_, scratch_ ? scratch_bytes_ : 0);
+                    }
                     backend_.beginRequest(command.runtime.generation, command.runtime.command_id);
                     const auto result = worker_->execute(command, sys::millis_now());
                     const auto stack_free = static_cast<uint32_t>(uxTaskGetStackHighWaterMark(nullptr) * sizeof(StackType_t));
@@ -1302,12 +1368,28 @@ class MapTileAsyncHost final
                         events_.waitForCapacity(pdMS_TO_TICKS(20));
                         continue;
                     }
+                    backend_.finishRequest();
+                    const auto wanted_scratch = backend_.tmapActive() ? kTmapWorkerScratchBytes : kMapTileWorkerScratchBytes;
+                    if (scratch_bytes_ != wanted_scratch)
+                    {
+                        // A terminal event already owns its contents. Release
+                        // before allocating the smaller scratch on next use.
+                        heap_caps_free(scratch_);
+                        scratch_ = nullptr;
+                        scratch_bytes_ = wanted_scratch;
+                        worker_->setScratch(nullptr, 0);
+                        std::printf("[GPS][MAP][worker] scratch_bytes=%u saved_psram_bytes=%u native_direct=%u\n",
+                                    static_cast<unsigned>(scratch_bytes_),
+                                    static_cast<unsigned>(kMapTileWorkerScratchBytes - scratch_bytes_), backend_.tmapActive() ? 1U : 0U);
+                    }
                     MAP_DIAG("[MAPD][worker-end] t=%lu gen=%lu id=%lu status=%u\n",
                              static_cast<unsigned long>(sys::millis_now()), static_cast<unsigned long>(command.runtime.generation),
                              static_cast<unsigned long>(command.runtime.command_id), static_cast<unsigned>(result));
                 }
                 have_command = false;
-                vTaskDelay(kMapTileWorkerPostCommandYieldTicks);
+                size_t queued = 0, in_flight = 0;
+                const bool backlog = commands_.statistics(queued, in_flight) && queued;
+                vTaskDelay(backlog ? 1 : kMapTileWorkerPostCommandYieldTicks);
                 continue;
             }
             bool idle = false;
@@ -1329,6 +1411,7 @@ class MapTileAsyncHost final
                     heap_caps_free(scratch_);
                     scratch_ = nullptr;
                 }
+                scratch_bytes_ = kMapTileWorkerScratchBytes;
                 portENTER_CRITICAL(&lock_);
                 task_ = nullptr;
                 started_ = false;
@@ -1365,10 +1448,10 @@ class MapTileAsyncHost final
             // ESP heap allocation only guarantees the allocator's alignment,
             // which need not satisfy TileHeader's explicit 8-byte alignment.
             scratch_ = static_cast<uint8_t*>(heap_caps_aligned_alloc(alignof(ui::map_poi::TileHeader),
-                                                                     kMapTileWorkerScratchBytes,
+                                                                     scratch_bytes_,
                                                                      MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
 #else
-            scratch_ = allocate_tile_payload(kMapTileWorkerScratchBytes);
+            scratch_ = allocate_tile_payload(scratch_bytes_);
 #endif
             if (scratch_ == nullptr)
             {
@@ -1389,7 +1472,7 @@ class MapTileAsyncHost final
                 ui::map_tiles::MapTileWorker(backend_,
                                              events_,
                                              scratch_,
-                                             kMapTileWorkerScratchBytes);
+                                             scratch_bytes_);
             if (worker_ == nullptr)
             {
                 if (!task_start_failed_logged_)
@@ -1436,6 +1519,7 @@ class MapTileAsyncHost final
     MapTileEventQueue events_{copy_map_tile_event, release_tile_payload};
     EspMapTileWorkerBackend backend_{worker_tile_source()};
     uint8_t* scratch_ = nullptr;
+    size_t scratch_bytes_ = kMapTileWorkerScratchBytes;
     ui::map_tiles::MapTileWorker* worker_ = nullptr;
     ui::map_tiles::MapTileAsyncRuntime async_runtime_{commands_};
     ui::map_tiles::MapTileStateMachine state_machine_{};
@@ -2795,8 +2879,6 @@ static bool apply_map_tile_event(TileContext& ctx, ui::map_tiles::MapTileAsyncEv
             }
         }
         release_tile_payload(event);
-        update_visible_map_data_flag(ctx);
-        rebuild_render_queue(ctx);
         return true;
     }
 
@@ -2823,8 +2905,6 @@ static bool apply_map_tile_event(TileContext& ctx, ui::map_tiles::MapTileAsyncEv
     }
 
     release_tile_payload(event);
-    update_visible_map_data_flag(ctx);
-    rebuild_render_queue(ctx);
     metrics.stages[Metrics::Apply].add(sys::millis_now() - apply_start);
     if (rendered) ++metrics.rendered_count;
     MAP_DIAG("[MAPD][render] t=%lu id=%lu ok=%d obj=%p hidden=%d refs=%u decode_ms=%lu\n",
@@ -2925,8 +3005,18 @@ static void drain_map_tile_events(TileContext& ctx, uint32_t start_ms, uint32_t 
 {
     struct ReportOnExit
     {
-        ~ReportOnExit() { map_tile_async_host().reportMetrics(); }
-    } report;
+        TileContext& ctx;
+        bool changed = false;
+        ~ReportOnExit()
+        {
+            if (changed)
+            {
+                update_visible_map_data_flag(ctx);
+                rebuild_render_queue(ctx);
+            }
+            map_tile_async_host().reportMetrics();
+        }
+    } report{ctx};
     tile_loader_maintenance(ctx);
     // Failure/cancellation bookkeeping must not consume a PNG decode slot or
     // incur image cooldown. Stop between events when the UI budget is spent.
@@ -2935,7 +3025,12 @@ static void drain_map_tile_events(TileContext& ctx, uint32_t start_ms, uint32_t 
            map_tile_async_host().popEventIf(control, [](const auto& event)
                                             { return event.kind != ui::map_tiles::MapTileAsyncEventKind::Ready; }))
     {
-        if (map_tile_async_host().acceptEvent(control, ctx.render_queue)) (void)apply_map_tile_event(ctx, control);
+        if (map_tile_async_host().acceptEvent(control, ctx.render_queue))
+        {
+            const bool base = control.tile.layer <= ui::map_tiles::MapTileLayer::Satellite;
+            const bool applied = apply_map_tile_event(ctx, control);
+            report.changed |= base && applied;
+        }
         else release_tile_payload(control);
     }
     if (static_cast<uint32_t>(sys::millis_now() - start_ms) >= budget_ms) return;
@@ -2954,7 +3049,9 @@ static void drain_map_tile_events(TileContext& ctx, uint32_t start_ms, uint32_t 
         const bool accepted = map_tile_async_host().acceptEvent(event, ctx.render_queue);
         if (accepted)
         {
-            (void)apply_map_tile_event(ctx, event);
+            const bool base = event.tile.layer <= ui::map_tiles::MapTileLayer::Satellite;
+            const bool applied = apply_map_tile_event(ctx, event);
+            report.changed |= base && applied;
         }
         else
         {
@@ -3600,6 +3697,7 @@ void tile_loader_step(TileContext& ctx)
     const int max_tiles_per_step = kMapTileRequestsPerUiStep;
     MapTile* attempted[max_tiles_per_step] = {NULL};
     int attempted_count = 0;
+    bool render_changed = false;
     const bool visible_loading = std::any_of(ctx.tiles->begin(), ctx.tiles->end(), [](const auto& tile)
                                              { return tile.visible && !tile.has_png_file && !tile.base_missing; });
     bool prefetch_pending = std::any_of(ctx.tiles->begin(), ctx.tiles->end(), [](const auto& tile)
@@ -3653,6 +3751,7 @@ void tile_loader_step(TileContext& ctx)
 
         attempted[attempted_count++] = best;
 
+#if TRAIL_MATE_MAP_TILE_FLOW_LOG
         int before_visible_total = 0;
         int before_visible_loaded = 0;
         int before_visible_placeholder = 0;
@@ -3671,6 +3770,7 @@ void tile_loader_step(TileContext& ctx)
                      before_visible_loaded,
                      before_visible_placeholder,
                      before_visible_unloaded);
+#endif
 
         // Save old object position for invalidation
         lv_obj_t* old_obj = best->img_obj;
@@ -3682,6 +3782,7 @@ void tile_loader_step(TileContext& ctx)
         }
 
         bool rendered_now = false;
+        const auto before_state = tile_render_state(*best);
         if (DecodedTileCache* cached = find_cached_tile_ref(base_tile_ref_for_tile(*best)))
         {
             rendered_now = render_base_tile_from_cache(ctx, *best, *cached);
@@ -3691,7 +3792,9 @@ void tile_loader_step(TileContext& ctx)
             (void)request_base_tile_async(*best);
             if (!best->visible && best->base_request_pending) prefetch_pending = true;
         }
+        render_changed |= before_state != tile_render_state(*best);
 
+#if TRAIL_MATE_MAP_TILE_FLOW_LOG
         int after_visible_total = 0;
         int after_visible_loaded = 0;
         int after_visible_placeholder = 0;
@@ -3711,6 +3814,7 @@ void tile_loader_step(TileContext& ctx)
                      after_visible_loaded,
                      after_visible_placeholder,
                      after_visible_unloaded);
+#endif
 
         // Invalidate only the tile area, not the entire container
         if (rendered_now && best->img_obj != NULL)
@@ -3735,6 +3839,7 @@ void tile_loader_step(TileContext& ctx)
 
         // After loading a tile, update has_visible_map_data flag
         // This ensures the flag is updated immediately when tiles are loaded
+#if GPS_DEBUG
         if (ctx.has_visible_map_data)
         {
             bool old_value = *ctx.has_visible_map_data;
@@ -3745,6 +3850,7 @@ void tile_loader_step(TileContext& ctx)
                         old_value, *ctx.has_visible_map_data);
             }
         }
+#endif
 
         if ((int32_t)(sys::millis_now() - start_ms) >= (int32_t)budget_ms)
         {
@@ -3814,8 +3920,11 @@ void tile_loader_step(TileContext& ctx)
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
     if (static_cast<int32_t>(sys::millis_now() - start_ms) < static_cast<int32_t>(budget_ms)) request_visible_poi_tile(ctx);
 #endif
-    update_visible_map_data_flag(ctx);
-    rebuild_render_queue(ctx);
+    if (render_changed)
+    {
+        update_visible_map_data_flag(ctx);
+        rebuild_render_queue(ctx);
+    }
 }
 
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
