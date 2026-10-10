@@ -836,7 +836,20 @@ void completion_timer_cb(lv_timer_t* timer)
         !impl->model.focus_point.valid || !map_tile_completions_pending()) return;
     // Only committed results trigger the bounded UI work. Idle checks do not
     // resubmit requests, visit SD, refresh markers, or invalidate the display.
+    // Lightweight dragging moves existing objects immediately, while the
+    // planning anchor advances only on the regular loader tick. Position new
+    // images in the same current preview frame, then restore the planning
+    // anchor so its next boundary comparison still sees the full movement.
+    const int anchor_x = impl->anchor.gps_tile_screen_x;
+    const int anchor_y = impl->anchor.gps_tile_screen_y;
+    if (impl->drag_preview_active && impl->anchor.valid)
+    {
+        impl->anchor.gps_tile_screen_x += impl->model.pan_x - impl->tile_ctx.previous_pan_x;
+        impl->anchor.gps_tile_screen_y += impl->model.pan_y - impl->tile_ctx.previous_pan_y;
+    }
     tile_loader_step(impl->tile_ctx);
+    impl->anchor.gps_tile_screen_x = anchor_x;
+    impl->anchor.gps_tile_screen_y = anchor_y;
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
     if (!impl->gesture_pressed && !impl->gesture_dragging && !impl->drag_preview_active)
         refresh_poi_overlay(*impl, false);
