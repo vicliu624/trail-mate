@@ -508,6 +508,10 @@ void translate_loaded_tiles(RuntimeImpl& impl, int dx, int dy)
         return;
     }
 
+    const int anchor_pan_x = impl.anchor.gps_tile_screen_x + impl.anchor.gps_offset_x -
+                             lv_obj_get_width(impl.widgets.tile_layer) / 2;
+    const int anchor_pan_y = impl.anchor.gps_tile_screen_y + impl.anchor.gps_offset_y -
+                             lv_obj_get_height(impl.widgets.tile_layer) / 2;
     for (auto& tile : impl.tiles)
     {
         if (!tile.img_obj || !lv_obj_is_valid(tile.img_obj) || tile.z != impl.model.zoom || tile.map_source != impl.model.map_source)
@@ -519,8 +523,8 @@ void translate_loaded_tiles(RuntimeImpl& impl, int dx, int dy)
             continue;
         // Objects can have been placed by different asynchronous callbacks.
         // Reproject their tile identity instead of accumulating their position.
-        screen_x += impl.model.pan_x - impl.tile_ctx.previous_pan_x;
-        screen_y += impl.model.pan_y - impl.tile_ctx.previous_pan_y;
+        screen_x += impl.model.pan_x - anchor_pan_x;
+        screen_y += impl.model.pan_y - anchor_pan_y;
         lv_obj_set_pos(tile.img_obj, static_cast<lv_coord_t>(screen_x), static_cast<lv_coord_t>(screen_y));
         // Prefetched descriptors already own pixels. Reveal them immediately
         // when a lightweight drag brings them into view, without new SD I/O.
