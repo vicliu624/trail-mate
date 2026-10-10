@@ -260,7 +260,7 @@ int main(int argc, char** argv)
     assert(contains(gps_runtime, "add_help_row(\"T\", \"Track\", \"Select track file\")"));
     assert(contains(gps_runtime, "add_help_row(\"V\", nullptr, \"Show/hide elevation profile\")"));
     assert(contains(gps_runtime, "add_help_row(\"I\", nullptr, \"Hide info, keep route\")"));
-    assert(contains(gps_runtime, "add_help_row(\"O\", \"Contour\", \"Toggle contour overlay\")"));
+    assert(contains(gps_runtime, "add_help_row(\"O\", \"Ctr\", \"Toggle contour overlay\")"));
     assert(contains(gps_runtime, "add_help_row(\"Route\", nullptr, \"Shown when route active\")"));
     assert(contains(gps_runtime, "add_help_row(\"Members\", nullptr, \"Shown when team active\")"));
     assert(contains(gps_runtime, "add_help_row(help_key_label(), \"Back\", \"Close help\")"));

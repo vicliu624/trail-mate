@@ -30,6 +30,13 @@ class MapTileEventQueue final : public ui::map_tiles::IMapTileEventSink
     MapTileEventQueue& operator=(const MapTileEventQueue&) = delete;
 
     bool available() const { return mutex_ && capacity_changed_; }
+    bool pending()
+    {
+        if (!mutex_ || xSemaphoreTake(mutex_, 0) != pdTRUE) return false;
+        const bool ready = queue_.front() != nullptr;
+        xSemaphoreGive(mutex_);
+        return ready;
+    }
 
     struct Statistics
     {

@@ -7,7 +7,8 @@
     "flags": [
       "-I../../modules/ui_map_runtime/include",
       "-I../../modules/ui_presentation/include",
-      "-I../../modules/core_sys/include"
+      "-I../../modules/core_sys/include",
+      "-I../../modules/core_tmap/include"
     ]
   }
 }

@@ -15,6 +15,7 @@ using Projection = gps::ui::shell::Projection;
 #include "platform/ui/tracker_runtime.h"
 #include "sys/clock.h"
 #include "ui/app_runtime.h"
+#include "ui/components/map_poi_search.h"
 #include "ui/formatters.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
@@ -90,7 +91,7 @@ constexpr lv_coord_t kMapControlButtonHeight = 20;
 constexpr lv_coord_t kMapControlButtonSmallWidth = 26;
 constexpr lv_coord_t kMapControlButtonMediumWidth = 36;
 constexpr lv_coord_t kMapControlButtonWideWidth = 44;
-constexpr lv_coord_t kMapControlButtonContourWidth = 56;
+constexpr lv_coord_t kMapControlButtonContourWidth = 36;
 constexpr lv_coord_t kMapControlButtonTrackerWidth = 42;
 constexpr lv_coord_t kMapSideRailWidth = 72;
 constexpr lv_coord_t kMapAltitudePanelHeight = 18;
@@ -161,6 +162,7 @@ enum class MapControlAction : uint8_t
     TeamMember,
     PickLocation,
     CancelLocation,
+    Search,
 };
 
 const Host* s_host = nullptr;
@@ -177,6 +179,9 @@ int s_map_zoom = kCardputerZeroMapDefaultZoom;
 int s_map_pan_x = 0;
 int s_map_pan_y = 0;
 bool s_map_view_initialized = false;
+bool s_search_center_valid = false;
+int32_t s_search_target_latitude_e7 = 0;
+int32_t s_search_target_longitude_e7 = 0;
 bool s_map_info_visible = true;
 ::ui::map::MapOverlaySnapshot* s_overlay_snapshot = nullptr;
 const ::gps::ui::runtime::MapTarget* s_map_target = nullptr;
@@ -194,6 +199,7 @@ lv_obj_t* s_map_zoom_label = nullptr;
 lv_obj_t* s_map_zoom_out_btn = nullptr;
 lv_obj_t* s_map_zoom_in_btn = nullptr;
 lv_obj_t* s_map_center_btn = nullptr;
+lv_obj_t* s_map_search_btn = nullptr;
 lv_obj_t* s_map_layer_btn = nullptr;
 lv_obj_t* s_map_contour_btn = nullptr;
 lv_obj_t* s_map_help_btn = nullptr;
@@ -404,7 +410,7 @@ bool has_valid_viewport_center(const ::ui::map::MapViewport& viewport)
 {
     return std::isfinite(viewport.center_lat) &&
            std::isfinite(viewport.center_lon) &&
-           (s_map_target || viewport.center_lat != 0.0 || viewport.center_lon != 0.0);
+           (s_search_center_valid || s_map_target || viewport.center_lat != 0.0 || viewport.center_lon != 0.0);
 }
 
 void sync_workspace_layers_from_renderer()
@@ -582,7 +588,10 @@ void set_map_notice(const char* text, uint32_t duration_ms)
         return;
     }
 
-    std::snprintf(s_map_notice_text, sizeof(s_map_notice_text), "%s", text);
+    size_t bytes = std::min(std::strlen(text), sizeof(s_map_notice_text) - 1);
+    while (bytes && (static_cast<uint8_t>(text[bytes]) & 0xc0) == 0x80) --bytes;
+    std::memcpy(s_map_notice_text, text, bytes);
+    s_map_notice_text[bytes] = '\0';
     s_map_notice_until_ms = sys::millis_now() + duration_ms;
 }
 
@@ -612,6 +621,8 @@ void set_button_label(lv_obj_t* btn, const char* text)
 
 void clear_map_controls()
 {
+    ::ui::components::map_poi_search::close();
+    s_map_search_btn = nullptr;
     s_map_pick_btn = s_map_cancel_btn = nullptr;
     s_map_viewport = nullptr;
     s_map_control_bar = nullptr;
@@ -1695,7 +1706,7 @@ void sync_map_notice_overlay()
     const uint32_t now = sys::millis_now();
     if (s_map_notice_text[0] != '\0' && now < s_map_notice_until_ms)
     {
-        set_compact_label(s_map_notice_label, s_map_notice_text);
+        ::ui::i18n::set_content_label_text_raw(s_map_notice_label, s_map_notice_text);
         lv_obj_set_style_bg_color(s_map_notice_panel, lv_color_hex(0x25170D), 0);
         lv_obj_clear_flag(s_map_notice_panel, LV_OBJ_FLAG_HIDDEN);
         lv_obj_move_foreground(s_map_notice_panel);
@@ -1850,7 +1861,7 @@ void sync_map_control_labels(const ::ui::map::MapWorkspaceSnapshot& snapshot)
 
     const auto layers = ::ui::widgets::map::current_layer_state();
     set_button_label(s_map_layer_btn, compact_map_source_label(layers.map_source));
-    set_button_label(s_map_contour_btn, layers.contour_enabled ? "Contour*" : "Contour");
+    set_button_label(s_map_contour_btn, layers.contour_enabled ? "Ctr*" : "Ctr");
     sync_map_context_buttons(snapshot);
 
     char zoom_buf[8]{};
@@ -3029,6 +3040,8 @@ void keep_only_current_position_overlay(::ui::map::MapOverlaySnapshot& snapshot)
             // Saved places remain visible like Agenda markers and POIs when
             // map chrome is hidden; this toggle only hides transient info.
             item.kind == ::ui::map::MapOverlayKind::Geocache ||
+            (item.kind == ::ui::map::MapOverlayKind::SelectedTarget &&
+             item.stable_id == ::ui::map::kSearchTargetOverlayId) ||
             (keep_route_points && item.kind == ::ui::map::MapOverlayKind::RoutePoint) ||
             (keep_selected_route_image &&
              item.kind == ::ui::map::MapOverlayKind::SelectedTarget);
@@ -3269,6 +3282,25 @@ void refresh_view()
     sync_workspace_layers_from_renderer();
     auto snapshot = map_workspace_model().snapshot();
     (void)map_overlay_source().buildMapOverlaySnapshot(*s_overlay_snapshot);
+    if (s_search_center_valid && !s_map_target && !s_target_request && !s_location_request)
+    {
+        // Reuse the PSRAM snapshot; reserve a visible marker for the chosen
+        // search result even when ordinary POI labels are limited at this zoom.
+        if (s_overlay_snapshot->item_count == ::ui::map::MapOverlaySnapshot::kMaxItems)
+        {
+            --s_overlay_snapshot->item_count;
+            s_overlay_snapshot->truncated = true;
+        }
+        auto& target = s_overlay_snapshot->items[s_overlay_snapshot->item_count++];
+        target = ::ui::map::MapOverlayItem{};
+        target.kind = ::ui::map::MapOverlayKind::SelectedTarget;
+        target.style = ::ui::map::MapOverlayStyle::Warning;
+        target.point.valid = true;
+        target.point.lat = s_search_target_latitude_e7 / 10000000.0;
+        target.point.lon = s_search_target_longitude_e7 / 10000000.0;
+        target.stable_id = ::ui::map::kSearchTargetOverlayId;
+        target.selected = target.visible = true;
+    }
     if (!s_map_target)
         ::geocaching::ui::shell::appendMapOverlays(*s_overlay_snapshot, snapshot.viewport.center_lat, snapshot.viewport.center_lon, current_map_zoom());
     if (s_map_target && s_overlay_snapshot->item_count < ::ui::map::MapOverlaySnapshot::kMaxItems)
@@ -3705,9 +3737,10 @@ void open_map_help_modal()
     add_help_row("WASD", nullptr, "Move map");
     add_help_row("Q", "E", "Zoom map");
     add_help_row("C", "Pos", "Center current position");
+    add_help_row("F", nullptr, "Find a place");
     add_help_row("P", nullptr, "Show/hide route photos");
     add_help_row("L", nullptr, "Change base layer");
-    add_help_row("O", "Contour", "Toggle contour overlay");
+    add_help_row("O", "Ctr", "Toggle contour overlay");
     add_help_row("T", "Track", "Select track file");
     add_help_row("V", nullptr, "Show/hide elevation profile");
     add_help_row("I", nullptr, "Hide info, keep route");
@@ -3988,6 +4021,32 @@ void show_team_overlay_notice()
     request_refresh_view();
 }
 
+void selected_search_location(const platform::ui::map_search::Result& result, void*)
+{
+    auto& model = map_workspace_model();
+    auto viewport = model.viewport();
+    // The workspace owns WGS84; the viewport renderer applies the configured
+    // display transform once. Avoid converting here and shifting the map twice.
+    viewport.center_lat = result.latitude_e7 / 1e7;
+    viewport.center_lon = result.longitude_e7 / 1e7;
+    int selected_zoom = std::max<int>(result.minimum_zoom, std::min<int>(current_map_zoom(), result.maximum_zoom));
+    while (selected_zoom >= 0 && !(result.zoom_mask & (uint32_t{1} << selected_zoom))) --selected_zoom;
+    if (selected_zoom < 0)
+        for (selected_zoom = 0; selected_zoom <= 18 && !(result.zoom_mask & (uint32_t{1} << selected_zoom)); ++selected_zoom)
+        {
+        }
+    if (selected_zoom > 18) return;
+    viewport.zoom = static_cast<uint8_t>(selected_zoom);
+    if (!model.setViewport(viewport).ok) return;
+    s_map_zoom = selected_zoom;
+    s_search_center_valid = true;
+    s_search_target_latitude_e7 = result.latitude_e7;
+    s_search_target_longitude_e7 = result.longitude_e7;
+    s_map_pan_x = s_map_pan_y = 0;
+    set_map_notice(result.name, 3000);
+    request_refresh_view();
+}
+
 void on_map_control_clicked(lv_event_t* e)
 {
     if (lv_event_get_code(e) != LV_EVENT_CLICKED)
@@ -4008,6 +4067,18 @@ void on_map_control_clicked(lv_event_t* e)
     case MapControlAction::Center:
         center_map_on_self();
         break;
+    case MapControlAction::Search:
+    {
+        const auto viewport = map_workspace_model().viewport();
+        ::ui::widgets::map::GeoPoint origin{};
+        origin.lat = viewport.center_lat;
+        origin.lon = viewport.center_lon;
+        if (::ui::widgets::map::screen_center(s_map_runtime, origin) && origin.valid)
+            (void)::ui::map_geo::inverse(origin.lat, origin.lon, app::configFacade().readConfig().map_coord_system, origin.lat, origin.lon);
+        if (!::ui::components::map_poi_search::open(s_root, origin.lat, origin.lon, selected_search_location))
+            set_map_notice("Search unavailable", 2000);
+        break;
+    }
     case MapControlAction::Layer:
         cycle_map_layer();
         break;
@@ -4042,6 +4113,19 @@ void on_map_control_clicked(lv_event_t* e)
 
 bool handle_map_key(uint32_t key, lv_event_t* e)
 {
+    if (!s_location_request && (key == 'f' || key == 'F'))
+    {
+        const auto viewport = map_workspace_model().viewport();
+        ::ui::widgets::map::GeoPoint origin{};
+        origin.lat = viewport.center_lat;
+        origin.lon = viewport.center_lon;
+        if (::ui::widgets::map::screen_center(s_map_runtime, origin) && origin.valid)
+            (void)::ui::map_geo::inverse(origin.lat, origin.lon, app::configFacade().readConfig().map_coord_system, origin.lat, origin.lon);
+        consume_key_event(e);
+        if (!::ui::components::map_poi_search::open(s_root, origin.lat, origin.lon, selected_search_location))
+            set_map_notice("Search unavailable", 2000);
+        return true;
+    }
     if (s_map_target && (key == 'g' || key == 'G'))
     {
         auto* root = ::ui::widgets::map::widgets(s_map_runtime).root;
@@ -4244,6 +4328,7 @@ void add_map_controls_to_group(lv_group_t* group)
     if (s_map_zoom_out_btn) lv_group_add_obj(group, s_map_zoom_out_btn);
     if (s_map_zoom_in_btn) lv_group_add_obj(group, s_map_zoom_in_btn);
     if (s_map_center_btn) lv_group_add_obj(group, s_map_center_btn);
+    if (s_map_search_btn) lv_group_add_obj(group, s_map_search_btn);
     if (s_map_layer_btn) lv_group_add_obj(group, s_map_layer_btn);
     if (s_map_contour_btn) lv_group_add_obj(group, s_map_contour_btn);
     if (s_map_tracker_btn) lv_group_add_obj(group, s_map_tracker_btn);
@@ -4278,7 +4363,10 @@ void create_map_control_bar(lv_obj_t* viewport)
     lv_obj_set_style_pad_top(s_map_control_bar, 2, 0);
     lv_obj_set_style_pad_bottom(s_map_control_bar, 2, 0);
     lv_obj_set_style_pad_column(s_map_control_bar, 3, 0);
-    lv_obj_clear_flag(s_map_control_bar, LV_OBJ_FLAG_SCROLLABLE);
+    // Fixed controls fit a 320px screen; route/team controls may extend it.
+    lv_obj_add_flag(s_map_control_bar, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scroll_dir(s_map_control_bar, LV_DIR_HOR);
+    lv_obj_set_scrollbar_mode(s_map_control_bar, LV_SCROLLBAR_MODE_OFF);
     bind_map_key_handler(s_map_control_bar);
 
     s_map_zoom_out_btn = create_map_control_button(
@@ -4316,10 +4404,12 @@ void create_map_control_bar(lv_obj_t* viewport)
         kMapControlButtonMediumWidth,
         "OSM",
         MapControlAction::Layer);
+    s_map_search_btn = create_map_control_button(
+        s_map_control_bar, kMapControlButtonSmallWidth, "F", MapControlAction::Search);
     s_map_contour_btn = create_map_control_button(
         s_map_control_bar,
         kMapControlButtonContourWidth,
-        "Contour",
+        "Ctr",
         MapControlAction::Contour);
     s_map_tracker_btn = create_map_control_button(
         s_map_control_bar,
@@ -4384,7 +4474,7 @@ void create_route_elevation_profile_overlay(lv_obj_t* viewport)
 void create_map_notice_overlay(lv_obj_t* viewport)
 {
     s_map_notice_panel = lv_obj_create(viewport);
-    lv_obj_set_size(s_map_notice_panel, LV_SIZE_CONTENT, 18);
+    lv_obj_set_size(s_map_notice_panel, LV_SIZE_CONTENT, 24);
     lv_obj_align(s_map_notice_panel, LV_ALIGN_TOP_LEFT, 4, 4);
     lv_obj_add_flag(s_map_notice_panel, LV_OBJ_FLAG_IGNORE_LAYOUT);
     lv_obj_add_flag(s_map_notice_panel, LV_OBJ_FLAG_HIDDEN);
@@ -4402,7 +4492,7 @@ void create_map_notice_overlay(lv_obj_t* viewport)
     s_map_notice_label = lv_label_create(s_map_notice_panel);
     lv_label_set_text(s_map_notice_label, "");
     lv_obj_set_width(s_map_notice_label, 154);
-    lv_obj_set_style_text_font(s_map_notice_label, &lv_font_montserrat_10, 0);
+    lv_obj_set_style_text_font(s_map_notice_label, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(s_map_notice_label, lv_color_hex(0xFFF3DF), 0);
     lv_label_set_long_mode(s_map_notice_label, LV_LABEL_LONG_DOT);
     lv_obj_center(s_map_notice_label);

@@ -102,6 +102,9 @@ struct RuntimeImpl
     ui::map_tiles::MapTileRenderQueue render_queue{};
     TileContext tile_ctx{};
     lv_timer_t* loader_timer = nullptr;
+#if defined(ARDUINO_ARCH_ESP32)
+    lv_timer_t* completion_timer = nullptr;
+#endif
     uint32_t loader_interval_ms = 50;
     uint32_t last_loader_active_log_ms = 0;
     bool loader_paused = false;
@@ -505,15 +508,30 @@ void translate_loaded_tiles(RuntimeImpl& impl, int dx, int dy)
         return;
     }
 
+    const int anchor_pan_x = impl.anchor.gps_tile_screen_x + impl.anchor.gps_offset_x -
+                             lv_obj_get_width(impl.widgets.tile_layer) / 2;
+    const int anchor_pan_y = impl.anchor.gps_tile_screen_y + impl.anchor.gps_offset_y -
+                             lv_obj_get_height(impl.widgets.tile_layer) / 2;
     for (auto& tile : impl.tiles)
     {
-        if (!tile.img_obj || !lv_obj_is_valid(tile.img_obj))
+        if (!tile.img_obj || !lv_obj_is_valid(tile.img_obj) || tile.z != impl.model.zoom || tile.map_source != impl.model.map_source)
         {
             continue;
         }
-        lv_obj_set_pos(tile.img_obj,
-                       static_cast<lv_coord_t>(lv_obj_get_x(tile.img_obj) + dx),
-                       static_cast<lv_coord_t>(lv_obj_get_y(tile.img_obj) + dy));
+        int screen_x = 0, screen_y = 0;
+        if (!tile_screen_pos_xyz(impl.tile_ctx, tile.x, tile.y, tile.z, screen_x, screen_y))
+            continue;
+        // Objects can have been placed by different asynchronous callbacks.
+        // Reproject their tile identity instead of accumulating their position.
+        screen_x += impl.model.pan_x - anchor_pan_x;
+        screen_y += impl.model.pan_y - anchor_pan_y;
+        lv_obj_set_pos(tile.img_obj, static_cast<lv_coord_t>(screen_x), static_cast<lv_coord_t>(screen_y));
+        // Prefetched descriptors already own pixels. Reveal them immediately
+        // when a lightweight drag brings them into view, without new SD I/O.
+        const bool visible = tile_in_rect(lv_obj_get_x(tile.img_obj), lv_obj_get_y(tile.img_obj),
+                                          lv_obj_get_width(impl.widgets.tile_layer), lv_obj_get_height(impl.widgets.tile_layer), 0);
+        if (visible) lv_obj_clear_flag(tile.img_obj, LV_OBJ_FLAG_HIDDEN);
+        else lv_obj_add_flag(tile.img_obj, LV_OBJ_FLAG_HIDDEN);
     }
 }
 
@@ -819,6 +837,35 @@ void refresh_poi_overlay(RuntimeImpl& impl, bool force)
 }
 #endif
 
+#if defined(ARDUINO_ARCH_ESP32)
+void completion_timer_cb(lv_timer_t* timer)
+{
+    auto* impl = static_cast<RuntimeImpl*>(lv_timer_get_user_data(timer));
+    if (!impl || !is_runtime_alive(*impl) || impl->loader_paused ||
+        !impl->model.focus_point.valid || !map_tile_completions_pending()) return;
+    // Only committed results trigger the bounded UI work. Idle checks do not
+    // resubmit requests, visit SD, refresh markers, or invalidate the display.
+    // Lightweight dragging moves existing objects immediately, while the
+    // planning anchor advances only on the regular loader tick. Position new
+    // images in the same current preview frame, then restore the planning
+    // anchor so its next boundary comparison still sees the full movement.
+    const int anchor_x = impl->anchor.gps_tile_screen_x;
+    const int anchor_y = impl->anchor.gps_tile_screen_y;
+    if (impl->drag_preview_active && impl->anchor.valid)
+    {
+        impl->anchor.gps_tile_screen_x += impl->model.pan_x - impl->tile_ctx.previous_pan_x;
+        impl->anchor.gps_tile_screen_y += impl->model.pan_y - impl->tile_ctx.previous_pan_y;
+    }
+    tile_loader_step(impl->tile_ctx);
+    impl->anchor.gps_tile_screen_x = anchor_x;
+    impl->anchor.gps_tile_screen_y = anchor_y;
+#if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
+    if (!impl->gesture_pressed && !impl->gesture_dragging && !impl->drag_preview_active)
+        refresh_poi_overlay(*impl, false);
+#endif
+}
+#endif
+
 void loader_timer_cb(lv_timer_t* timer)
 {
     auto* impl = static_cast<RuntimeImpl*>(lv_timer_get_user_data(timer));
@@ -839,7 +886,21 @@ void loader_timer_cb(lv_timer_t* timer)
     }
 
     tile_loader_maintenance(impl->tile_ctx);
-    if (impl->gesture_pressed || impl->gesture_dragging || impl->drag_preview_active) return;
+    if (impl->gesture_pressed || impl->gesture_dragging || impl->drag_preview_active)
+    {
+#if defined(ARDUINO_ARCH_ESP32)
+        // Bounded viewport planning and async event application continue while
+        // dragging. The UI never performs SD I/O; existing overlays translate.
+        const auto focus = transformed_focus(impl->model);
+        if (focus.valid)
+        {
+            calculate_required_tiles(impl->tile_ctx, focus.lat, focus.lon, impl->model.zoom,
+                                     impl->model.pan_x, impl->model.pan_y, true);
+            tile_loader_step(impl->tile_ctx);
+        }
+#endif
+        return;
+    }
     refresh_markers(*impl);
 
     const uint32_t now_ms = lv_tick_get();
@@ -980,6 +1041,9 @@ Widgets create(Runtime& runtime, lv_obj_t* parent, uint32_t loader_interval_ms)
                       &impl->has_visible_map_data);
 
     impl->loader_timer = lv_timer_create(loader_timer_cb, loader_interval_ms, impl);
+#if defined(ARDUINO_ARCH_ESP32)
+    impl->completion_timer = lv_timer_create(completion_timer_cb, 30, impl);
+#endif
     impl->loader_interval_ms = loader_interval_ms;
     impl->alive = true;
     std::printf("[UI][Lifecycle] map runtime create root=%p tile=%p loader=%p interval_ms=%lu\n",
@@ -1016,6 +1080,14 @@ void destroy(Runtime& runtime)
                 impl->has_visible_map_data ? 1 : 0,
                 impl->has_map_data ? 1 : 0);
     impl->alive = false;
+
+#if defined(ARDUINO_ARCH_ESP32)
+    if (impl->completion_timer)
+    {
+        lv_timer_del(impl->completion_timer);
+        impl->completion_timer = nullptr;
+    }
+#endif
 
     if (impl->loader_timer)
     {

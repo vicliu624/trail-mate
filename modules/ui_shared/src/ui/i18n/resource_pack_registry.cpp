@@ -48,6 +48,7 @@
 
 namespace ui::i18n
 {
+void request_missing_content_glyph(uint32_t codepoint);
 namespace
 {
 
@@ -138,6 +139,8 @@ struct FontPackRecord
     uint8_t load_failure_count = 0;
     bool load_retry_is_transient = false;
     bool content_load_deferred_logged = false;
+    uint32_t content_last_used_frame = 0;
+    bool content_used = false;
 };
 
 struct ImePackRecord
@@ -1393,6 +1396,24 @@ void reset_font_chain(FontChainState& chain)
     chain.desc.clear();
 }
 
+#if LVGL_VERSION_MAJOR >= 9
+bool tracked_content_glyph(const lv_font_t* font, lv_font_glyph_dsc_t* descriptor, uint32_t codepoint, uint32_t next)
+{
+    auto* pack = static_cast<FontPackRecord*>(font->user_data);
+    const auto* original = pack ? resolved_font(pack) : nullptr;
+    if (!original || !original->get_glyph_dsc || !original->get_glyph_dsc(original, descriptor, codepoint, next)) return false;
+    pack->content_last_used_frame = s_completed_lvgl_frame_count;
+    pack->content_used = true;
+    return true;
+}
+
+bool missing_content_glyph(const lv_font_t*, lv_font_glyph_dsc_t*, uint32_t codepoint, uint32_t)
+{
+    if (codepoint > 127) request_missing_content_glyph(codepoint);
+    return false;
+}
+#endif
+
 void rebuild_font_chain(FontChainState& chain, const std::vector<FontPackRecord*>& requested_packs)
 {
     reset_font_chain(chain);
@@ -1425,10 +1446,26 @@ void rebuild_font_chain(FontChainState& chain, const std::vector<FontPackRecord*
     chain.composed_fonts.resize(usable_packs.size());
 
     const lv_font_t* next_fallback = nullptr;
+#if LVGL_VERSION_MAJOR >= 9
+    static lv_font_t missing_font{};
+    if (&chain == &s_content_font_chain)
+    {
+        missing_font.get_glyph_dsc = missing_content_glyph;
+        missing_font.line_height = 16;
+        next_fallback = &missing_font;
+    }
+#endif
     for (std::size_t index = usable_packs.size(); index > 0; --index)
     {
         FontPackRecord* pack = usable_packs[index - 1U];
         chain.composed_fonts[index - 1U] = *resolved_font(pack);
+#if LVGL_VERSION_MAJOR >= 9
+        if (&chain == &s_content_font_chain && !pack->builtin)
+        {
+            chain.composed_fonts[index - 1U].user_data = pack;
+            chain.composed_fonts[index - 1U].get_glyph_dsc = tracked_content_glyph;
+        }
+#endif
         chain.composed_fonts[index - 1U].fallback = next_fallback;
         next_fallback = &chain.composed_fonts[index - 1U];
     }
@@ -1781,6 +1818,13 @@ std::vector<FontPackRecord*> current_content_pack_sequence()
             append_unique_pack(packs, &pack);
         }
     }
+    // Let newly loaded map subsets supply shared glyphs before older fallback
+    // subsets, so redundant older data can actually become idle and be freed.
+    for (auto it = s_content_supplement_packs.rbegin(); it != s_content_supplement_packs.rend(); ++it)
+    {
+        auto* pack = *it;
+        if (pack && pack->id.compare(0, 4, "map-") == 0) append_unique_pack(packs, pack);
+    }
     for (FontPackRecord* pack : s_content_supplement_packs)
     {
         append_unique_pack(packs, pack);
@@ -2015,6 +2059,69 @@ bool can_add_content_supplement(const FontPackRecord& pack)
            profile.max_content_supplement_ram_bytes;
 }
 
+bool content_supplement_is_idle(const FontPackRecord* pack)
+{
+#if LVGL_VERSION_MAJOR >= 9
+    return pack && !pack->builtin && pack != s_active_ui_font_pack && pack != s_active_content_font_pack &&
+           !::ui::fonts::has_explicit_font_reference(pack->owned_font) &&
+           (!pack->content_used || uint32_t(s_completed_lvgl_frame_count - pack->content_last_used_frame) > 2U);
+#else
+    // Without glyph usage tracking, retaining fonts is safer than guessing.
+    (void)pack;
+    return false;
+#endif
+}
+
+bool can_reclaim_content_supplement(const FontPackRecord& candidate)
+{
+    if (can_add_content_supplement(candidate)) return true;
+    if (kAllowSynchronousContentSupplementFontLoad || is_font_runtime_loaded(candidate)) return false;
+    const auto& profile = ::ui::runtime::current_memory_profile();
+    if (!profile.max_content_supplement_packs || !candidate.estimated_ram_bytes ||
+        candidate.estimated_ram_bytes > profile.max_content_supplement_ram_bytes) return false;
+    size_t bytes = 0, count = 0;
+    for (const auto* pack : s_content_supplement_packs)
+    {
+        if (!pack || pack->builtin || content_supplement_is_idle(pack)) continue;
+        bytes += pack->estimated_ram_bytes;
+        ++count;
+    }
+    return count < profile.max_content_supplement_packs &&
+           bytes <= profile.max_content_supplement_ram_bytes - candidate.estimated_ram_bytes;
+}
+
+bool reclaim_content_supplement(FontPackRecord& candidate)
+{
+    if (can_add_content_supplement(candidate)) return true;
+    if (!can_reclaim_content_supplement(candidate)) return false;
+    // Called only from the deferred post-frame loader. Detach bindings and
+    // chain copies before destroying any bitmap or descriptor they referenced.
+    ::ui::fonts::clear_locale_font_bindings();
+    reset_font_chain(s_content_font_chain);
+    while (!can_add_content_supplement(candidate))
+    {
+        auto victim = s_content_supplement_packs.end();
+        uint32_t greatest_age = 0;
+        for (auto it = s_content_supplement_packs.begin(); it != s_content_supplement_packs.end(); ++it)
+        {
+            if (!content_supplement_is_idle(*it)) continue;
+            const auto age = (*it)->content_used ? uint32_t(s_completed_lvgl_frame_count - (*it)->content_last_used_frame) : UINT32_MAX;
+            if (victim == s_content_supplement_packs.end() || age > greatest_age)
+            {
+                victim = it;
+                greatest_age = age;
+            }
+        }
+        if (victim == s_content_supplement_packs.end()) break;
+        std::printf("%s font cache evict id=%s incoming=%s reason=idle budget=%lu\n", kLogTag, (*victim)->id.c_str(),
+                    candidate.id.c_str(), static_cast<unsigned long>(::ui::runtime::current_memory_profile().max_content_supplement_ram_bytes));
+        unload_external_font_pack(**victim);
+        s_content_supplement_packs.erase(victim);
+    }
+    rebuild_runtime_font_chains();
+    return can_add_content_supplement(candidate);
+}
+
 bool preload_active_locale_preferred_content_supplements()
 {
 #if defined(ESP_PLATFORM) || defined(ARDUINO_ARCH_ESP32)
@@ -2136,7 +2243,7 @@ FontPackRecord* choose_content_supplement(const std::vector<uint32_t>& missing)
             {
                 continue;
             }
-            if (!can_add_content_supplement(*pack))
+            if (!can_reclaim_content_supplement(*pack))
             {
                 continue;
             }
@@ -2187,7 +2294,7 @@ FontPackRecord* choose_content_supplement(const std::vector<uint32_t>& missing)
         {
             continue;
         }
-        if (!can_add_content_supplement(pack))
+        if (!can_reclaim_content_supplement(pack))
         {
             continue;
         }
@@ -3651,7 +3758,7 @@ void queue_deferred_content_supplement_load(FontPackRecord& pack, const char* re
     {
         return;
     }
-    if (!font_pack_supports_content(pack) || !can_add_content_supplement(pack))
+    if (!font_pack_supports_content(pack) || !can_reclaim_content_supplement(pack))
     {
         std::printf("%s font load skipped id=%s role=content_supplement reason=content_budget active_locale=%s source=%s\n",
                     kLogTag,
@@ -3682,6 +3789,15 @@ void queue_deferred_content_supplement_load(FontPackRecord& pack, const char* re
     }
 
     (void)schedule_deferred_content_supplement_async(pack, reason);
+}
+
+void request_missing_content_glyph(uint32_t codepoint)
+{
+    if (s_content_supplement_load_async_pending || s_content_supplement_retry_timer || s_pending_locale_change.locale) return;
+    // A single small request; no SD I/O or eviction in a glyph callback.
+    const std::vector<uint32_t> missing{codepoint};
+    if (auto* candidate = choose_content_supplement(missing))
+        queue_deferred_content_supplement_load(*candidate, "glyph_cache_miss");
 }
 
 void deferred_content_supplement_retry_timer_cb(lv_timer_t* timer)
@@ -3719,20 +3835,19 @@ void deferred_content_supplement_load_cb()
     {
         return;
     }
-    if (!can_add_content_supplement(*pack))
+    const uint32_t now_ms = sys::millis_now();
+    if (font_load_backoff_active(*pack, now_ms))
+    {
+        schedule_deferred_content_supplement_retry(*pack, remaining_font_load_retry_ms(*pack, now_ms));
+        return;
+    }
+    if (!reclaim_content_supplement(*pack))
     {
         std::printf("%s font load skipped id=%s role=content_supplement reason=content_budget active_locale=%s source=%s\n",
                     kLogTag,
                     pack->id.c_str(),
                     s_active_locale ? s_active_locale->id.c_str() : "<none>",
                     pack->source_path.empty() ? "<none>" : pack->source_path.c_str());
-        return;
-    }
-
-    const uint32_t now_ms = sys::millis_now();
-    if (font_load_backoff_active(*pack, now_ms))
-    {
-        schedule_deferred_content_supplement_retry(*pack, remaining_font_load_retry_ms(*pack, now_ms));
         return;
     }
 

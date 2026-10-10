@@ -186,28 +186,36 @@ AnnotationLayoutResult layout_annotations(AnnotationCandidate* candidates, std::
     candidate_count = std::min(candidate_count, AnnotationLayoutOptions::kMaxCandidates);
     capacity = std::min(capacity, AnnotationLayoutOptions::kMaxPlacements);
     previous_count = previous ? std::min(previous_count, AnnotationLayoutOptions::kMaxPlacements) : 0;
+    static_assert(AnnotationLayoutOptions::kMaxCandidates <= 256);
     for (std::size_t i = 0; i < candidate_count; ++i)
     {
         auto& c = candidates[i];
         c.processed = false;
+        c.source_order = static_cast<uint8_t>(i);
         c.retained = false;
         for (std::size_t j = 0; j < previous_count; ++j)
             if (c.key == previous[j].key) c.retained = true;
     }
+    // All preference inputs are fixed for this layout. Sort the caller's
+    // candidate storage once, rather than rescanning it for every attempt.
+    // Heap sort is iterative, needs no secondary array or recursive stack.
+    const auto order = [&](const auto& a, const auto& b)
+    {
+        if (better(a, b, o)) return true;
+        if (better(b, a, o)) return false;
+        return a.source_order < b.source_order;
+    };
+    std::make_heap(candidates, candidates + candidate_count, order);
+    std::sort_heap(candidates, candidates + candidate_count, order);
     const auto phase = [&](int kind, unsigned limit)
     {
         unsigned added = 0;
-        while (added < limit && result.count < capacity && result.labels < o.max_labels)
+        for (std::size_t best = 0; best < candidate_count && added < limit &&
+                                   result.count < capacity && result.labels < o.max_labels;
+             ++best)
         {
-            std::size_t best = candidate_count;
-            for (std::size_t i = 0; i < candidate_count; ++i)
-            {
-                const auto& c = candidates[i];
-                if (c.processed || !named(c) || (kind >= 0 && static_cast<int>(c.kind) != kind)) continue;
-                if (best == candidate_count || better(c, candidates[best], o)) best = i;
-            }
-            if (best == candidate_count) break;
             auto& c = candidates[best];
+            if (c.processed || !named(c) || (kind >= 0 && static_cast<int>(c.kind) != kind)) continue;
             c.processed = true;
             bool duplicate = false;
             for (std::size_t i = 0; i < result.count; ++i)
@@ -231,6 +239,15 @@ AnnotationLayoutResult layout_annotations(AnnotationCandidate* candidates, std::
     phase(static_cast<int>(ui::map::AnnotationKind::Place), o.place_reservation);
     phase(static_cast<int>(ui::map::AnnotationKind::Poi), o.poi_reservation);
     phase(-1, o.max_labels);
+
+    // Keep caller indices and unnamed clustering order unchanged. The ordinal
+    // uses existing padding; restoring order needs no temporary index array.
+    for (std::size_t i = 0; i < result.count; ++i)
+        output[i].candidate = candidates[output[i].candidate].source_order;
+    const auto source_order = [](const auto& a, const auto& b)
+    { return a.source_order < b.source_order; };
+    std::make_heap(candidates, candidates + candidate_count, source_order);
+    std::sort_heap(candidates, candidates + candidate_count, source_order);
 
     for (std::size_t i = 0; i < candidate_count && result.count < capacity; ++i)
     {

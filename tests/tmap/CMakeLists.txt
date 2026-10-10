@@ -1,0 +1,23 @@
+cmake_minimum_required(VERSION 3.20)
+project(tmap_reader_contract LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(REPO "${CMAKE_CURRENT_LIST_DIR}/../..")
+add_executable(tmap_probe probe.cpp ${REPO}/modules/core_tmap/src/reader.cpp ${REPO}/modules/core_tmap/src/search.cpp)
+target_include_directories(tmap_probe PRIVATE ${REPO}/modules/core_tmap/include)
+if(MSVC)
+    target_compile_options(tmap_probe PRIVATE /utf-8 /W4)
+else()
+    target_compile_options(tmap_probe PRIVATE -Wall -Wextra -Werror)
+    target_compile_definitions(tmap_probe PRIVATE _FILE_OFFSET_BITS=64)
+endif()
+add_executable(tmap_source_probe source_probe.cpp
+    ${REPO}/modules/core_tmap/src/reader.cpp ${REPO}/modules/core_tmap/src/search.cpp
+    ${REPO}/modules/ui_map_runtime/src/map_tiles/tmap_map_tile_source.cpp)
+target_include_directories(tmap_source_probe PRIVATE
+    ${REPO}/modules/core_tmap/include ${REPO}/modules/ui_map_runtime/include ${REPO}/modules/ui_presentation/include)
+if(MSVC)
+    target_compile_options(tmap_source_probe PRIVATE /utf-8 /W4 /UNDEBUG)
+else()
+    target_compile_options(tmap_source_probe PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+    target_compile_definitions(tmap_source_probe PRIVATE _FILE_OFFSET_BITS=64)
+endif()

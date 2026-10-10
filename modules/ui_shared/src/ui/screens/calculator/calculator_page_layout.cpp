@@ -1,5 +1,6 @@
 #include "ui/screens/calculator/calculator_page_layout.h"
 
+#include "ui/top_bar_metrics.h"
 #include <algorithm>
 
 namespace calculator::ui::layout
@@ -37,7 +38,7 @@ Geometry resolve(lv_obj_t* parent)
                                                         kLargeTouchMaximumContentWidth)
                                  : geometry.width;
     geometry.content_x = (geometry.width - geometry.content_width) / 2;
-    geometry.top_bar_height = geometry.large_touch ? 32 : 24;
+    geometry.top_bar_height = ::ui::kUnifiedTopBarHeight;
     geometry.display_y = geometry.top_bar_height + 4;
     geometry.display_height = deck_compact ? 48 : (geometry.large_touch ? 74 : 52);
     geometry.function_y = geometry.display_y + geometry.display_height + 4;

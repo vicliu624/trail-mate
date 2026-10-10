@@ -42,7 +42,7 @@ int main()
     assert(profile.card_height == 80);
     assert(profile.icon_scale == 208);
     assert(profile.grid_height_pct == 50);
-    assert(profile.grid_top_offset == 28);
-    assert(profile.top_bar_height == 26);
+    assert(profile.grid_top_offset == 26);
+    assert(profile.top_bar_height == 24);
     return 0;
 }

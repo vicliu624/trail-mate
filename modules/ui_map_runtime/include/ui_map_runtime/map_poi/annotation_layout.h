@@ -19,7 +19,12 @@ struct AnnotationCandidate
     ui::map::AnnotationKind kind = ui::map::AnnotationKind::Poi;
     bool processed = false;
     bool retained = false;
+    uint8_t source_order = 0; // Temporary ordinal in the existing tail padding.
 };
+static_assert(sizeof(AnnotationCandidate) ==
+                  (offsetof(AnnotationCandidate, retained) + sizeof(bool) + alignof(AnnotationCandidate) - 1) /
+                      alignof(AnnotationCandidate) * alignof(AnnotationCandidate),
+              "Layout ordinal must not grow candidate storage");
 
 struct AnnotationPlacement
 {

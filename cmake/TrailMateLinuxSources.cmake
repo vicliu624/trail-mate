@@ -348,6 +348,7 @@ set(TRAIL_MATE_LINUX_UI_SHELL_SOURCES
     # modules/ui_shared �?components
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/components/air_status_footer.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/components/floating_search_box.cpp"
+    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/components/map_poi_search.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/components/screen_saver_overlay.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/components/shortcut_help_modal.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/runtime_device_status_source.cpp"

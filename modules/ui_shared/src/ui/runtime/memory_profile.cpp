@@ -25,7 +25,8 @@ MemoryProfile make_standard_profile()
     profile.kind = MemoryProfileKind::Standard;
     profile.max_locale_font_ram_bytes = 768U * 1024U;
     profile.max_content_supplement_ram_bytes = 640U * 1024U;
-    profile.max_content_supplement_packs = 2;
+    // More small subsets may share the same unchanged RAM budget.
+    profile.max_content_supplement_packs = 8;
     // 320x240 and pager touch map views need visible 256px tiles plus pan cushion.
     profile.max_map_decode_tiles = 12;
     profile.retain_map_decode_cache_on_page_exit = false;
@@ -39,7 +40,7 @@ MemoryProfile make_extended_profile()
     profile.kind = MemoryProfileKind::Extended;
     profile.max_locale_font_ram_bytes = 2U * 1024U * 1024U;
     profile.max_content_supplement_ram_bytes = 2U * 1024U * 1024U;
-    profile.max_content_supplement_packs = 3;
+    profile.max_content_supplement_packs = 8;
     profile.max_map_decode_tiles = 12;
     profile.retain_map_decode_cache_on_page_exit = true;
     return profile;

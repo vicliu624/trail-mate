@@ -1,8 +1,8 @@
 #pragma once
 
 #include <cstddef>
-#include <cstdio>
 #include <cstdint>
+#include <cstdio>
 
 #include "lvgl.h"
 #include "ui/assets/fonts/fonts.h"
@@ -145,6 +145,18 @@ inline LocalizedFontBinding* acquire_localized_font_binding(const lv_font_t* bas
         }
     }
     return nullptr;
+}
+
+inline bool has_explicit_font_reference(const lv_font_t* font)
+{
+    if (!font) return false;
+    const auto* bindings = localized_font_binding_storage();
+    for (std::size_t index = 0; index < localized_font_binding_storage_size(); ++index)
+    {
+        const auto& binding = bindings[index];
+        if (binding.used && (binding.base == font || binding.explicit_fallback == font)) return true;
+    }
+    return false;
 }
 
 inline void clear_locale_font_bindings()

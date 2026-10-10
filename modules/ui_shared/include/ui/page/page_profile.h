@@ -6,6 +6,7 @@
 #pragma once
 
 #include "lvgl.h"
+#include "ui/top_bar_metrics.h"
 
 namespace ui::page_profile
 {
@@ -22,7 +23,7 @@ struct PageLayoutProfile
     const char* name = "default";
     LayoutVariant variant = LayoutVariant::HybridCompact;
 
-    lv_coord_t top_bar_height = 30;
+    lv_coord_t top_bar_height = ::ui::kUnifiedTopBarHeight;
     lv_coord_t top_content_gap = 3;
     const lv_font_t* title_font = nullptr;
     const lv_font_t* body_font = nullptr;

@@ -38,7 +38,7 @@ int main()
     const auto pager = ui::page_profile::make_pager_profile();
     assert(std::strcmp(pager.name, "pager") == 0);
     assert(!pager.dense);
-    assert(pager.top_bar_height == 30);
+    assert(pager.top_bar_height == 24);
     assert(pager.filter_panel_width == 90);
     assert(pager.filter_button_height == 28);
     assert(pager.list_item_height == 28);
@@ -47,7 +47,7 @@ int main()
     const auto zero = ui::page_profile::make_cardputer_zero_profile();
     assert(std::strcmp(zero.name, "cardputer_zero") == 0);
     assert(zero.dense);
-    assert(zero.top_bar_height == 22);
+    assert(zero.top_bar_height == 24);
     assert(zero.filter_panel_width == 78);
     assert(zero.filter_button_height == 24);
     assert(zero.list_item_height == 24);

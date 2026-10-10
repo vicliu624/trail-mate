@@ -58,7 +58,7 @@ namespace
 
 constexpr lv_coord_t kPagerWidth = 480;
 constexpr lv_coord_t kPagerHeight = 222;
-constexpr lv_coord_t kPagerTopBarHeight = 30;
+constexpr lv_coord_t kPagerTopBarHeight = ::ui::widgets::kTopBarHeight;
 constexpr lv_coord_t kPagerBottomBarHeight = 24;
 constexpr lv_coord_t kPagerOuterMargin = 10;
 constexpr int kMaxCandidates = 24;

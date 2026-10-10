@@ -11,6 +11,7 @@
 #include "platform/esp/arduino_common/map_tiles/lvgl_tile_image.h"
 #include "platform/esp/arduino_common/map_tiles/map_tile_command_queue.h"
 #include "platform/esp/arduino_common/map_tiles/map_tile_event_queue.h"
+#include "platform/esp/arduino_common/map_tiles/sd_tmap_storage.h"
 #include "platform/esp/arduino_common/storage/sd_card_runtime.h"
 #include "src/draw/lv_image_decoder_private.h"
 #include "src/misc/cache/instance/lv_image_cache.h"
@@ -25,6 +26,7 @@
 #include "ui_map_runtime/map_tiles/map_tile_geometry.h"
 #include "ui_map_runtime/map_tiles/map_tile_pipeline_metrics.h"
 #include "ui_map_runtime/map_tiles/map_tile_types.h"
+#include "ui_map_runtime/map_tiles/native_pixel_buffer.h"
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
 #include "platform/esp/arduino_common/map_poi/cjson_poi_parser.h"
 #include "ui_map_runtime/map_poi/annotation_layout.h"
@@ -138,6 +140,7 @@ static bool g_missing_tile_notice_pending = false;
 static bool g_missing_tile_notice_emitted = false;
 static uint8_t g_missing_tile_notice_source = 0;
 static uint32_t g_map_tile_runtime_generation = 1;
+static uint32_t g_active_map_media_session = 0;
 
 namespace
 {
@@ -226,9 +229,22 @@ class SdMapTileFileSystem final : public ui::map_tiles::IMapTileFileSystem
 };
 #endif
 
-constexpr std::size_t kMapTileWorkerScratchBytes = 192U * 1024U;
+// One reusable PSRAM buffer also covers the largest v1 native RGBA tile.
+constexpr std::size_t kMapTileWorkerScratchBytes = 256U * 1024U;
+constexpr std::size_t kTmapWorkerScratchBytes = 48U * 1024U;
+#if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
+static_assert(sizeof(ui::map_poi::TileHeader) + ui::map_poi::TileHeader::kMaxRecords * sizeof(ui::map_poi::Record) <= kTmapWorkerScratchBytes);
+#endif
+constexpr std::size_t kNativeTilePixelBudgetBytes = 3U * 1024U * 1024U;
+std::atomic<std::size_t> g_native_tile_pixel_bytes{0};
+std::atomic<uint32_t> g_map_worker_stack_low_bytes{UINT32_MAX};
+
+bool native_tile_format(ui::map_tiles::MapTileFormat format)
+{
+    return format == ui::map_tiles::MapTileFormat::Rgb565 || format == ui::map_tiles::MapTileFormat::Rgba8888;
+}
 constexpr std::size_t kMapTileWorkerTaskStackBytes = 4U * 1024U;
-constexpr int kMapTileEventsPerUiDrain = 1;
+constexpr int kMapTileEventsPerUiDrain = 4;
 constexpr int kMapTileRequestsPerUiStep = 2;
 constexpr uint32_t kMapTileUiDrainBudgetMs = 4;
 constexpr uint32_t kMapTileUiEventCooldownMs = 60;
@@ -264,6 +280,10 @@ const char* map_tile_format_name(ui::map_tiles::MapTileFormat format)
         return "jsonl";
     case ui::map_tiles::MapTileFormat::PoiRecords:
         return "poi-records";
+    case ui::map_tiles::MapTileFormat::Rgb565:
+        return "rgb565";
+    case ui::map_tiles::MapTileFormat::Rgba8888:
+        return "rgba8888";
     case ui::map_tiles::MapTileFormat::Unknown:
     default:
         return "unknown";
@@ -328,8 +348,10 @@ bool resolve_map_tile_log_path(const ui::map_tiles::MapTileRef& ref,
                                char* out_path,
                                std::size_t out_size)
 {
-    ui::map_tiles::MapTileResolver resolver("/");
-    return resolver.resolvePath(ref, out_path, out_size);
+    if (!out_path || !out_size) return false;
+    const int n = std::snprintf(out_path, out_size, "%s/%u/%lu/%lu", map_tile_layer_name(ref.layer),
+                                static_cast<unsigned>(ref.z), static_cast<unsigned long>(ref.x), static_cast<unsigned long>(ref.y));
+    return n >= 0 && static_cast<size_t>(n) < out_size;
 }
 
 lv_color_format_t lvgl_source_format_for_tile(ui::map_tiles::MapTileFormat format)
@@ -381,10 +403,10 @@ void log_map_tile_event_failure(const char* stage,
     }
     char path[160]{};
     (void)resolve_map_tile_log_path(event.tile, path, sizeof(path));
-    MAP_DIAG("[MAPD][event-fail] t=%lu stage=%s gen=%lu id=%lu kind=%u err=%ld path=%s\n",
+    MAP_DIAG("[MAPD][event-fail] t=%lu stage=%s gen=%lu id=%lu kind=%u err=%ld tile_id=%s\n",
              static_cast<unsigned long>(now_ms), stage, static_cast<unsigned long>(event.generation),
              static_cast<unsigned long>(event.command_id), static_cast<unsigned>(event.kind), error, path);
-    std::printf("[GPS][MAP][event] fail stage=%s kind=%s layer=%s(%u) z=%u x=%lu y=%lu gen=%lu active_gen=%lu err=%ld path=%s\n",
+    std::printf("[GPS][MAP][event] fail stage=%s kind=%s layer=%s(%u) z=%u x=%lu y=%lu gen=%lu active_gen=%lu err=%ld tile_id=%s\n",
                 stage ? stage : "unknown",
                 map_tile_event_kind_name(event.kind),
                 map_tile_layer_name(event.tile.layer),
@@ -406,17 +428,17 @@ uint8_t* allocate_tile_payload(std::size_t size)
         return nullptr;
     }
     return static_cast<uint8_t*>(
-        heap_caps_malloc_prefer(size,
-                                2,
-                                MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT,
-                                MALLOC_CAP_8BIT));
+        heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
 }
 
 void release_tile_payload(ui::map_tiles::MapTileAsyncEvent& event)
 {
     if (event.payload.data != nullptr)
     {
-        heap_caps_free(const_cast<uint8_t*>(event.payload.data));
+        if (native_tile_format(event.payload.format))
+            ui::map_tiles::NativePixelBuffer::release(event.payload.data);
+        else
+            heap_caps_free(const_cast<uint8_t*>(event.payload.data));
     }
     event.payload = {};
     event.payload_size = 0;
@@ -434,6 +456,17 @@ lv_image_dsc_t* decode_payload_to_image_desc(const ui::map_tiles::MapTileRef& re
         payload.format == ui::map_tiles::MapTileFormat::Unknown
             ? ui::map_tiles::mapTileFormatForLayer(ref.layer)
             : payload.format;
+    if (native_tile_format(payload_format))
+    {
+        const bool rgba = payload_format == ui::map_tiles::MapTileFormat::Rgba8888;
+        auto* image = platform::esp::map_tiles::LvglTileImage::captureNative(
+            payload.data, payload.size, rgba ? LV_COLOR_FORMAT_ARGB8888 : LV_COLOR_FORMAT_RGB565,
+            ui::map_tiles::NativePixelBuffer::retain, ui::map_tiles::NativePixelBuffer::release,
+            [](size_t bytes) -> void*
+            { return heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT); });
+        if (image && rgba) ui::map_tiles::NativePixelBuffer::convertRgbaToBgra(payload.data, payload.size);
+        return image;
+    }
     const lv_color_format_t source_format = lvgl_source_format_for_tile(payload_format);
     if (source_format == LV_COLOR_FORMAT_UNKNOWN)
     {
@@ -553,7 +586,8 @@ class MapTileAvailabilityMemory final
             {
                 continue;
             }
-            missing = static_cast<int32_t>(entry.expires_ms - now_ms) > 0;
+            missing = entry.media_session == ::platform::esp::arduino_common::storage::sd_media_session() &&
+                      static_cast<int32_t>(entry.expires_ms - now_ms) > 0;
             break;
         }
         xSemaphoreGive(mutex_);
@@ -589,6 +623,7 @@ class MapTileAvailabilityMemory final
         slot->used = true;
         slot->ref = ref;
         slot->expires_ms = now_ms + kMapTileMissingCacheTtlMs;
+        slot->media_session = ::platform::esp::arduino_common::storage::sd_media_session();
         xSemaphoreGive(mutex_);
     }
 
@@ -616,6 +651,7 @@ class MapTileAvailabilityMemory final
         bool used = false;
         ui::map_tiles::MapTileRef ref{};
         uint32_t expires_ms = 0;
+        uint32_t media_session = 0;
     };
 
     bool ensureMutex()
@@ -645,10 +681,27 @@ ui::map_tiles::MapTileAsyncEvent copy_map_tile_event(const ui::map_tiles::MapTil
         event.payload.data != nullptr &&
         event.payload.size > 0)
     {
+        if (native_tile_format(event.payload.format) && event.native_payload_lease)
+        {
+            ui::map_tiles::NativePixelBuffer::retain(event.payload.data);
+            owned.published_ms = sys::millis_now();
+            owned.timing_available = true;
+            return owned;
+        }
         uint8_t* payload = nullptr;
         int allocation_error = -12;
+        if (native_tile_format(event.payload.format))
+        {
+            payload = ui::map_tiles::NativePixelBuffer::create(
+                event.payload.size, g_native_tile_pixel_bytes,
+                kNativeTilePixelBudgetBytes,
+                [](size_t alignment, size_t bytes) -> void*
+                { return heap_caps_aligned_alloc(alignment, bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT); },
+                heap_caps_free);
+        }
+        else
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
-        if (event.payload.format == ui::map_tiles::MapTileFormat::PoiRecords)
+            if (event.payload.format == ui::map_tiles::MapTileFormat::PoiRecords)
         {
             if (ui::map_poi::validPayload(event.payload.data, event.payload.size))
                 payload = static_cast<uint8_t*>(heap_caps_aligned_alloc(alignof(ui::map_poi::TileHeader), event.payload.size,
@@ -661,7 +714,7 @@ ui::map_tiles::MapTileAsyncEvent copy_map_tile_event(const ui::map_tiles::MapTil
         if (payload == nullptr)
         {
             log_map_tile_event_failure("payload_alloc", owned, allocation_error);
-            owned.kind = ui::map_tiles::MapTileAsyncEventKind::Failed;
+            owned.kind = native_tile_format(event.payload.format) ? ui::map_tiles::MapTileAsyncEventKind::RetryLater : ui::map_tiles::MapTileAsyncEventKind::Failed;
             owned.error = allocation_error;
             owned.payload = {};
             owned.payload_size = 0;
@@ -696,14 +749,46 @@ using MapTileEventQueue = platform::esp::arduino_common::map_tiles::MapTileEvent
 class EspMapTileWorkerBackend final : public ui::map_tiles::IMapTileWorkerBackend
 {
   public:
+    void beginRequest(uint32_t generation, uint32_t command_id)
+    {
+        if (request_generation_ == generation && request_command_id_ == command_id) return;
+        // Scratch ownership changes with every command, even within one zoom.
+        // Only repeated execution of this exact command may resume pixel bytes.
+        finishRequest();
+        if (request_generation_ != generation) tmap_source_.cancelPendingAnnotations();
+        request_generation_ = generation;
+        request_command_id_ = command_id;
+    }
     explicit EspMapTileWorkerBackend(ui::map_tiles::IMapTileSource& source)
         : source_(source)
     {
+    }
+    ~EspMapTileWorkerBackend() override { finishRequest(); }
+    const uint8_t* nativePayload() const override { return native_pixels_; }
+    bool tmapActive() const { return source_mode_ == SourceMode::Tmap; }
+    void finishRequest()
+    {
+        tmap_storage_.cancelTransfers();
+        if (native_pixels_) ui::map_tiles::NativePixelBuffer::release(native_pixels_);
+        native_pixels_ = nullptr;
+        native_bytes_ = 0;
     }
 
     ui::map_tiles::MapTileLookupResult lookup(
         const ui::map_tiles::MapTileRef& ref) override
     {
+        if (media_session_ != ::platform::esp::arduino_common::storage::sd_media_session()) resetMetadata();
+        const auto prepared = prepareSource();
+        if (prepared != tmap::Status::Ok)
+        {
+            ui::map_tiles::MapTileLookupResult pending{};
+            pending.status = ui::map_tiles::MapTileStatus::Error;
+            return pending;
+        }
+        if (source_mode_ == SourceMode::Tmap) return tmap_source_.lookup(ref);
+#if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
+        if (ref.layer == ui::map_tiles::MapTileLayer::Poi) return poi_source_.lookup(ref);
+#endif
         return source_.lookup(ref);
     }
 
@@ -712,6 +797,83 @@ class EspMapTileWorkerBackend final : public ui::map_tiles::IMapTileWorkerBacken
         uint8_t* buffer,
         std::size_t capacity) override
     {
+        // Select a storage format once per runtime/media session. Missing
+        // coverage inside TMAP mode never probes legacy files.
+        if (media_session_ != ::platform::esp::arduino_common::storage::sd_media_session()) resetMetadata();
+        const auto prepared = prepareSource();
+        if (prepared != tmap::Status::Ok)
+        {
+            ui::map_tiles::MapTileReadResult pending{};
+            pending.status = prepared == tmap::Status::Busy || prepared == tmap::Status::More ? ui::map_tiles::MapTileReadStatus::RetryLater : prepared == tmap::Status::Invalid ? ui::map_tiles::MapTileReadStatus::Invalid
+                                                                                                                                                                                 : ui::map_tiles::MapTileReadStatus::Error;
+            pending.error = pending.status == ui::map_tiles::MapTileReadStatus::RetryLater ? -11 : pending.status == ui::map_tiles::MapTileReadStatus::Invalid ? -22
+                                                                                                                                                               : -5;
+            return pending;
+        }
+        if (source_mode_ == SourceMode::Tmap)
+        {
+            const auto read_start = sys::millis_now();
+            if (ref.layer != ui::map_tiles::MapTileLayer::Poi && !native_pixels_)
+            {
+                const auto info = tmap_source_.lookup(ref);
+                if (info.status == ui::map_tiles::MapTileStatus::Available && native_tile_format(info.format))
+                {
+                    native_pixels_ = ui::map_tiles::NativePixelBuffer::create(
+                        info.size, g_native_tile_pixel_bytes, kNativeTilePixelBudgetBytes,
+                        [](size_t alignment, size_t bytes) -> void*
+                        { return heap_caps_aligned_alloc(alignment, bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT); },
+                        heap_caps_free);
+                    if (!native_pixels_)
+                    {
+                        ui::map_tiles::MapTileReadResult pending{};
+                        pending.status = ui::map_tiles::MapTileReadStatus::RetryLater;
+                        pending.format = info.format;
+                        pending.error = -12;
+                        return pending;
+                    }
+                    native_bytes_ = info.size;
+                }
+            }
+            if (!native_pixels_ && (!buffer || !capacity))
+            {
+                ui::map_tiles::MapTileReadResult pending{};
+                pending.status = ui::map_tiles::MapTileReadStatus::RetryLater;
+                pending.error = -12;
+                return pending;
+            }
+            auto packaged = tmap_source_.read(ref, native_pixels_ ? native_pixels_ : buffer,
+                                              native_pixels_ ? native_bytes_ : capacity);
+            packaged.timing.available = true;
+            packaged.timing.read_ms = sys::millis_now() - read_start;
+            // Separate annotation diagnostics from raster traffic, with at most
+            // one message per five seconds for each group. No payload copies.
+            static uint32_t source_log_ms[2]{};
+            const unsigned group = ref.layer == ui::map_tiles::MapTileLayer::Poi ? 1U : 0U;
+            const uint32_t now = sys::millis_now();
+            if (source_log_ms[group] == 0 || now - source_log_ms[group] >= 5000U)
+            {
+                source_log_ms[group] = now;
+                const char* status = packaged.status == ui::map_tiles::MapTileReadStatus::Ready ? "ready" : packaged.status == ui::map_tiles::MapTileReadStatus::Missing  ? "missing"
+                                                                                                        : packaged.status == ui::map_tiles::MapTileReadStatus::RetryLater ? "busy"
+                                                                                                        : packaged.status == ui::map_tiles::MapTileReadStatus::Invalid    ? "invalid"
+                                                                                                                                                                          : "error";
+                if (packaged.error == -115) status = "progress";
+                std::printf("[GPS][MAP][source] mode=tmap package=%s layer=%s z=%u x=%lu y=%lu status=%s err=%ld bytes=%lu fallback_legacy=0\n",
+                            tmap_source_.activePackagePath(),
+                            map_tile_layer_name(ref.layer), static_cast<unsigned>(ref.z),
+                            static_cast<unsigned long>(ref.x), static_cast<unsigned long>(ref.y), status,
+                            static_cast<long>(packaged.error), static_cast<unsigned long>(packaged.size));
+            }
+            return packaged;
+        }
+        if (!buffer || !capacity)
+        {
+            ui::map_tiles::MapTileReadResult pending{};
+            pending.status = ui::map_tiles::MapTileReadStatus::RetryLater;
+            pending.format = ui::map_tiles::mapTileFormatForLayer(ref.layer);
+            pending.error = -12;
+            return pending;
+        }
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
         if (ref.layer == ui::map_tiles::MapTileLayer::Poi) return poi_source_.read(ref, buffer, capacity);
 #endif
@@ -753,13 +915,44 @@ class EspMapTileWorkerBackend final : public ui::map_tiles::IMapTileWorkerBacken
 
     void resetMetadata()
     {
+        finishRequest();
+        source_mode_ = SourceMode::Undecided;
+        tmap_source_.reset();
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
         poi_source_.reset();
 #endif
+        media_session_ = ::platform::esp::arduino_common::storage::sd_media_session();
     }
 
   private:
+    enum class SourceMode : uint8_t
+    {
+        Undecided,
+        Tmap,
+        Legacy
+    };
+    tmap::Status prepareSource()
+    {
+        if (source_mode_ != SourceMode::Undecided) return tmap::Status::Ok;
+        const auto status = tmap_source_.prepare();
+        if (status != tmap::Status::Ok) return status;
+        source_mode_ = tmap_source_.packageCount() ? SourceMode::Tmap : SourceMode::Legacy;
+        if (source_mode_ == SourceMode::Tmap) tmap_storage_.retainPackagePair();
+        std::printf("[GPS][MAP][source-mode] mode=%s packages=%lu session=%lu\n",
+                    source_mode_ == SourceMode::Tmap ? "tmap" : "legacy",
+                    static_cast<unsigned long>(tmap_source_.packageCount()),
+                    static_cast<unsigned long>(media_session_));
+        return tmap::Status::Ok;
+    }
+    SourceMode source_mode_ = SourceMode::Undecided;
     ui::map_tiles::IMapTileSource& source_;
+    platform::esp::map_tiles::SdTmapStorage tmap_storage_;
+    ui::map_tiles::TmapMapTileSource tmap_source_{tmap_storage_};
+    uint32_t media_session_ = 0;
+    uint32_t request_generation_ = 0;
+    uint32_t request_command_id_ = 0;
+    uint8_t* native_pixels_ = nullptr;
+    size_t native_bytes_ = 0;
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
     SdMapTileFileSystem poi_files_;
     platform::esp::arduino_common::map_poi::CJsonPoiParser poi_parser_;
@@ -1104,9 +1297,21 @@ class MapTileAsyncHost final
                         static_cast<unsigned long long>(metrics_.block_sectors),
                         static_cast<unsigned long>(metrics_.block_max_sectors),
                         static_cast<unsigned long long>(metrics_.block_us));
+        const auto stack_low = g_map_worker_stack_low_bytes.load(std::memory_order_relaxed);
+        std::printf("[GPS][MAP][memory] native=%u/%u internal_free=%u internal_min=%u "
+                    "psram_free=%u psram_min=%u worker_stack_min_bytes=%u\n",
+                    static_cast<unsigned>(g_native_tile_pixel_bytes.load(std::memory_order_relaxed)),
+                    static_cast<unsigned>(kNativeTilePixelBudgetBytes),
+                    static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL)),
+                    static_cast<unsigned>(heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL)),
+                    static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM)),
+                    static_cast<unsigned>(heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM)),
+                    static_cast<unsigned>(stack_low == UINT32_MAX ? 0 : stack_low));
         metrics_ = {};
         last_metrics_ms_ = now;
     }
+
+    bool completionsPending() { return events_.pending(); }
 
   private:
     static void taskThunk(void* self)
@@ -1133,7 +1338,23 @@ class MapTileAsyncHost final
             {
                 if (worker_ != nullptr)
                 {
+                    if (!scratch_)
+                    {
+                        scratch_ = static_cast<uint8_t*>(heap_caps_aligned_alloc(8, scratch_bytes_, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+                        worker_->setScratch(scratch_, scratch_ ? scratch_bytes_ : 0);
+                    }
+                    backend_.beginRequest(command.runtime.generation, command.runtime.command_id);
                     const auto result = worker_->execute(command, sys::millis_now());
+                    const auto stack_free = static_cast<uint32_t>(uxTaskGetStackHighWaterMark(nullptr) * sizeof(StackType_t));
+                    const auto old_low = g_map_worker_stack_low_bytes.load(std::memory_order_relaxed);
+                    g_map_worker_stack_low_bytes.store(std::min(old_low, stack_free), std::memory_order_relaxed);
+                    if (result == ui::map_tiles::MapTileExecutionStatus::Yielded)
+                    {
+                        // Keep the PSRAM scratch and command intact. Give the
+                        // display/radio a turn; reserve checks cancellation next.
+                        vTaskDelay(1);
+                        continue;
+                    }
                     if (result == ui::map_tiles::MapTileExecutionStatus::Backpressured)
                     {
 #if TRAIL_MATE_MAP_DIAGNOSTICS
@@ -1148,12 +1369,28 @@ class MapTileAsyncHost final
                         events_.waitForCapacity(pdMS_TO_TICKS(20));
                         continue;
                     }
+                    backend_.finishRequest();
+                    const auto wanted_scratch = backend_.tmapActive() ? kTmapWorkerScratchBytes : kMapTileWorkerScratchBytes;
+                    if (scratch_bytes_ != wanted_scratch)
+                    {
+                        // A terminal event already owns its contents. Release
+                        // before allocating the smaller scratch on next use.
+                        heap_caps_free(scratch_);
+                        scratch_ = nullptr;
+                        scratch_bytes_ = wanted_scratch;
+                        worker_->setScratch(nullptr, 0);
+                        std::printf("[GPS][MAP][worker] scratch_bytes=%u saved_psram_bytes=%u native_direct=%u\n",
+                                    static_cast<unsigned>(scratch_bytes_),
+                                    static_cast<unsigned>(kMapTileWorkerScratchBytes - scratch_bytes_), backend_.tmapActive() ? 1U : 0U);
+                    }
                     MAP_DIAG("[MAPD][worker-end] t=%lu gen=%lu id=%lu status=%u\n",
                              static_cast<unsigned long>(sys::millis_now()), static_cast<unsigned long>(command.runtime.generation),
                              static_cast<unsigned long>(command.runtime.command_id), static_cast<unsigned>(result));
                 }
                 have_command = false;
-                vTaskDelay(kMapTileWorkerPostCommandYieldTicks);
+                size_t queued = 0, in_flight = 0;
+                const bool backlog = commands_.statistics(queued, in_flight) && queued;
+                vTaskDelay(backlog ? 1 : kMapTileWorkerPostCommandYieldTicks);
                 continue;
             }
             bool idle = false;
@@ -1167,6 +1404,7 @@ class MapTileAsyncHost final
             if (idle)
             {
                 events_.clear();
+                backend_.resetMetadata();
                 delete worker_;
                 worker_ = nullptr;
                 if (scratch_ != nullptr)
@@ -1174,6 +1412,7 @@ class MapTileAsyncHost final
                     heap_caps_free(scratch_);
                     scratch_ = nullptr;
                 }
+                scratch_bytes_ = kMapTileWorkerScratchBytes;
                 portENTER_CRITICAL(&lock_);
                 task_ = nullptr;
                 started_ = false;
@@ -1210,10 +1449,10 @@ class MapTileAsyncHost final
             // ESP heap allocation only guarantees the allocator's alignment,
             // which need not satisfy TileHeader's explicit 8-byte alignment.
             scratch_ = static_cast<uint8_t*>(heap_caps_aligned_alloc(alignof(ui::map_poi::TileHeader),
-                                                                     kMapTileWorkerScratchBytes,
+                                                                     scratch_bytes_,
                                                                      MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
 #else
-            scratch_ = allocate_tile_payload(kMapTileWorkerScratchBytes);
+            scratch_ = allocate_tile_payload(scratch_bytes_);
 #endif
             if (scratch_ == nullptr)
             {
@@ -1234,7 +1473,7 @@ class MapTileAsyncHost final
                 ui::map_tiles::MapTileWorker(backend_,
                                              events_,
                                              scratch_,
-                                             kMapTileWorkerScratchBytes);
+                                             scratch_bytes_);
             if (worker_ == nullptr)
             {
                 if (!task_start_failed_logged_)
@@ -1281,6 +1520,7 @@ class MapTileAsyncHost final
     MapTileEventQueue events_{copy_map_tile_event, release_tile_payload};
     EspMapTileWorkerBackend backend_{worker_tile_source()};
     uint8_t* scratch_ = nullptr;
+    size_t scratch_bytes_ = kMapTileWorkerScratchBytes;
     ui::map_tiles::MapTileWorker* worker_ = nullptr;
     ui::map_tiles::MapTileAsyncRuntime async_runtime_{commands_};
     ui::map_tiles::MapTileStateMachine state_machine_{};
@@ -1530,6 +1770,8 @@ size_t tile_decode_cache_limit(const TileContext& ctx)
 }
 
 } // namespace
+
+bool map_tile_completions_pending() { return map_tile_async_host().completionsPending(); }
 
 uint8_t sanitize_map_source(uint8_t map_source)
 {
@@ -2123,7 +2365,7 @@ static bool evict_invisible_cached_tile_object(TileContext& ctx)
     return true;
 }
 
-static void reset_all_tiles_for_render_change(TileContext& ctx)
+static void reset_all_tiles_for_render_change(TileContext& ctx, bool preserve_poi)
 {
     if (!ctx.tiles)
     {
@@ -2133,8 +2375,21 @@ static void reset_all_tiles_for_render_change(TileContext& ctx)
     {
         reset_tile_runtime(tile);
         tile.visible = false;
+        if (preserve_poi)
+        {
+            tile.map_source = g_active_map_source;
+#if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
+            tile.poi_pending = false;
+            tile.poi_request_generation = 0;
+            tile.poi_request_id = 0;
+            tile.poi_retry_not_before_ms = 0;
+            // Cancelled partial reads must resume under the new generation.
+            if (tile.poi && reinterpret_cast<const ui::map_poi::TileHeader*>(tile.poi.get())->partial)
+                tile.poi_checked = false;
+#endif
+        }
     }
-    ctx.tiles->clear();
+    if (!preserve_poi) ctx.tiles->clear();
     if (ctx.has_map_data)
     {
         *ctx.has_map_data = false;
@@ -2149,13 +2404,16 @@ static void sync_render_settings(TileContext& ctx)
 {
     uint8_t map_source = sanitize_map_source(g_requested_map_source);
     bool contour_enabled = g_requested_contour_enabled;
+    const auto media_session = ::platform::esp::arduino_common::storage::sd_media_session();
+    const bool media_changed = media_session != g_active_map_media_session;
 
-    if (map_source == g_active_map_source && contour_enabled == g_active_contour_enabled)
+    if (!media_changed && map_source == g_active_map_source && contour_enabled == g_active_contour_enabled)
     {
         return;
     }
 
-    bool source_changed = (map_source != g_active_map_source);
+    bool source_changed = media_changed || (map_source != g_active_map_source);
+    g_active_map_media_session = media_session;
     const uint32_t previous_generation = g_map_tile_runtime_generation;
     g_active_map_source = map_source;
     g_active_contour_enabled = contour_enabled;
@@ -2166,7 +2424,9 @@ static void sync_render_settings(TileContext& ctx)
     }
     map_tile_async_host().cancelGeneration(previous_generation);
 
-    reset_all_tiles_for_render_change(ctx);
+    // OSM annotation identity is independent of the selected pixel style.
+    // A replaced medium invalidates both; a style change only invalidates pixels.
+    reset_all_tiles_for_render_change(ctx, !media_changed);
     if (source_changed)
     {
         g_missing_tile_notice_pending = false;
@@ -2284,7 +2544,7 @@ static bool render_base_tile_from_cache(TileContext& ctx, MapTile& tile, Decoded
     const lv_coord_t screen_width = lv_obj_get_width(ctx.map_container);
     const lv_coord_t screen_height = lv_obj_get_height(ctx.map_container);
     tile.visible = tile_in_rect(screen_x, screen_y, screen_width, screen_height, 0);
-    if (!tile.visible)
+    if (!tile.visible && !tile.prefetch)
     {
         return false;
     }
@@ -2300,6 +2560,7 @@ static bool render_base_tile_from_cache(TileContext& ctx, MapTile& tile, Decoded
     style_tile_obj(tile.img_obj);
     lv_obj_move_background(tile.img_obj);
     lv_image_set_src(tile.img_obj, cache.img_dsc);
+    if (!tile.visible) lv_obj_add_flag(tile.img_obj, LV_OBJ_FLAG_HIDDEN);
     bind_tile_decoded_cache(tile, cache);
 
     tile.map_source = g_active_map_source;
@@ -2467,7 +2728,7 @@ static bool apply_poi_tile_event(TileContext& ctx, ui::map_tiles::MapTileAsyncEv
     tile->poi_retry_not_before_ms = 0;
     if (event.kind == ui::map_tiles::MapTileAsyncEventKind::RetryLater)
     {
-        tile->poi_retry_not_before_ms = sys::millis_now() + kMapTileLayerBusyBackoffMs;
+        tile->poi_retry_not_before_ms = event.error == -115 ? 0 : sys::millis_now() + kMapTileLayerBusyBackoffMs;
         release_tile_payload(event);
         return false;
     }
@@ -2477,16 +2738,22 @@ static bool apply_poi_tile_event(TileContext& ctx, ui::map_tiles::MapTileAsyncEv
         event.payload.format != ui::map_tiles::MapTileFormat::PoiRecords ||
         !ui::map_poi::validPayload(event.payload.data, event.payload.size))
     {
-        if (event.error == -12)
+        if (event.error == -12 || event.error == -5)
         {
             tile->poi_checked = false;
-            tile->poi_retry_not_before_ms = sys::millis_now() + kMapTileLayerTransientBackoffMs;
+            // A transient SD I/O failure must not permanently suppress labels
+            // while the raster layer continues recovering. Slow retries for
+            // persistent I/O errors; Missing/Invalid remain checked.
+            tile->poi_retry_not_before_ms = sys::millis_now() +
+                                            (event.error == -5 ? 5000U : kMapTileLayerTransientBackoffMs);
         }
         log_map_tile_event_failure("poi_payload", event, event.error);
         release_tile_payload(event);
         return false;
     }
     const auto* header = reinterpret_cast<const ui::map_poi::TileHeader*>(event.payload.data);
+    tile->poi_checked = !header->partial;
+    if (header->partial) tile->poi_retry_not_before_ms = 0;
     // Failed reads must not discard a previously valid tile payload. Replace
     // only after a new typed payload has passed validation (including empty).
     tile->poi.reset();
@@ -2502,10 +2769,10 @@ static bool apply_poi_tile_event(TileContext& ctx, ui::map_tiles::MapTileAsyncEv
         event.payload.data = nullptr;
         event.payload.size = 0;
     }
-    std::printf("[MapViewport][POI] z=%u x=%lu y=%lu available=%d enabled=%d records=%u\n",
+    std::printf("[MapViewport][POI] z=%u x=%lu y=%lu available=%d enabled=%d records=%u partial=%d\n",
                 static_cast<unsigned>(event.tile.z), static_cast<unsigned long>(event.tile.x),
                 static_cast<unsigned long>(event.tile.y), ctx.poi_available, ctx.poi_policy.enabled(event.tile.z),
-                tile->poi ? count : 0);
+                tile->poi ? count : 0, header->partial);
     release_tile_payload(event);
     return true;
 }
@@ -2514,6 +2781,11 @@ static void request_visible_poi_tile(TileContext& ctx)
 {
     if (!ctx.tiles || !ctx.anchor || !ctx.anchor->valid) return;
     if (ctx.poi_policy_known && (!ctx.poi_available || !ctx.poi_policy.enabled(ctx.anchor->z))) return;
+    // Match the three retained annotation slots; do not queue more partially
+    // processed tiles than can keep progress while raster requests interleave.
+    unsigned pending_count = 0;
+    for (const auto& tile : *ctx.tiles) pending_count += tile.poi_pending;
+    if (pending_count >= 3) return;
     MapTile* best = nullptr;
     const uint32_t now = sys::millis_now();
     for (auto& tile : *ctx.tiles)
@@ -2597,7 +2869,7 @@ static bool apply_map_tile_event(TileContext& ctx, ui::map_tiles::MapTileAsyncEv
     if (event.kind != ui::map_tiles::MapTileAsyncEventKind::Ready)
     {
         log_map_tile_event_failure("worker", event, event.error);
-        const bool confirmed_missing = map_tile_availability_memory().knownMissing(event.tile);
+        const bool confirmed_missing = event.error == -2 || map_tile_availability_memory().knownMissing(event.tile);
         if (is_contour)
         {
             if (confirmed_missing)
@@ -2623,8 +2895,6 @@ static bool apply_map_tile_event(TileContext& ctx, ui::map_tiles::MapTileAsyncEv
             }
         }
         release_tile_payload(event);
-        update_visible_map_data_flag(ctx);
-        rebuild_render_queue(ctx);
         return true;
     }
 
@@ -2651,8 +2921,6 @@ static bool apply_map_tile_event(TileContext& ctx, ui::map_tiles::MapTileAsyncEv
     }
 
     release_tile_payload(event);
-    update_visible_map_data_flag(ctx);
-    rebuild_render_queue(ctx);
     metrics.stages[Metrics::Apply].add(sys::millis_now() - apply_start);
     if (rendered) ++metrics.rendered_count;
     MAP_DIAG("[MAPD][render] t=%lu id=%lu ok=%d obj=%p hidden=%d refs=%u decode_ms=%lu\n",
@@ -2727,7 +2995,7 @@ void tile_loader_maintenance(TileContext& ctx)
                                                             {
             if (candidate.generation != g_map_tile_runtime_generation) return true;
             const auto* tile = find_tile(ctx, candidate.tile.x, candidate.tile.y, candidate.tile.z);
-            return !tile || !tile->visible || !current_tile_request(*tile, candidate); });
+            return !tile || (!tile->visible && !tile->prefetch) || !current_tile_request(*tile, candidate); });
         if (!found) break;
         auto* tile = find_tile(ctx, event.tile.x, event.tile.y, event.tile.z);
         MAP_DIAG("[MAPD][discard] t=%lu gen=%lu active=%lu id=%lu exists=%d visible=%d matches=%d\n",
@@ -2753,8 +3021,18 @@ static void drain_map_tile_events(TileContext& ctx, uint32_t start_ms, uint32_t 
 {
     struct ReportOnExit
     {
-        ~ReportOnExit() { map_tile_async_host().reportMetrics(); }
-    } report;
+        TileContext& ctx;
+        bool changed = false;
+        ~ReportOnExit()
+        {
+            if (changed)
+            {
+                update_visible_map_data_flag(ctx);
+                rebuild_render_queue(ctx);
+            }
+            map_tile_async_host().reportMetrics();
+        }
+    } report{ctx};
     tile_loader_maintenance(ctx);
     // Failure/cancellation bookkeeping must not consume a PNG decode slot or
     // incur image cooldown. Stop between events when the UI budget is spent.
@@ -2763,25 +3041,33 @@ static void drain_map_tile_events(TileContext& ctx, uint32_t start_ms, uint32_t 
            map_tile_async_host().popEventIf(control, [](const auto& event)
                                             { return event.kind != ui::map_tiles::MapTileAsyncEventKind::Ready; }))
     {
-        if (map_tile_async_host().acceptEvent(control, ctx.render_queue)) (void)apply_map_tile_event(ctx, control);
+        if (map_tile_async_host().acceptEvent(control, ctx.render_queue))
+        {
+            const bool base = control.tile.layer <= ui::map_tiles::MapTileLayer::Satellite;
+            const bool applied = apply_map_tile_event(ctx, control);
+            report.changed |= base && applied;
+        }
         else release_tile_payload(control);
     }
     if (static_cast<uint32_t>(sys::millis_now() - start_ms) >= budget_ms) return;
     const uint32_t now_ms = sys::millis_now();
-    if (g_map_tile_next_event_drain_ms != 0 &&
-        static_cast<int32_t>(g_map_tile_next_event_drain_ms - now_ms) > 0)
-    {
-        return;
-    }
+    const bool cooling = g_map_tile_next_event_drain_ms != 0 &&
+                         static_cast<int32_t>(g_map_tile_next_event_drain_ms - now_ms) > 0;
 
     ui::map_tiles::MapTileAsyncEvent event{};
     int drained = 0;
-    while (drained < kMapTileEventsPerUiDrain && map_tile_async_host().popEvent(event))
+    while (drained < kMapTileEventsPerUiDrain &&
+           map_tile_async_host().popEventIf(event, [cooling](const auto& candidate)
+                                            { return !cooling || native_tile_format(candidate.format) ||
+                                                     candidate.format == ui::map_tiles::MapTileFormat::PoiRecords; }))
     {
+        const bool cheap = native_tile_format(event.format) || event.format == ui::map_tiles::MapTileFormat::PoiRecords;
         const bool accepted = map_tile_async_host().acceptEvent(event, ctx.render_queue);
         if (accepted)
         {
-            (void)apply_map_tile_event(ctx, event);
+            const bool base = event.tile.layer <= ui::map_tiles::MapTileLayer::Satellite;
+            const bool applied = apply_map_tile_event(ctx, event);
+            report.changed |= base && applied;
         }
         else
         {
@@ -2789,7 +3075,11 @@ static void drain_map_tile_events(TileContext& ctx, uint32_t start_ms, uint32_t 
         }
         ++drained;
         event = {};
-        g_map_tile_next_event_drain_ms = sys::millis_now() + kMapTileUiEventCooldownMs;
+        if (!cheap)
+        {
+            g_map_tile_next_event_drain_ms = sys::millis_now() + kMapTileUiEventCooldownMs;
+            break;
+        }
         if (static_cast<uint32_t>(sys::millis_now() - start_ms) >= budget_ms)
         {
             break;
@@ -2888,6 +3178,7 @@ static void mark_all_invisible(TileContext& ctx, int target_zoom)
     for (auto& tile : *ctx.tiles)
     {
         tile.visible = false;
+        tile.prefetch = false;
         // Delete tile objects that don't match target zoom level immediately
         // This prevents memory buildup when switching zoom levels frequently
         if (tile.img_obj != NULL && tile.z != target_zoom)
@@ -2952,25 +3243,26 @@ static void collect_required_tiles(TileContext& ctx, double lat, double lng, int
     // Ensure GPS center tile exists
     ensure_tile(ctx, gps_tile_x, gps_tile_y, zoom, 0); // Priority 0 = center
 
-    // Dynamic tile collection based on screen viewport
-    // Calculate which tiles are needed to cover the entire screen (no preloading)
-    // Start from screen corners and work inward to find all tiles that intersect the viewport
-
-    // Calculate tile range needed to cover screen
-    // Convert screen coordinates to tile coordinates
-    // For each possible tile position, check if it intersects the screen
-
-    // Start from GPS tile and expand outward until we cover the entire screen
-    // Use a reasonable maximum range (e.g., 10 tiles in each direction)
-    const int MAX_TILE_RANGE = 10;
-
-    // Collect all tiles that intersect the viewport
-    for (int dy = -MAX_TILE_RANGE; dy <= MAX_TILE_RANGE; dy++)
+    // Exact viewport range plus one neighboring ring; no 441-position scan.
+    const auto floor_tile = [](int pixels)
+    { return static_cast<int>(std::floor(pixels / 256.0)); };
+    const int min_dx = floor_tile(-ctx.anchor->gps_tile_screen_x);
+    const int max_dx = floor_tile(screen_width - 1 - ctx.anchor->gps_tile_screen_x);
+    const int min_dy = floor_tile(-ctx.anchor->gps_tile_screen_y);
+    const int max_dy = floor_tile(screen_height - 1 - ctx.anchor->gps_tile_screen_y);
+    struct Candidate
     {
-        for (int dx = -MAX_TILE_RANGE; dx <= MAX_TILE_RANGE; dx++)
+        int x = 0, y = 0, priority = 0;
+    };
+    Candidate ahead[4]{};
+    size_t ahead_count = 0, visible_count = 0;
+    for (int dy = min_dy - 1; dy <= max_dy + 1; dy++)
+    {
+        for (int dx = min_dx - 1; dx <= max_dx + 1; dx++)
         {
             int tile_x = gps_tile_x + dx;
             int tile_y = gps_tile_y + dy;
+            if (tile_y < 0 || tile_y >= (1 << zoom)) continue;
 
             // Normalize tile coordinates
             normalize_tile(zoom, tile_x, tile_y);
@@ -2996,8 +3288,34 @@ static void collect_required_tiles(TileContext& ctx, double lat, double lng, int
                 if (dy_px < 0) dy_px = -dy_px;
                 int priority = dx_px + dy_px;
                 ensure_tile(ctx, tile_x, tile_y, zoom, priority);
+                ++visible_count;
+            }
+            else
+            {
+                const int cx = screen_x + TILE_SIZE / 2 - screen_width / 2;
+                const int cy = screen_y + TILE_SIZE / 2 - screen_height / 2;
+                const int distance = std::abs(cx) + std::abs(cy);
+                const bool forward = cx * ctx.pan_direction_x + cy * ctx.pan_direction_y > 0;
+                const int priority = 100000 + distance + (forward ? 0 : 2048);
+                bool duplicate = false;
+                for (size_t i = 0; i < ahead_count; ++i) duplicate |= ahead[i].x == tile_x && ahead[i].y == tile_y;
+                if (duplicate) continue;
+                size_t at = 0;
+                while (at < ahead_count && ahead[at].priority <= priority) ++at;
+                if (at == 4) continue;
+                for (size_t i = std::min<size_t>(ahead_count, 3); i > at; --i) ahead[i] = ahead[i - 1];
+                ahead[at] = {tile_x, tile_y, priority};
+                ahead_count = std::min<size_t>(4, ahead_count + 1);
             }
         }
+    }
+    const auto limit = tile_object_cache_limit(ctx);
+    ahead_count = std::min(ahead_count, limit > visible_count ? limit - visible_count : 0);
+    for (size_t i = 0; i < ahead_count; ++i)
+    {
+        auto& tile = ensure_tile(ctx, ahead[i].x, ahead[i].y, zoom, ahead[i].priority);
+        tile.visible = false;
+        tile.prefetch = true;
     }
 }
 
@@ -3088,6 +3406,9 @@ static void layout_loaded_tile_objects(TileContext& ctx)
             // Hide invisible tiles
             if (tile.img_obj != NULL)
             {
+                // Keep prefetched/cached descriptors aligned with the current
+                // anchor so a later lightweight drag can reveal them correctly.
+                lv_obj_set_pos(tile.img_obj, screen_x, screen_y);
                 lv_obj_add_flag(tile.img_obj, LV_OBJ_FLAG_HIDDEN);
             }
             if (tile.contour_obj != NULL)
@@ -3279,7 +3600,40 @@ void calculate_required_tiles(TileContext& ctx, double lat, double lng, int zoom
         return;
     }
 
+    const bool had_anchor = ctx.anchor->valid;
+    const int previous_zoom = had_anchor ? ctx.anchor->z : zoom;
+    const int previous_left = had_anchor ? ctx.anchor->gps_tile_x + static_cast<int>(std::floor(-ctx.anchor->gps_tile_screen_x / 256.0)) : 0;
+    const int previous_top = had_anchor ? ctx.anchor->gps_tile_y + static_cast<int>(std::floor(-ctx.anchor->gps_tile_screen_y / 256.0)) : 0;
+    const int width = lv_obj_get_width(ctx.map_container);
+    const int height = lv_obj_get_height(ctx.map_container);
+    const int previous_right = had_anchor ? ctx.anchor->gps_tile_x + static_cast<int>(std::floor((width - 1 - ctx.anchor->gps_tile_screen_x) / 256.0)) : 0;
+    const int previous_bottom = had_anchor ? ctx.anchor->gps_tile_y + static_cast<int>(std::floor((height - 1 - ctx.anchor->gps_tile_screen_y) / 256.0)) : 0;
     sync_render_settings(ctx);
+    if (ctx.anchor->valid && ctx.anchor->z != zoom)
+    {
+        const auto previous = g_map_tile_runtime_generation;
+        if (++g_map_tile_runtime_generation == 0) g_map_tile_runtime_generation = kMapTileGenerationInitial;
+        map_tile_async_host().cancelGeneration(previous);
+        for (auto& tile : *ctx.tiles)
+        {
+            tile.base_request_pending = false;
+            tile.contour_request_pending = false;
+            tile.base_retry_not_before_ms = 0;
+            tile.contour_retry_not_before_ms = 0;
+#if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
+            tile.poi_pending = false;
+            tile.poi_retry_not_before_ms = 0;
+#endif
+        }
+        ctx.pan_direction_x = ctx.pan_direction_y = 0;
+    }
+    else
+    {
+        if (pan_x != ctx.previous_pan_x) ctx.pan_direction_x = pan_x > ctx.previous_pan_x ? -1 : 1;
+        if (pan_y != ctx.previous_pan_y) ctx.pan_direction_y = pan_y > ctx.previous_pan_y ? -1 : 1;
+    }
+    ctx.previous_pan_x = pan_x;
+    ctx.previous_pan_y = pan_y;
 
     GPS_LOG("[GPS] calculate_required_tiles: has_fix=%d, zoom=%d, lat=%.6f, lng=%.6f\n",
             has_fix, zoom, lat, lng);
@@ -3288,6 +3642,27 @@ void calculate_required_tiles(TileContext& ctx, double lat, double lng, int zoom
     mark_all_invisible(ctx, zoom);
 
     update_map_anchor(ctx, lat, lng, zoom, pan_x, pan_y, has_fix);
+    const int next_left = ctx.anchor->valid ? ctx.anchor->gps_tile_x + static_cast<int>(std::floor(-ctx.anchor->gps_tile_screen_x / 256.0)) : previous_left;
+    const int next_top = ctx.anchor->valid ? ctx.anchor->gps_tile_y + static_cast<int>(std::floor(-ctx.anchor->gps_tile_screen_y / 256.0)) : previous_top;
+    const int next_right = ctx.anchor->valid ? ctx.anchor->gps_tile_x + static_cast<int>(std::floor((width - 1 - ctx.anchor->gps_tile_screen_x) / 256.0)) : previous_right;
+    const int next_bottom = ctx.anchor->valid ? ctx.anchor->gps_tile_y + static_cast<int>(std::floor((height - 1 - ctx.anchor->gps_tile_screen_y) / 256.0)) : previous_bottom;
+    if (had_anchor && previous_zoom == zoom && (previous_left != next_left || previous_top != next_top || previous_right != next_right || previous_bottom != next_bottom))
+    {
+        const auto previous = g_map_tile_runtime_generation;
+        if (++g_map_tile_runtime_generation == 0) g_map_tile_runtime_generation = kMapTileGenerationInitial;
+        map_tile_async_host().cancelGeneration(previous);
+        for (auto& tile : *ctx.tiles)
+        {
+            tile.base_request_pending = false;
+            tile.contour_request_pending = false;
+            tile.base_retry_not_before_ms = 0;
+            tile.contour_retry_not_before_ms = 0;
+#if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
+            tile.poi_pending = false;
+            tile.poi_retry_not_before_ms = 0;
+#endif
+        }
+    }
 
     collect_required_tiles(ctx, lat, lng, zoom, pan_x, pan_y, has_fix);
 
@@ -3338,6 +3713,11 @@ void tile_loader_step(TileContext& ctx)
     const int max_tiles_per_step = kMapTileRequestsPerUiStep;
     MapTile* attempted[max_tiles_per_step] = {NULL};
     int attempted_count = 0;
+    bool render_changed = false;
+    const bool visible_loading = std::any_of(ctx.tiles->begin(), ctx.tiles->end(), [](const auto& tile)
+                                             { return tile.visible && !tile.has_png_file && !tile.base_missing; });
+    bool prefetch_pending = std::any_of(ctx.tiles->begin(), ctx.tiles->end(), [](const auto& tile)
+                                        { return tile.prefetch && !tile.visible && tile.base_request_pending; });
 
     while (attempted_count < max_tiles_per_step)
     {
@@ -3347,7 +3727,9 @@ void tile_loader_step(TileContext& ctx)
         MapTile* best = nullptr;
         for (auto& tile : *ctx.tiles)
         {
-            if (tile.visible &&
+            if (!tile.visible && (visible_loading || prefetch_pending ||
+                                  g_native_tile_pixel_bytes.load(std::memory_order_relaxed) > kNativeTilePixelBudgetBytes - 2U * 256U * 1024U)) continue;
+            if ((tile.visible || tile.prefetch) &&
                 tile.map_source == g_active_map_source &&
                 !tile.has_png_file &&
                 !tile.base_missing &&
@@ -3385,6 +3767,7 @@ void tile_loader_step(TileContext& ctx)
 
         attempted[attempted_count++] = best;
 
+#if TRAIL_MATE_MAP_TILE_FLOW_LOG
         int before_visible_total = 0;
         int before_visible_loaded = 0;
         int before_visible_placeholder = 0;
@@ -3403,6 +3786,7 @@ void tile_loader_step(TileContext& ctx)
                      before_visible_loaded,
                      before_visible_placeholder,
                      before_visible_unloaded);
+#endif
 
         // Save old object position for invalidation
         lv_obj_t* old_obj = best->img_obj;
@@ -3414,6 +3798,7 @@ void tile_loader_step(TileContext& ctx)
         }
 
         bool rendered_now = false;
+        const auto before_state = tile_render_state(*best);
         if (DecodedTileCache* cached = find_cached_tile_ref(base_tile_ref_for_tile(*best)))
         {
             rendered_now = render_base_tile_from_cache(ctx, *best, *cached);
@@ -3421,8 +3806,11 @@ void tile_loader_step(TileContext& ctx)
         else
         {
             (void)request_base_tile_async(*best);
+            if (!best->visible && best->base_request_pending) prefetch_pending = true;
         }
+        render_changed |= before_state != tile_render_state(*best);
 
+#if TRAIL_MATE_MAP_TILE_FLOW_LOG
         int after_visible_total = 0;
         int after_visible_loaded = 0;
         int after_visible_placeholder = 0;
@@ -3442,6 +3830,7 @@ void tile_loader_step(TileContext& ctx)
                      after_visible_loaded,
                      after_visible_placeholder,
                      after_visible_unloaded);
+#endif
 
         // Invalidate only the tile area, not the entire container
         if (rendered_now && best->img_obj != NULL)
@@ -3466,6 +3855,7 @@ void tile_loader_step(TileContext& ctx)
 
         // After loading a tile, update has_visible_map_data flag
         // This ensures the flag is updated immediately when tiles are loaded
+#if GPS_DEBUG
         if (ctx.has_visible_map_data)
         {
             bool old_value = *ctx.has_visible_map_data;
@@ -3476,6 +3866,7 @@ void tile_loader_step(TileContext& ctx)
                         old_value, *ctx.has_visible_map_data);
             }
         }
+#endif
 
         if ((int32_t)(sys::millis_now() - start_ms) >= (int32_t)budget_ms)
         {
@@ -3545,8 +3936,11 @@ void tile_loader_step(TileContext& ctx)
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
     if (static_cast<int32_t>(sys::millis_now() - start_ms) < static_cast<int32_t>(budget_ms)) request_visible_poi_tile(ctx);
 #endif
-    update_visible_map_data_flag(ctx);
-    rebuild_render_queue(ctx);
+    if (render_changed)
+    {
+        update_visible_map_data_flag(ctx);
+        rebuild_render_queue(ctx);
+    }
 }
 
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
