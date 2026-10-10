@@ -1,5 +1,6 @@
 #pragma once
 #include "platform/esp/arduino_common/storage/sd_card_runtime.h"
+#include "platform/esp/arduino_common/storage/sd_transfer_policy.h"
 #include "ui_map_runtime/map_tiles/tmap_map_tile_source.h"
 #include <algorithm>
 #include <cstdio>
@@ -161,7 +162,11 @@ class SdTmapStorage final : public ui::map_tiles::TmapStorage
                 raw_bytes_ = bytes;
                 raw_completed_ = 0;
             }
-            for (unsigned batch = 0; batch < 4 && raw_completed_ < bytes; ++batch)
+            // SDMMC can transfer larger runs without extra locks. Shared SPI
+            // keeps its original 4 KiB requests and physical 512-byte slicing.
+            constexpr size_t chunk = arduino_common::storage::ActiveSdTransferPolicy::file_slice_bytes > 4096 ? 32768 : 4096;
+            constexpr unsigned batches = chunk > 4096 ? 1 : 4;
+            for (unsigned batch = 0; batch < batches && raw_completed_ < bytes; ++batch)
             {
                 const auto at = offset + raw_completed_;
                 if (!seekIfNeeded(at))
@@ -170,7 +175,7 @@ class SdTmapStorage final : public ui::map_tiles::TmapStorage
                     raw_output_ = nullptr;
                     return tmap::Status::IoError;
                 }
-                const auto requested = std::min<size_t>(4096, bytes - raw_completed_);
+                const auto requested = std::min<size_t>(chunk, bytes - raw_completed_);
                 const int n = file_.read(output + raw_completed_, requested);
                 if (n > 0 && static_cast<size_t>(n) <= requested) raw_completed_ += static_cast<size_t>(n);
                 position_valid_ = n > 0 && !file_.read_busy();
@@ -187,7 +192,7 @@ class SdTmapStorage final : public ui::map_tiles::TmapStorage
         }
         else if (bytes)
         {
-            // Two fixed PSRAM blocks preserve partial index-page reads across
+            // Eight fixed PSRAM blocks preserve partial index-page reads across
             // Busy and share completed pages without reissuing physical I/O.
             if (!blocks_)
             {
@@ -218,7 +223,7 @@ class SdTmapStorage final : public ui::map_tiles::TmapStorage
             {
                 const auto at = offset + selected->completed;
                 if (!seekIfNeeded(at)) return file_.read_busy() ? tmap::Status::Busy : tmap::Status::IoError;
-                const auto requested = std::min<size_t>(512, bytes - selected->completed);
+                const auto requested = bytes - selected->completed;
                 const int n = file_.read(selected->data + selected->completed, requested);
                 if (read_cache_ && n > 0) read_cache_->sd_bytes += static_cast<size_t>(n);
                 if (n > 0 && static_cast<size_t>(n) <= requested) selected->completed += static_cast<size_t>(n);
@@ -258,7 +263,7 @@ class SdTmapStorage final : public ui::map_tiles::TmapStorage
     };
     struct Blocks
     {
-        Block pages[2]{};
+        Block pages[8]{};
         uint32_t age = 0;
     };
     bool seekIfNeeded(uint64_t offset)

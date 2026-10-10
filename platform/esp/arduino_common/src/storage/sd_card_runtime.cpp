@@ -1391,6 +1391,22 @@ bool sd_rename(const char* old_path, const char* new_path, uint32_t expected_ses
 class SdRuntimeFile::Impl
 {
   public:
+    // Only immutable TMAP readers allocate this, strictly in PSRAM. Positions
+    // include SdFat's cluster cursor so backward seeks need not restart a long
+    // fragmented exFAT chain. Never retain positions across close/media changes.
+    struct SeekCache
+    {
+        struct Entry
+        {
+            fspos_t position{};
+            uint32_t age = 0;
+        };
+        Entry entries[64]{};
+        uint32_t age = 0;
+        uint32_t restores = 0;
+        uint32_t calls = 0, elapsed_ms = 0, max_ms = 0, reported_ms = 0;
+    };
+    SeekCache* seek_cache = nullptr;
     FsFile sdfat_file;
     uint32_t session = 0;
     SdCardBackend backend = SdCardBackend::None;
@@ -1494,6 +1510,11 @@ void SdRuntimeFile::close()
     // A stale/contended handle must not flush from its later destructor or open.
     // This SdFat configuration owns file state inline and has a non-I/O destructor.
     abandon_sd_file(impl_->sdfat_file);
+    if (impl_->seek_cache)
+    {
+        heap_caps_free(impl_->seek_cache);
+        impl_->seek_cache = nullptr;
+    }
     impl_->backend = SdCardBackend::None;
     impl_->path[0] = '\0';
     impl_->mode[0] = '\0';
@@ -1815,9 +1836,100 @@ bool SdRuntimeFile::seek(uint64_t offset)
             return false;
         }
         const SdIoErrorScope io_error;
-        const bool result = impl_->sdfat_file.seekSet(offset);
+        const auto path_length = std::strlen(impl_->path);
+        if (!impl_->seek_cache && std::strcmp(impl_->mode, "r") == 0 && path_length >= 5 &&
+            std::strcmp(impl_->path + path_length - 5, ".tmap") == 0)
+        {
+            auto* memory = heap_caps_malloc(sizeof(Impl::SeekCache), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+            if (memory) impl_->seek_cache = new (memory) Impl::SeekCache{};
+        }
+        fspos_t previous{};
+        impl_->sdfat_file.fgetpos(&previous);
+        if (impl_->seek_cache)
+        {
+            auto& cache = *impl_->seek_cache;
+            // The closest known predecessor reduces FAT walking. A current
+            // position beyond the target cannot be used as a predecessor.
+            auto* best = static_cast<Impl::SeekCache::Entry*>(nullptr);
+            for (auto& entry : cache.entries)
+                if (entry.age && entry.position.position <= offset &&
+                    (previous.position > offset || entry.position.position > previous.position) &&
+                    (!best || entry.position.position > best->position.position)) best = &entry;
+            if (best)
+            {
+                impl_->sdfat_file.fsetpos(&best->position);
+                best->age = ++cache.age;
+                ++cache.restores;
+            }
+        }
+        bool result = true;
+        if (impl_->seek_cache && offset <= impl_->sdfat_file.fileSize())
+        {
+            auto& cache = *impl_->seek_cache;
+            // Half the slots are persistent coarse anchors; the other half
+            // retain recent exact positions. Populate anchors while walking
+            // forward for the first time so reverse panning also has a nearby
+            // predecessor. This costs no complete-file scan at open time.
+            constexpr uint64_t unit = UINT64_C(1048576);
+            const auto length = impl_->sdfat_file.fileSize();
+            const auto interval = length / 32 + (length % 32 != 0);
+            const auto stride = std::max<uint64_t>(unit, (interval + unit - 1) / unit * unit);
+            auto at = impl_->sdfat_file.curPosition();
+            if (at <= offset)
+            {
+                auto boundary = (at / stride + 1) * stride;
+                for (; boundary <= offset; boundary += stride)
+                {
+                    if (!impl_->sdfat_file.seekSet(boundary))
+                    {
+                        result = false;
+                        break;
+                    }
+                    auto& anchor = cache.entries[boundary / stride - 1];
+                    impl_->sdfat_file.fgetpos(&anchor.position);
+                    anchor.age = ++cache.age;
+                }
+            }
+        }
+        if (result) result = impl_->sdfat_file.seekSet(offset);
         read_busy_ = !result && (guard.busStatus() == sys::runtime::BusAcquireStatus::Busy || guard.busStatus() == sys::runtime::BusAcquireStatus::TimedOut);
-        if (!result) sd_io_end("file_seek", impl_->path, start_ms, false, 0, read_busy_ ? -2 : -1, static_cast<int64_t>(offset), io_error.error());
+        if (impl_->seek_cache)
+        {
+            if (!result) impl_->sdfat_file.fsetpos(&previous);
+            auto& cache = *impl_->seek_cache;
+            fspos_t current{};
+            impl_->sdfat_file.fgetpos(&current);
+            auto* target = &cache.entries[32];
+            for (size_t index = 32; index < 64; ++index)
+            {
+                auto& entry = cache.entries[index];
+                if (entry.age && entry.position.position == current.position)
+                {
+                    target = &entry;
+                    break;
+                }
+                if (entry.age < target->age) target = &entry;
+            }
+            target->position = current;
+            target->age = ++cache.age;
+            const auto elapsed = sys::millis_now() - start_ms;
+            ++cache.calls;
+            cache.elapsed_ms += elapsed;
+            cache.max_ms = std::max(cache.max_ms, elapsed);
+            const auto now = sys::millis_now();
+            if (now - cache.reported_ms >= 5000U)
+            {
+                std::printf("[TMAP][SD][seek] calls=%lu restored=%lu ms(avg/max)=%lu/%lu cache_bytes=%u memory=psram\n",
+                            static_cast<unsigned long>(cache.calls), static_cast<unsigned long>(cache.restores),
+                            static_cast<unsigned long>(cache.elapsed_ms / cache.calls), static_cast<unsigned long>(cache.max_ms),
+                            static_cast<unsigned>(sizeof(Impl::SeekCache)));
+                cache.reported_ms = now;
+                cache.calls = cache.restores = cache.elapsed_ms = cache.max_ms = 0;
+            }
+        }
+        sd_io_end("file_seek", impl_->path, start_ms, result, 0, result ? 0 : read_busy_ ? -2
+                                                                                         : -1,
+                  static_cast<int64_t>(offset), io_error.error());
         return result;
     }
     return false;
