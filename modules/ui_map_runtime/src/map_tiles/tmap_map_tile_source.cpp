@@ -14,6 +14,8 @@ constexpr size_t kPathBytes = 192, kEntriesPerBlock = 16;
 struct Entry
 {
     tmap::Package package{};
+    std::array<uint32_t, 13> layer_zooms{};
+    bool has_pois = false;
     char path[kPathBytes]{};
 };
 struct Block
@@ -156,8 +158,10 @@ struct TmapMapTileSource::State
     Block* tail = nullptr;
     Entry* active = nullptr;
     char pending[kPathBytes]{};
+    std::array<uint32_t, 13> pending_layers{};
     uint32_t session = 0;
     size_t count = 0, bytes = sizeof(State);
+    uint32_t switches = 0, switch_log_ms = 0;
     bool complete = false, failed = false;
     struct AnnotationSlot
     {
@@ -250,6 +254,13 @@ tmap::Status TmapMapTileSource::catalog() const
             s.failed = true;
             return tmap::Status::Invalid;
         }
+        status = s.reader.layerCoverage(s.pending_layers);
+        if (status == tmap::Status::Busy || status == tmap::Status::More) return status;
+        if (status != tmap::Status::Ok)
+        {
+            s.failed = true;
+            return status;
+        }
         if (s.count % kEntriesPerBlock == 0)
         {
             auto* memory = storage_.allocate(sizeof(Block), alignof(Block));
@@ -262,6 +273,8 @@ tmap::Status TmapMapTileSource::catalog() const
         }
         auto* entry = &s.tail->entries[s.count % kEntriesPerBlock];
         entry->package = s.reader.package();
+        entry->layer_zooms = s.pending_layers;
+        entry->has_pois = s.reader.poiCount() != 0;
         std::memcpy(entry->path, s.pending, sizeof(entry->path));
         s.entries[s.count++] = entry;
         s.pending[0] = 0;
@@ -281,6 +294,14 @@ tmap::Status TmapMapTileSource::activate(size_t index) const
     // Do not reuse offsets when a file was replaced without a media refresh.
     if (s.reader.package().build != entry->package.build) return tmap::Status::Invalid;
     s.active = entry;
+    ++s.switches;
+    const auto now = storage_.nowMs();
+    if (s.switches == 1 || now - s.switch_log_ms >= 5000U)
+    {
+        s.switch_log_ms = now;
+        std::printf("[TMAP][PACKAGE] activate path=%s switches=%lu\n", entry->path,
+                    static_cast<unsigned long>(s.switches));
+    }
     return tmap::Status::Ok;
 }
 tmap::Status TmapMapTileSource::select(const MapTileRef& ref, tmap::Tile& tile) const
@@ -311,6 +332,15 @@ tmap::Status TmapMapTileSource::select(const MapTileRef& ref, tmap::Tile& tile) 
             while (!(candidates & (UINT32_C(1) << bit))) ++bit;
             candidates &= ~(UINT32_C(1) << bit);
             const size_t i = word * 32 + bit;
+            if (ref.layer == MapTileLayer::Poi)
+            {
+                if (!s.entries[i]->has_pois) continue;
+            }
+            else
+            {
+                const auto slot = static_cast<unsigned>(ref.layer);
+                if (slot >= 13 || !(s.entries[i]->layer_zooms[slot] & (UINT32_C(1) << ref.z))) continue;
+            }
             if (!s.entries[i]->package.bounds.intersects(bounds)) continue;
             status = activate(i);
             if (status != tmap::Status::Ok) return status;

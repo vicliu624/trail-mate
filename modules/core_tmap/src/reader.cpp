@@ -345,6 +345,33 @@ Status Reader::find(const Section& section, KeyKind kind, const uint8_t* key, si
     }
     return Status::Invalid;
 }
+Status Reader::layerCoverage(std::array<uint32_t, 13>& zooms)
+{
+    zooms.fill(0);
+    if (!isOpen()) return Status::Invalid;
+    const auto* layers = section(2);
+    if (!layers || layers->length > 64U * 96U) return Status::Invalid;
+    auto& record = workspace_.record;
+    for (uint64_t at = 0; at < layers->length; at += 96)
+    {
+        const auto status = read(layers->offset + at, record.data(), 96);
+        if (status != Status::Ok) return status;
+        const auto* d = record.data();
+        const auto semantic = u16(d + 4);
+        const unsigned slot = semantic >= 1 && semantic <= 3       ? semantic - 1
+                              : semantic >= 100 && semantic <= 104 ? semantic - 100 + 3
+                              : semantic >= 110 && semantic <= 114 ? semantic - 110 + 8
+                                                                   : 13;
+        if (slot == 13) continue;
+        if (u16(d + 6) != 256 || u16(d + 14)) return Status::Invalid;
+        const auto* index = section(u32(d + 16));
+        const auto* pixels = section(u32(d + 20));
+        if (!index || !pixels || index->type != 10 || pixels->type != 11 ||
+            index->owner != u32(d) || pixels->owner != u32(d)) return Status::Invalid;
+        if (index->count && pixels->length) zooms[slot] |= u32(d + 8) & package_.zoom_mask;
+    }
+    return Status::Ok;
+}
 Status Reader::lookupTile(uint32_t semantic, uint8_t zoom, uint32_t x, uint32_t y, Tile& output)
 {
     output = {};

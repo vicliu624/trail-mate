@@ -253,6 +253,11 @@ void init_tile_context(TileContext& ctx, lv_obj_t* map_container, MapAnchor* anc
  */
 void cleanup_tiles(TileContext& ctx);
 
+#if defined(ARDUINO_ARCH_ESP32)
+// UI-side nonblocking check; no allocation, planning or filesystem access.
+bool map_tile_completions_pending();
+#endif
+
 /**
  * Release the asynchronous tile service lease owned by this context.
  * cleanup_tiles() intentionally keeps the lease because it is also used for

@@ -152,6 +152,8 @@ class Reader
     bool isOpen() const { return file_ != nullptr && opened_; }
     const Package& package() const { return package_; }
     uint64_t poiCount() const;
+    // OSM, terrain, satellite, major contours 100..104, minor 110..114.
+    Status layerCoverage(std::array<uint32_t, 13>& zooms);
     Status lookupTile(uint32_t semantic, uint8_t zoom, uint32_t x, uint32_t y, Tile& tile);
     Status lookupAnnotations(uint8_t zoom, uint32_t x, uint32_t y);
     Status readTile(const Tile& tile, uint8_t* output, size_t capacity);

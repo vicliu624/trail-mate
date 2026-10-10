@@ -240,7 +240,7 @@ bool native_tile_format(ui::map_tiles::MapTileFormat format)
     return format == ui::map_tiles::MapTileFormat::Rgb565 || format == ui::map_tiles::MapTileFormat::Rgba8888;
 }
 constexpr std::size_t kMapTileWorkerTaskStackBytes = 4U * 1024U;
-constexpr int kMapTileEventsPerUiDrain = 1;
+constexpr int kMapTileEventsPerUiDrain = 4;
 constexpr int kMapTileRequestsPerUiStep = 2;
 constexpr uint32_t kMapTileUiDrainBudgetMs = 4;
 constexpr uint32_t kMapTileUiEventCooldownMs = 60;
@@ -1249,6 +1249,8 @@ class MapTileAsyncHost final
         last_metrics_ms_ = now;
     }
 
+    bool completionsPending() { return events_.pending(); }
+
   private:
     static void taskThunk(void* self)
     {
@@ -1683,6 +1685,8 @@ size_t tile_decode_cache_limit(const TileContext& ctx)
 }
 
 } // namespace
+
+bool map_tile_completions_pending() { return map_tile_async_host().completionsPending(); }
 
 uint8_t sanitize_map_source(uint8_t map_source)
 {
@@ -2936,16 +2940,17 @@ static void drain_map_tile_events(TileContext& ctx, uint32_t start_ms, uint32_t 
     }
     if (static_cast<uint32_t>(sys::millis_now() - start_ms) >= budget_ms) return;
     const uint32_t now_ms = sys::millis_now();
-    if (g_map_tile_next_event_drain_ms != 0 &&
-        static_cast<int32_t>(g_map_tile_next_event_drain_ms - now_ms) > 0)
-    {
-        return;
-    }
+    const bool cooling = g_map_tile_next_event_drain_ms != 0 &&
+                         static_cast<int32_t>(g_map_tile_next_event_drain_ms - now_ms) > 0;
 
     ui::map_tiles::MapTileAsyncEvent event{};
     int drained = 0;
-    while (drained < kMapTileEventsPerUiDrain && map_tile_async_host().popEvent(event))
+    while (drained < kMapTileEventsPerUiDrain &&
+           map_tile_async_host().popEventIf(event, [cooling](const auto& candidate)
+                                            { return !cooling || native_tile_format(candidate.format) ||
+                                                     candidate.format == ui::map_tiles::MapTileFormat::PoiRecords; }))
     {
+        const bool cheap = native_tile_format(event.format) || event.format == ui::map_tiles::MapTileFormat::PoiRecords;
         const bool accepted = map_tile_async_host().acceptEvent(event, ctx.render_queue);
         if (accepted)
         {
@@ -2957,7 +2962,11 @@ static void drain_map_tile_events(TileContext& ctx, uint32_t start_ms, uint32_t 
         }
         ++drained;
         event = {};
-        g_map_tile_next_event_drain_ms = sys::millis_now() + kMapTileUiEventCooldownMs;
+        if (!cheap)
+        {
+            g_map_tile_next_event_drain_ms = sys::millis_now() + kMapTileUiEventCooldownMs;
+            break;
+        }
         if (static_cast<uint32_t>(sys::millis_now() - start_ms) >= budget_ms)
         {
             break;

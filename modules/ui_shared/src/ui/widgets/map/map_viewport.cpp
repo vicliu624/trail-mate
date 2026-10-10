@@ -102,6 +102,9 @@ struct RuntimeImpl
     ui::map_tiles::MapTileRenderQueue render_queue{};
     TileContext tile_ctx{};
     lv_timer_t* loader_timer = nullptr;
+#if defined(ARDUINO_ARCH_ESP32)
+    lv_timer_t* completion_timer = nullptr;
+#endif
     uint32_t loader_interval_ms = 50;
     uint32_t last_loader_active_log_ms = 0;
     bool loader_paused = false;
@@ -825,6 +828,22 @@ void refresh_poi_overlay(RuntimeImpl& impl, bool force)
 }
 #endif
 
+#if defined(ARDUINO_ARCH_ESP32)
+void completion_timer_cb(lv_timer_t* timer)
+{
+    auto* impl = static_cast<RuntimeImpl*>(lv_timer_get_user_data(timer));
+    if (!impl || !is_runtime_alive(*impl) || impl->loader_paused ||
+        !impl->model.focus_point.valid || !map_tile_completions_pending()) return;
+    // Only committed results trigger the bounded UI work. Idle checks do not
+    // resubmit requests, visit SD, refresh markers, or invalidate the display.
+    tile_loader_step(impl->tile_ctx);
+#if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
+    if (!impl->gesture_pressed && !impl->gesture_dragging && !impl->drag_preview_active)
+        refresh_poi_overlay(*impl, false);
+#endif
+}
+#endif
+
 void loader_timer_cb(lv_timer_t* timer)
 {
     auto* impl = static_cast<RuntimeImpl*>(lv_timer_get_user_data(timer));
@@ -1000,6 +1019,9 @@ Widgets create(Runtime& runtime, lv_obj_t* parent, uint32_t loader_interval_ms)
                       &impl->has_visible_map_data);
 
     impl->loader_timer = lv_timer_create(loader_timer_cb, loader_interval_ms, impl);
+#if defined(ARDUINO_ARCH_ESP32)
+    impl->completion_timer = lv_timer_create(completion_timer_cb, 30, impl);
+#endif
     impl->loader_interval_ms = loader_interval_ms;
     impl->alive = true;
     std::printf("[UI][Lifecycle] map runtime create root=%p tile=%p loader=%p interval_ms=%lu\n",
@@ -1036,6 +1058,14 @@ void destroy(Runtime& runtime)
                 impl->has_visible_map_data ? 1 : 0,
                 impl->has_map_data ? 1 : 0);
     impl->alive = false;
+
+#if defined(ARDUINO_ARCH_ESP32)
+    if (impl->completion_timer)
+    {
+        lv_timer_del(impl->completion_timer);
+        impl->completion_timer = nullptr;
+    }
+#endif
 
     if (impl->loader_timer)
     {
