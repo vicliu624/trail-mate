@@ -937,6 +937,7 @@ class EspMapTileWorkerBackend final : public ui::map_tiles::IMapTileWorkerBacken
         const auto status = tmap_source_.prepare();
         if (status != tmap::Status::Ok) return status;
         source_mode_ = tmap_source_.packageCount() ? SourceMode::Tmap : SourceMode::Legacy;
+        if (source_mode_ == SourceMode::Tmap) tmap_storage_.retainPackagePair();
         std::printf("[GPS][MAP][source-mode] mode=%s packages=%lu session=%lu\n",
                     source_mode_ == SourceMode::Tmap ? "tmap" : "legacy",
                     static_cast<unsigned long>(tmap_source_.packageCount()),
@@ -2364,7 +2365,7 @@ static bool evict_invisible_cached_tile_object(TileContext& ctx)
     return true;
 }
 
-static void reset_all_tiles_for_render_change(TileContext& ctx)
+static void reset_all_tiles_for_render_change(TileContext& ctx, bool preserve_poi)
 {
     if (!ctx.tiles)
     {
@@ -2374,8 +2375,21 @@ static void reset_all_tiles_for_render_change(TileContext& ctx)
     {
         reset_tile_runtime(tile);
         tile.visible = false;
+        if (preserve_poi)
+        {
+            tile.map_source = g_active_map_source;
+#if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
+            tile.poi_pending = false;
+            tile.poi_request_generation = 0;
+            tile.poi_request_id = 0;
+            tile.poi_retry_not_before_ms = 0;
+            // Cancelled partial reads must resume under the new generation.
+            if (tile.poi && reinterpret_cast<const ui::map_poi::TileHeader*>(tile.poi.get())->partial)
+                tile.poi_checked = false;
+#endif
+        }
     }
-    ctx.tiles->clear();
+    if (!preserve_poi) ctx.tiles->clear();
     if (ctx.has_map_data)
     {
         *ctx.has_map_data = false;
@@ -2410,7 +2424,9 @@ static void sync_render_settings(TileContext& ctx)
     }
     map_tile_async_host().cancelGeneration(previous_generation);
 
-    reset_all_tiles_for_render_change(ctx);
+    // OSM annotation identity is independent of the selected pixel style.
+    // A replaced medium invalidates both; a style change only invalidates pixels.
+    reset_all_tiles_for_render_change(ctx, !media_changed);
     if (source_changed)
     {
         g_missing_tile_notice_pending = false;

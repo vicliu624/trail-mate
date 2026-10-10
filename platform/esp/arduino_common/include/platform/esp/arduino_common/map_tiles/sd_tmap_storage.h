@@ -34,6 +34,9 @@ class SdTmapStorage final : public ui::map_tiles::TmapStorage
         uint64_t hits = 0, sd_bytes = 0;
     };
     void setReadCache(ReadCache* cache) { read_cache_ = cache; }
+    // Map rendering may retain one other immutable package. Search keeps its
+    // original single-file policy; the eight data pages remain shared.
+    void retainPackagePair() { retain_pair_ = true; }
     ~SdTmapStorage() override { closePackage(); }
     void* allocate(size_t bytes, size_t alignment) override
     {
@@ -93,25 +96,65 @@ class SdTmapStorage final : public ui::map_tiles::TmapStorage
         // Catalog/header retries must not reopen the same immutable file and
         // discard its partial page transfer on every Busy response.
         if (!path || std::strlen(path) >= sizeof(current_path_)) return tmap::Status::Invalid;
-        if (file_.is_open() && size_ && file_session_ == session() && std::strcmp(current_path_, path) == 0)
+        if (file_session_ != session()) closePackage();
+        if (currentFile().is_open() && size_ && file_session_ == session() && std::strcmp(current_path_, path) == 0)
             return tmap::Status::Ok;
-        file_.close();
+        if (retain_pair_ && !parked_)
+        {
+            void* memory = allocate(sizeof(Parked), alignof(Parked));
+            if (memory) parked_ = new (memory) Parked{};
+        }
+        if (parked_)
+        {
+            // MRU pair: an existing alternate file resumes its own FAT seek
+            // anchors. A third package replaces the least recently used file.
+            const bool hit = parked_->size && std::strcmp(parked_->path, path) == 0;
+            if (!parked_->inactive) parked_->inactive = &parked_->file;
+            File* previous = &currentFile();
+            active_file_ = parked_->inactive;
+            parked_->inactive = previous;
+            std::swap_ranges(std::begin(current_path_), std::end(current_path_), std::begin(parked_->path));
+            std::swap(size_, parked_->size);
+            std::swap(position_, parked_->position);
+            std::swap(position_valid_, parked_->position_valid);
+            raw_output_ = nullptr;
+            clearReadCache();
+            if (hit)
+            {
+                ++pair_hits_;
+                reportPair();
+                return tmap::Status::Ok;
+            }
+        }
+        currentFile().close();
         size_ = 0;
+        current_path_[0] = 0;
         position_valid_ = false;
         raw_output_ = nullptr;
         clearReadCache();
         if (blocks_)
-            for (auto& block : blocks_->pages) block.bytes = 0;
+            for (auto& block : blocks_->pages)
+                if (block.owner == &currentFile()) block.bytes = 0;
         file_session_ = session();
-        if (!file_.open(path, "r", file_session_)) return file_.read_busy() ? tmap::Status::Busy : tmap::Status::IoError;
-        size_ = file_.size();
-        if (file_.read_busy()) return tmap::Status::Busy;
+        if (!currentFile().open(path, "r", file_session_)) return currentFile().read_busy() ? tmap::Status::Busy : tmap::Status::IoError;
+        ++package_opens_;
+        size_ = currentFile().size();
+        if (currentFile().read_busy()) return tmap::Status::Busy;
         if (size_) std::strcpy(current_path_, path);
+        reportPair();
         return size_ ? tmap::Status::Ok : tmap::Status::Invalid;
     }
     void closePackage() override
     {
         file_.close();
+        if (parked_)
+        {
+            parked_->file.close();
+            parked_->~Parked();
+            release(parked_);
+            parked_ = nullptr;
+        }
+        active_file_ = nullptr;
         size_ = 0;
         current_path_[0] = 0;
         position_valid_ = false;
@@ -136,7 +179,7 @@ class SdTmapStorage final : public ui::map_tiles::TmapStorage
     {
         if (file_session_ != session() || arduino_common::storage::sd_external_block_owner_active())
             return raw_output_ == output && raw_offset_ == offset && raw_bytes_ == bytes ? tmap::Status::More : tmap::Status::Busy;
-        if (!file_.is_open() || offset > size_ || bytes > size_ - offset)
+        if (!currentFile().is_open() || offset > size_ || bytes > size_ - offset)
         {
             raw_output_ = nullptr;
             return tmap::Status::Invalid;
@@ -171,16 +214,16 @@ class SdTmapStorage final : public ui::map_tiles::TmapStorage
                 const auto at = offset + raw_completed_;
                 if (!seekIfNeeded(at))
                 {
-                    if (file_.read_busy()) return tmap::Status::More;
+                    if (currentFile().read_busy()) return tmap::Status::More;
                     raw_output_ = nullptr;
                     return tmap::Status::IoError;
                 }
                 const auto requested = std::min<size_t>(chunk, bytes - raw_completed_);
-                const int n = file_.read(output + raw_completed_, requested);
+                const int n = currentFile().read(output + raw_completed_, requested);
                 if (n > 0 && static_cast<size_t>(n) <= requested) raw_completed_ += static_cast<size_t>(n);
-                position_valid_ = n > 0 && !file_.read_busy();
+                position_valid_ = n > 0 && !currentFile().read_busy();
                 position_ = at + (n > 0 ? static_cast<size_t>(n) : 0);
-                if (file_.read_busy()) return tmap::Status::More;
+                if (currentFile().read_busy()) return tmap::Status::More;
                 if (n <= 0 || static_cast<size_t>(n) > requested)
                 {
                     raw_output_ = nullptr;
@@ -202,7 +245,7 @@ class SdTmapStorage final : public ui::map_tiles::TmapStorage
             }
             Block* selected = nullptr;
             for (auto& block : blocks_->pages)
-                if (block.bytes == bytes && block.offset == offset) selected = &block;
+                if (block.owner == &currentFile() && block.bytes == bytes && block.offset == offset) selected = &block;
             if (!selected)
             {
                 selected = &*std::min_element(std::begin(blocks_->pages), std::end(blocks_->pages),
@@ -215,6 +258,7 @@ class SdTmapStorage final : public ui::map_tiles::TmapStorage
                                                   return pa != pb ? pa < pb : a.age < b.age;
                                               });
                 selected->offset = offset;
+                selected->owner = &currentFile();
                 selected->bytes = bytes;
                 selected->completed = 0;
             }
@@ -222,14 +266,14 @@ class SdTmapStorage final : public ui::map_tiles::TmapStorage
             while (selected->completed < bytes)
             {
                 const auto at = offset + selected->completed;
-                if (!seekIfNeeded(at)) return file_.read_busy() ? tmap::Status::Busy : tmap::Status::IoError;
+                if (!seekIfNeeded(at)) return currentFile().read_busy() ? tmap::Status::Busy : tmap::Status::IoError;
                 const auto requested = bytes - selected->completed;
-                const int n = file_.read(selected->data + selected->completed, requested);
+                const int n = currentFile().read(selected->data + selected->completed, requested);
                 if (read_cache_ && n > 0) read_cache_->sd_bytes += static_cast<size_t>(n);
                 if (n > 0 && static_cast<size_t>(n) <= requested) selected->completed += static_cast<size_t>(n);
-                position_valid_ = n > 0 && !file_.read_busy();
+                position_valid_ = n > 0 && !currentFile().read_busy();
                 position_ = at + (n > 0 ? static_cast<size_t>(n) : 0);
-                if (file_.read_busy()) return tmap::Status::Busy;
+                if (currentFile().read_busy()) return tmap::Status::Busy;
                 if (n <= 0 || static_cast<size_t>(n) > requested) return tmap::Status::IoError;
             }
             std::memcpy(output, selected->data, bytes);
@@ -257,6 +301,7 @@ class SdTmapStorage final : public ui::map_tiles::TmapStorage
     struct Block
     {
         uint8_t data[4096]{};
+        const File* owner = nullptr;
         uint64_t offset = 0;
         size_t bytes = 0, completed = 0;
         uint32_t age = 0;
@@ -269,12 +314,33 @@ class SdTmapStorage final : public ui::map_tiles::TmapStorage
     bool seekIfNeeded(uint64_t offset)
     {
         if (position_valid_ && position_ == offset) return true;
-        const bool ok = file_.seek(offset);
+        const bool ok = currentFile().seek(offset);
         position_valid_ = ok;
         position_ = offset;
         return ok;
     }
     Blocks* blocks_ = nullptr;
+    struct Parked
+    {
+        File file;
+        File* inactive = nullptr;
+        char path[192]{};
+        uint64_t size = 0, position = 0;
+        bool position_valid = false;
+    };
+    File& currentFile() { return active_file_ ? *active_file_ : file_; }
+    void reportPair()
+    {
+        if (!parked_ || (pair_log_ms_ && nowMs() - pair_log_ms_ < 5000U)) return;
+        pair_log_ms_ = nowMs();
+        std::printf("[TMAP][SD][pair] opens=%lu resumes=%lu extra_state_bytes=%u shared_pages=8\n",
+                    static_cast<unsigned long>(package_opens_), static_cast<unsigned long>(pair_hits_),
+                    static_cast<unsigned>(sizeof(Parked)));
+    }
+    Parked* parked_ = nullptr;
+    File* active_file_ = nullptr;
+    bool retain_pair_ = false;
+    uint32_t package_opens_ = 0, pair_hits_ = 0, pair_log_ms_ = 0;
     char current_path_[192]{};
     uint8_t* raw_output_ = nullptr;
     uint64_t raw_offset_ = 0, position_ = 0;
