@@ -514,9 +514,14 @@ void translate_loaded_tiles(RuntimeImpl& impl, int dx, int dy)
         {
             continue;
         }
-        lv_obj_set_pos(tile.img_obj,
-                       static_cast<lv_coord_t>(lv_obj_get_x(tile.img_obj) + dx),
-                       static_cast<lv_coord_t>(lv_obj_get_y(tile.img_obj) + dy));
+        int screen_x = 0, screen_y = 0;
+        if (!tile_screen_pos_xyz(impl.tile_ctx, tile.x, tile.y, tile.z, screen_x, screen_y))
+            continue;
+        // Objects can have been placed by different asynchronous callbacks.
+        // Reproject their tile identity instead of accumulating their position.
+        screen_x += impl.model.pan_x - impl.tile_ctx.previous_pan_x;
+        screen_y += impl.model.pan_y - impl.tile_ctx.previous_pan_y;
+        lv_obj_set_pos(tile.img_obj, static_cast<lv_coord_t>(screen_x), static_cast<lv_coord_t>(screen_y));
         // Prefetched descriptors already own pixels. Reveal them immediately
         // when a lightweight drag brings them into view, without new SD I/O.
         const bool visible = tile_in_rect(lv_obj_get_x(tile.img_obj), lv_obj_get_y(tile.img_obj),
