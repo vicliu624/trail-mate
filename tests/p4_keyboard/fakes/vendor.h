@@ -10,6 +10,8 @@ namespace fake
 {
 inline bool attached = true;
 inline bool transfer_ok = true;
+inline bool probe_timeout = false;
+inline std::vector<uint16_t> probe_addresses;
 inline int probes = 0;
 inline int shortcuts = 0;
 inline int exits = 0;

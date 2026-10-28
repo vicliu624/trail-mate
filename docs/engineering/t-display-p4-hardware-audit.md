@@ -64,11 +64,55 @@ addresses, and SDA/SCL/INT levels. The official keyboard schematic separates
 establish controller supply or data-bus continuity.
 
 Absent-accessory retries no longer wait 50 ms for an already powered I/O rail
-inside the LVGL timer. Address probes use a 5 ms SDK timeout and emit one short
-diagnostic summary per 30 seconds, while normal hot-plug checks retain their
+inside the LVGL timer. The initial short-probe change used a 5 ms SDK timeout;
+the 2026-10-28 follow-up below corrects its RTOS tick truncation. Diagnostic
+summaries retain their 30-second rate limit and hot-plug checks retain their
 five-second cadence. Input initialization, hardware ACKs, actual Chat typing,
 and resource behavior during physical connection changes remain separate
 acceptance criteria.
+
+### Keyboard discovery follow-up on 2026-10-28
+
+The effective TFT SDK configuration uses `CONFIG_FREERTOS_HZ=100`, including
+the retained configuration from the October 16 device session. ESP-IDF
+[`i2c_master_probe()`](https://github.com/espressif/esp-idf/blob/v5.5.4/components/esp_driver_i2c/i2c_master.c)
+converts its millisecond argument through `pdMS_TO_TICKS()` and waits for an
+interrupt-driven completion using that tick count. A 5 ms argument becomes
+zero ticks at 100 Hz and can time out before the completion interrupt is
+delivered, even when an accessory is present. Commit `40e460bf9` introduced
+that timeout while reducing absent-accessory stalls.
+
+The probe now waits for 20 ms, with a compile-time check that this provides at
+least two ticks. Its result remains an `esp_err_t`: diagnostics distinguish
+`ESP_ERR_NOT_FOUND` (address NACK) from `ESP_ERR_TIMEOUT` and other SDK errors.
+They also print the actual wait in milliseconds and ticks. An XL9555 timeout
+skips the seven alternate-address probes so a stuck bus does not multiply the
+UI-task wait. Normal absent-device retries and vendor protocol ownership are
+unchanged.
+
+The production adapter is tested with real LVGL at both 100 Hz and 1000 Hz
+fake RTOS configurations. The hardware boundary now models IDF's tick
+conversion instead of assuming that a millisecond equals a tick. With the
+old production probe unchanged, the 100 Hz test failed at keyboard readiness
+after attaching the accessory. The corrected probe passes the same input,
+focus, repeat, modifier, hot-plug and recovery contracts. A separate timeout
+case checks that only XL9555 and TCA8418 are probed, then verifies recovery.
+The complete `t_display_p4_tft` firmware was built with ESP-IDF 5.5.4 and exited
+successfully. The application is 5,277,648 bytes and fits its 6 MiB partition.
+This local build covers the TFT target; it is not physical keyboard acceptance.
+
+The wiring and reset sequence were compared again with the official
+[V1 configuration](https://github.com/Xinyuan-LilyGO/lilygo_device_driver/blob/d25dba8623c5fa6475b756e5a601f3b55862c479/src/device/t_display_p4/v1/keyboard_expansion_config.h)
+and [keyboard initialization](https://github.com/Xinyuan-LilyGO/lilygo_device_driver/blob/d25dba8623c5fa6475b756e5a601f3b55862c479/src/device/t_display_p4/driver.cpp).
+SDA46/SCL45, HP I2C0, XL9555 `0x20`, reset IO6, TCA8418 `0x34` and the 10-by-7
+scan window agree. No replacement keyboard protocol driver or pin reassignment
+is required by this comparison.
+
+No physical device was connected for this follow-up. This fixes a reproducible
+discovery regression; it does not establish that the older software-bus
+failure or the original hardware issue is resolved. The next device test must
+record the SDK probe result, the `P4 keyboard ready` message and actual Chat
+input separately. Backlight illumination remains independent evidence.
 
 `tests/p4_keyboard` compiles the production keyboard adapter against real LVGL
 9.5 and fake hardware boundaries. It covers click edges, focus, repeat, stale

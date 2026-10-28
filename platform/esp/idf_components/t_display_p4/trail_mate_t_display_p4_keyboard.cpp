@@ -37,6 +37,11 @@ constexpr const char* kTag = "t-display-p4-kbd";
 constexpr uint32_t kPowerSettleMs = 50;
 constexpr uint32_t kResetDelayMs = 10;
 constexpr uint32_t kPollIntervalMs = 30;
+// IDF converts the SDK timeout to FreeRTOS ticks before waiting for the I2C
+// completion interrupt. P4 runs at 100 Hz: the old 5 ms became zero ticks and
+// could reject an attached keyboard before its ACK interrupt was delivered.
+constexpr uint32_t kI2cProbeTimeoutMs = 20;
+static_assert(pdMS_TO_TICKS(kI2cProbeTimeoutMs) >= 2, "Keyboard probe needs at least two RTOS ticks");
 constexpr uint32_t kI2cFailureBackoffMs = 500;
 constexpr uint32_t kI2cFailureLogIntervalMs = 2000;
 constexpr uint32_t kAttachRetryMs = 5000;
@@ -149,11 +154,13 @@ bool reset_tca8418_via_xl9555()
     return true;
 }
 
-bool probe_keyboard_bus(uint16_t address)
+esp_err_t probe_keyboard_bus(uint16_t address)
 {
     // Hot-plug detection runs on the UI task: never use the vendor's 1 s
     // timeout when an optional accessory or one of its lines is unavailable.
-    return s_xl9555_bus && i2c_master_probe(s_xl9555_bus->bus_handle(), address, 5) == ESP_OK;
+    // Keep the SDK result: NACK and timeout require different diagnosis.
+    if (!s_xl9555_bus) return ESP_ERR_INVALID_STATE;
+    return i2c_master_probe(s_xl9555_bus->bus_handle(), address, kI2cProbeTimeoutMs);
 }
 
 bool initialize_controller()
@@ -178,7 +185,8 @@ bool initialize_controller()
         reset_vendor_driver_state();
         return false;
     }
-    if (!probe_keyboard_bus(keyboard.xl9555))
+    const esp_err_t xl9555_probe = probe_keyboard_bus(keyboard.xl9555);
+    if (xl9555_probe != ESP_OK)
     {
         // Probe before constructing/configuring devices: an absent accessory
         // should not flood the console with five vendor config lines per retry.
@@ -186,10 +194,16 @@ bool initialize_controller()
         if (!s_last_i2c_failure_log_ms || static_cast<uint32_t>(now - s_last_i2c_failure_log_ms) >= 30000)
         {
             s_last_i2c_failure_log_ms = now ? now : 1;
-            const bool tca_ack = probe_keyboard_bus(keyboard.tca8418);
+            const esp_err_t tca8418_probe = probe_keyboard_bus(keyboard.tca8418);
             uint8_t expander_mask = 0;
-            for (unsigned index = 1; index < 8; ++index)
-                if (probe_keyboard_bus(0x20 + index)) expander_mask |= 1U << index;
+            // A timed-out bus cannot diagnose address straps. Avoid seven
+            // additional timeout waits under the LVGL lock in that case.
+            const bool scan_alternates = xl9555_probe == ESP_ERR_NOT_FOUND;
+            if (scan_alternates)
+            {
+                for (unsigned index = 1; index < 8; ++index)
+                    if (probe_keyboard_bus(0x20 + index) == ESP_OK) expander_mask |= 1U << index;
+            }
             const auto irq = static_cast<gpio_num_t>(keyboard.interrupt);
             (void)gpio_set_direction(irq, GPIO_MODE_INPUT);
             (void)gpio_set_pull_mode(irq, GPIO_PULLDOWN_ONLY);
@@ -197,8 +211,11 @@ bool initialize_controller()
                      keyboard.sda, gpio_get_level(static_cast<gpio_num_t>(keyboard.sda)),
                      keyboard.scl, gpio_get_level(static_cast<gpio_num_t>(keyboard.scl)),
                      keyboard.interrupt, gpio_get_level(irq));
-            ESP_LOGW(kTag, "Keyboard ACK XL9555=0 TCA8418=%u alternate_expanders=0x%02X",
-                     tca_ack ? 1U : 0U, expander_mask);
+            ESP_LOGW(kTag, "Keyboard probe XL9555=%s TCA8418=%s alternate_expanders=0x%02X scanned=%u wait=%lums/%luticks",
+                     esp_err_to_name(xl9555_probe), esp_err_to_name(tca8418_probe),
+                     expander_mask, scan_alternates ? 1U : 0U,
+                     static_cast<unsigned long>(kI2cProbeTimeoutMs),
+                     static_cast<unsigned long>(pdMS_TO_TICKS(kI2cProbeTimeoutMs)));
         }
         reset_vendor_driver_state();
         return false;

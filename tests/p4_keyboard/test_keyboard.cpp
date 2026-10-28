@@ -100,7 +100,7 @@ int main()
     fake::attached = false;
     assert(!trail_mate_t_display_p4_keyboard_initialize());
     assert(fake::probes == 1);
-    assert((fake::delays == std::vector<unsigned>{kPowerSettleMs}));
+    assert((fake::delays == std::vector<unsigned>{pdMS_TO_TICKS(kPowerSettleMs)}));
     assert(!trail_mate_t_display_p4_keyboard_start());
     assert(s_keypad != nullptr && s_poll_timer != nullptr);
     lv_timer_pause(s_poll_timer);
@@ -113,7 +113,7 @@ int main()
     poll_timer_cb(nullptr);
     assert(trail_mate_t_display_p4_keyboard_is_ready());
     assert(fake::probes == 2);
-    assert((fake::delays == std::vector<unsigned>{kResetDelayMs, kResetDelayMs}));
+    assert((fake::delays == std::vector<unsigned>{pdMS_TO_TICKS(kResetDelayMs), pdMS_TO_TICKS(kResetDelayMs)}));
     assert((fake::reset_steps == std::vector<int>{0, 2, 1}));
     assert(trail_mate_t_display_p4_keyboard_start());
 
@@ -312,5 +312,17 @@ int main()
     assert(!platform::ui::walkie::ptt && !s_ready);
     fake::transfer_ok = true;
     platform::ui::walkie::active = false;
+
+    // A bus timeout is not an address NACK. The diagnostic must not scan seven
+    // additional expander addresses while blocking the LVGL task on timeouts.
+    fake::probe_timeout = true;
+    fake::probe_addresses.clear();
+    s_last_i2c_failure_log_ms = 0;
+    lv_tick_inc(kAttachRetryMs);
+    assert(!trail_mate_t_display_p4_keyboard_initialize());
+    assert((fake::probe_addresses == std::vector<uint16_t>{0x20, 0x34}));
+    fake::probe_timeout = false;
+    lv_tick_inc(kAttachRetryMs);
+    assert(trail_mate_t_display_p4_keyboard_initialize());
     std::cout << "P4 keyboard: native click, focus, repeat, page routes and recovery passed\n";
 }
