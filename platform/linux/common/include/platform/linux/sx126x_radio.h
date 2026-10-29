@@ -1,4 +1,5 @@
 #pragma once
+#include "platform/linux/fsk_settings.h"
 
 #include <array>
 #include <cstddef>
@@ -73,6 +74,7 @@ class Sx126xRadio final
     void release();
 
     bool configureLoRa(const Sx126xLoRaConfig& config);
+    bool configureFsk(const FskSettings& config);
     bool startReceive();
     bool transmit(const std::uint8_t* data, std::size_t size);
     bool pollReceive(Sx126xPacket* out);
@@ -95,7 +97,7 @@ class Sx126xRadio final
     bool openGpioLocked();
     void closeLocked();
 
-    void waitReadyLocked() const;
+    bool waitReadyLocked();
     bool transferLocked(const std::uint8_t* tx,
                         std::uint8_t* rx,
                         std::size_t size);
@@ -143,6 +145,7 @@ class Sx126xRadio final
     mutable std::mutex mutex_{};
     Sx126xRadioConfig config_{};
     Sx126xLoRaConfig lora_config_{};
+    FskSettings fsk_config_{};
     int spi_fd_ = -1;
     int chip_fd_ = -1;
     int power_fd_ = -1;
@@ -152,8 +155,10 @@ class Sx126xRadio final
     int users_ = 0;
     std::uint8_t packet_type_ = 0xFF;
     float freq_mhz_ = 0.0f;
+    std::array<uint8_t, 2> image_calibration_{};
     bool initialized_ = false;
     bool online_ = false;
+    bool transport_failed_ = false;
     std::uint32_t rx_packets_ = 0;
     std::uint32_t tx_packets_ = 0;
     std::uint32_t rx_crc_errors_ = 0;

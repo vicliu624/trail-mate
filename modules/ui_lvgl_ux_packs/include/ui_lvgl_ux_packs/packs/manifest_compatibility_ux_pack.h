@@ -44,6 +44,12 @@ class ManifestCompatibilityUxPack final : public IUxPack
         using ui::presentation::PageId;
         switch (page)
         {
+        case PageId::Calculator:
+            out = ScreenId::Calculator;
+            return true;
+        case PageId::Geocaching:
+            out = ScreenId::Geocaching;
+            return true;
         case PageId::Dashboard:
             out = ScreenId::Dashboard;
             return true;

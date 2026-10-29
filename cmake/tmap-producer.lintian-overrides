@@ -1,0 +1,7 @@
+# Center's self-contained SkiaSharp runtime bundles its upstream raster codecs.
+# Keep these exact upstream binaries consistent with producer-manifest.json.
+embedded-library freetype [usr/lib/trailmate/tmap-producer/libSkiaSharp.so]
+embedded-library libjpeg [usr/lib/trailmate/tmap-producer/libSkiaSharp.so]
+embedded-library libpng [usr/lib/trailmate/tmap-producer/libSkiaSharp.so]
+# Preserve the published SQLite native asset and its recorded upstream hash.
+unstripped-binary-or-object [usr/lib/trailmate/tmap-producer/libe_sqlite3.so]

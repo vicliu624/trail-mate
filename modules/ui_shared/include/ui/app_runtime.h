@@ -9,8 +9,13 @@ extern lv_group_t* app_g;
 
 void menu_show();
 void ui_clear_active_app();
+// Detach a composition-owned descriptor before destroying it. Its owner must
+// close its widgets separately; no other application is entered by this call.
+void ui_detach_app(AppScreen* app);
 AppScreen* ui_get_active_app();
 void ui_switch_to_app(AppScreen* app, lv_obj_t* parent);
+// Programmatic navigation through the shell's application container.
+bool ui_open_app(AppScreen* app);
 void ui_exit_active_app(lv_obj_t* parent);
 bool ui_present_interruption_app(AppScreen* app, lv_obj_t* parent);
 void ui_dismiss_interruption_app(lv_obj_t* parent);

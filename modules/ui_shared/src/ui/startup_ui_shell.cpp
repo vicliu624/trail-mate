@@ -106,10 +106,11 @@ bool format_menu_time(char* out, size_t out_len)
     return true;
 }
 
-ui::menu_runtime::Hooks build_menu_runtime_hooks()
+ui::menu_runtime::Hooks build_menu_runtime_hooks(const Hooks& composition)
 {
     ui::menu_runtime::Hooks hooks{};
     hooks.format_time = format_menu_time;
+    hooks.status_refresh_interval_ms = composition.status_refresh_interval_ms;
     return hooks;
 }
 
@@ -189,7 +190,7 @@ bool initializeMenuSkeleton(const Hooks& hooks)
     }
     ui::menu_layout::init(options);
     ui::menu_runtime::init(
-        lv_screen_active(), main_screen, ui::menu_layout::menuPanel(), build_menu_runtime_hooks());
+        lv_screen_active(), main_screen, ui::menu_layout::menuPanel(), build_menu_runtime_hooks(hooks));
     init_screen_saver_overlay();
 
     s_shell_initialized = true;

@@ -15,6 +15,15 @@ inline bool isInstalledPackageRoute(std::string_view path)
 {
     return path.size() == 78 && path.substr(0, 8) == "/routes/" && path.substr(74) == ".kml" && isInstalledPackageAssetId(path.substr(8, 66));
 }
+// Platform route roots may be configurable host paths. Only a direct child of
+// the supplied root is recognized; basename matches elsewhere confer no status.
+inline bool isInstalledPackageRouteAtRoot(std::string_view path, std::string_view root)
+{
+    while (root.size() > 1 && root.back() == '/') root.remove_suffix(1);
+    if (root.empty() || path.size() != root.size() + 71 || path.substr(0, root.size()) != root || path[root.size()] != '/') return false;
+    const auto name = path.substr(root.size() + 1);
+    return name.substr(66) == ".kml" && isInstalledPackageAssetId(name.substr(0, 66));
+}
 inline bool installedPackageRevision(std::string_view path, uint8_t output[32])
 {
     if (!output || !isInstalledPackageRoute(path)) return false;

@@ -1,4 +1,5 @@
 #include "ui/page/page_profile.h"
+#include "ui/ux_build_config.h"
 
 #include <algorithm>
 
@@ -321,7 +322,7 @@ const PageLayoutProfile& current()
     {
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
         return make_tab5_profile();
-#elif defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)
+#elif defined(TRAIL_MATE_UI_P4_TOUCH)
         return make_t_display_p4_profile();
 #elif defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
         return make_cardputer_zero_profile();

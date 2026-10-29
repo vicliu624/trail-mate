@@ -37,6 +37,7 @@ class KeyVerificationPresentationSource final
                  bool is_sender,
                  const char* verification_code);
     void onPeerKeyMissing(uint32_t peer_id);
+    void onRuntimeFailure(uint32_t peer_id);
     void clear();
 
   private:

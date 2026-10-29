@@ -69,7 +69,12 @@ int main()
 
     const auto* cardputer = ui::presentation::findPageManifest("cardputer_compact_manifest");
     assert(cardputer != nullptr);
-    assert(cardputer->item_count == 10);
+    assert(cardputer->item_count == 14);
+    assert(contains(*cardputer, ui::presentation::PageId::Calendar));
+    const auto* cm0 = ui::presentation::findPageManifest("t_display_cm0_touch_manifest");
+    assert(cm0 && cm0->item_count == 14 && contains(*cm0, ui::presentation::PageId::Calendar));
+    assert(contains(*cardputer, ui::presentation::PageId::Geocaching));
+    assert(contains(*cardputer, ui::presentation::PageId::Calculator));
     assert(contains(*cardputer, ui::presentation::PageId::Dashboard));
     assert(contains(*cardputer, ui::presentation::PageId::Chat));
     assert(contains(*cardputer, ui::presentation::PageId::Contacts));
@@ -79,7 +84,7 @@ int main()
     assert(contains(*cardputer, ui::presentation::PageId::Team));
     assert(contains(*cardputer, ui::presentation::PageId::Tracker));
     assert(!contains(*cardputer, ui::presentation::PageId::Sstv));
-    assert(!contains(*cardputer, ui::presentation::PageId::EnergySweep));
+    assert(contains(*cardputer, ui::presentation::PageId::EnergySweep));
     assert(contains(*cardputer, ui::presentation::PageId::WalkieTalkie));
     assert(contains(*cardputer, ui::presentation::PageId::Extensions));
     assert(contains(*cardputer, ui::presentation::PageId::Settings));

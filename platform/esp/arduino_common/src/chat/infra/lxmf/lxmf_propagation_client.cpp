@@ -4,6 +4,7 @@
  */
 
 #include "platform/esp/arduino_common/chat/infra/lxmf/lxmf_propagation_client.h"
+#include "chat/infra/lxmf/lxmf_propagation_sync.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -293,10 +294,7 @@ void PropagationClient::resetForNetworkConfig(bool sync_on_start)
 
 bool PropagationClient::syncDue(uint32_t now_s, uint32_t sync_interval_s) const
 {
-    return state_.initial_sync_pending ||
-           (sync_interval_s != 0 &&
-            (state_.last_sync_s == 0 || now_s < state_.last_sync_s ||
-             (now_s - state_.last_sync_s) >= sync_interval_s));
+    return propagationSyncDue(state_, now_s, sync_interval_s);
 }
 
 PropagationSyncStage PropagationClient::syncStage() const
@@ -328,75 +326,31 @@ bool PropagationClient::startSyncIfDue(uint32_t now_s,
                                        uint32_t now_ms,
                                        uint32_t sync_interval_s)
 {
-    if (state_.sync_stage != PropagationSyncStage::Idle ||
-        !syncDue(now_s, sync_interval_s))
-    {
-        return false;
-    }
-
-    state_.sync_stage = PropagationSyncStage::NeedList;
-    state_.sync_started_ms = now_ms;
-    state_.persistence_started_ms = 0;
-    state_.sync_wants.clear();
-    state_.sync_haves.clear();
-    clearPropagationDeliveryCommits(state_);
-    std::memset(state_.sync_request_id, 0, sizeof(state_.sync_request_id));
-    return true;
+    return startPropagationSyncIfDue(state_, now_s, now_ms, sync_interval_s);
 }
 
 void PropagationClient::markSyncRequestSent(
     const uint8_t request_id[reticulum::kTruncatedHashSize],
     PropagationSyncStage next_stage)
 {
-    if (request_id)
-    {
-        copyBytes(state_.sync_request_id, request_id, sizeof(state_.sync_request_id));
-    }
-    else
-    {
-        std::memset(state_.sync_request_id, 0, sizeof(state_.sync_request_id));
-    }
-    state_.sync_stage = next_stage;
+    markPropagationSyncRequestSent(state_, request_id, next_stage);
 }
 
 bool PropagationClient::syncRequestMatches(
     const LinkPendingRequest& request) const
 {
-    return request.request_id.size() == sizeof(state_.sync_request_id) &&
-           bytesEqual(request.request_id.data(),
-                      state_.sync_request_id,
-                      sizeof(state_.sync_request_id));
+    return propagationSyncRequestMatches(state_, request);
 }
 
 void PropagationClient::markSyncFailed()
 {
-    state_.sync_stage = PropagationSyncStage::Failed;
+    markPropagationSyncFailed(state_);
 }
 
 void PropagationClient::noteListingResult(const PropagationIdList& remote_ids,
                                           std::size_t max_messages)
 {
-    const std::size_t limit = std::max<std::size_t>(1U, max_messages);
-    state_.sync_wants.clear();
-    state_.sync_haves.clear();
-    for (const auto& transient_id : remote_ids)
-    {
-        if (transient_id.size() != reticulum::kFullHashSize)
-        {
-            continue;
-        }
-        if (hasSeenPropagationTransient(state_, transient_id.data(), nullptr))
-        {
-            state_.sync_haves.push_back(transient_id);
-        }
-        else if (state_.sync_wants.size() < limit)
-        {
-            state_.sync_wants.push_back(transient_id);
-        }
-    }
-    state_.sync_stage = state_.sync_wants.empty()
-                            ? PropagationSyncStage::NeedAcknowledge
-                            : PropagationSyncStage::NeedMessages;
+    notePropagationListingResult(state_, remote_ids, max_messages);
 }
 
 bool PropagationClient::registerDeliveryCommit(
@@ -415,58 +369,18 @@ void PropagationClient::rememberDeliveredTransient(
     uint32_t now_s,
     std::size_t max_transients)
 {
-    rememberPropagationTransient(state_, transient_id, true, now_s, max_transients);
-    const bool already_have =
-        std::any_of(state_.sync_haves.begin(),
-                    state_.sync_haves.end(),
-                    [transient_id](const auto& have)
-                    {
-                        return have.size() == reticulum::kFullHashSize &&
-                               bytesEqual(have.data(),
-                                          transient_id,
-                                          reticulum::kFullHashSize);
-                    });
-    if (!already_have)
-    {
-        state_.sync_haves.emplace_back(transient_id,
-                                       transient_id + reticulum::kFullHashSize);
-    }
+    rememberDeliveredPropagationTransient(state_, transient_id, now_s, max_transients);
 }
 
 void PropagationClient::noteDownloadResult(bool registration_failed,
                                            uint32_t now_ms)
 {
-    state_.sync_stage =
-        registration_failed ? PropagationSyncStage::Failed
-                            : (state_.pending_deliveries.empty()
-                                   ? PropagationSyncStage::NeedAcknowledge
-                                   : PropagationSyncStage::AwaitingPersistence);
-    if (state_.sync_stage == PropagationSyncStage::AwaitingPersistence)
-    {
-        state_.persistence_started_ms = now_ms;
-    }
+    notePropagationDownloadResult(state_, registration_failed, now_ms);
 }
 
 bool PropagationClient::pollPersistence(uint32_t now_ms, uint32_t ttl_ms)
 {
-    if (state_.sync_stage != PropagationSyncStage::AwaitingPersistence)
-    {
-        return true;
-    }
-    if (state_.persistence_started_ms == 0 ||
-        (now_ms - state_.persistence_started_ms) > ttl_ms)
-    {
-        state_.sync_stage = PropagationSyncStage::Failed;
-        return true;
-    }
-    if (propagationDeliveryCommitsResolved(state_))
-    {
-        state_.sync_stage = propagationDeliveryCommitRejected(state_)
-                                ? PropagationSyncStage::Failed
-                                : PropagationSyncStage::NeedAcknowledge;
-        return true;
-    }
-    return false;
+    return pollPropagationPersistence(state_, now_ms, ttl_ms);
 }
 
 bool PropagationClient::noteDeliveryCommit(
@@ -475,25 +389,12 @@ bool PropagationClient::noteDeliveryCommit(
     uint32_t now_s,
     std::size_t max_transients)
 {
-    const bool matched = commitPropagationDelivery(state_,
-                                                   message_hash,
-                                                   accepted,
-                                                   now_s,
-                                                   max_transients);
-    if (matched &&
-        state_.sync_stage == PropagationSyncStage::AwaitingPersistence &&
-        propagationDeliveryCommitsResolved(state_))
-    {
-        state_.sync_stage = propagationDeliveryCommitRejected(state_)
-                                ? PropagationSyncStage::Failed
-                                : PropagationSyncStage::NeedAcknowledge;
-    }
-    return matched;
+    return notePropagationDeliveryCommit(state_, message_hash, accepted, now_s, max_transients);
 }
 
 void PropagationClient::markAcknowledged()
 {
-    state_.sync_stage = PropagationSyncStage::Complete;
+    markPropagationAcknowledged(state_);
 }
 
 std::size_t PropagationClient::syncHaveCount() const
@@ -503,28 +404,12 @@ std::size_t PropagationClient::syncHaveCount() const
 
 void PropagationClient::finishSyncComplete(uint32_t now_s)
 {
-    state_.last_sync_s = now_s;
-    state_.initial_sync_pending = false;
-    state_.sync_wants.clear();
-    state_.sync_haves.clear();
-    clearPropagationDeliveryCommits(state_);
-    state_.persistence_started_ms = 0;
-    state_.sync_started_ms = 0;
-    state_.sync_stage = PropagationSyncStage::Idle;
-    std::memset(state_.sync_request_id, 0, sizeof(state_.sync_request_id));
+    finishPropagationSyncComplete(state_, now_s);
 }
 
 void PropagationClient::finishSyncFailed(uint32_t now_s)
 {
-    state_.sync_wants.clear();
-    state_.sync_haves.clear();
-    clearPropagationDeliveryCommits(state_);
-    state_.persistence_started_ms = 0;
-    state_.sync_started_ms = 0;
-    state_.sync_stage = PropagationSyncStage::Idle;
-    state_.initial_sync_pending = false;
-    state_.last_sync_s = now_s;
-    std::memset(state_.sync_request_id, 0, sizeof(state_.sync_request_id));
+    finishPropagationSyncFailed(state_, now_s);
 }
 
 void PropagationClient::cull(uint32_t now_s,

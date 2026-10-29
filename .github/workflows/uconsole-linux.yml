@@ -33,7 +33,7 @@ jobs:
       - name: Install uConsole build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build dpkg-dev xorg-dev libasound2-dev libegl1-mesa-dev libwayland-dev libxkbcommon-dev wayland-protocols libgtk-4-dev libsqlite3-dev libcurl4-openssl-dev libmbedtls-dev
+          sudo apt-get install -y ninja-build dpkg-dev xorg-dev libasound2-dev libegl1-mesa-dev libwayland-dev libxkbcommon-dev wayland-protocols libgtk-4-dev libsqlite3-dev libcurl4-openssl-dev libmbedtls-dev libjpeg-dev libpng-dev libarchive-dev
 
       - name: Configure uConsole Linux shell
         working-directory: builds/linux_cmake

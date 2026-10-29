@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Trail Mate
+Comment=Trail Mate P4 touch interface for T-Display-CM0
+Exec=@CMAKE_INSTALL_FULL_BINDIR@/trailmate-linux --profile @CMAKE_INSTALL_FULL_DATADIR@/trailmate/devices/t-display-cm0.conf
+Terminal=false
+Icon=trailmate
+Categories=Utility;

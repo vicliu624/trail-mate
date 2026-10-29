@@ -419,6 +419,83 @@ bool decodeGroupAppPayload(const uint8_t* plain, size_t plain_len, DecodedGroupA
     return true;
 }
 
+size_t trimPeerPlaintextPadding(uint8_t payload_type, const uint8_t* plain, size_t padded_size)
+{
+    if (!plain) return 0;
+    if (payload_type == kPayloadTypeDirectData)
+    {
+        const bool tagged = padded_size >= 7 && plain[0] == kDirectAppMagic0 && plain[1] == kDirectAppMagic1;
+        const size_t prefix = tagged ? 7 : 4;
+        const size_t port_offset = tagged ? 3 : 0;
+        if (padded_size >= prefix + 4)
+        {
+            uint32_t port = 0;
+            memcpy(&port, plain + port_offset, sizeof(port));
+            if (port == kMeshCoreNodeInfoPortnum && hasControlPrefix(plain + prefix, padded_size - prefix, kMeshCoreControlKindNodeInfo))
+            {
+                const auto type = plain[prefix + 3];
+                const size_t size = type == kMeshCoreNodeInfoTypeInfo ? kMeshCoreNodeInfoInfoPayloadSize : type == kMeshCoreNodeInfoTypeQuery ? kMeshCoreNodeInfoQueryPayloadSize
+                                                                                                                                              : 0;
+                if (!size || padded_size < prefix + size) return 0;
+                for (size_t i = prefix + size; i < padded_size; ++i)
+                    if (plain[i]) return 0;
+                return prefix + size;
+            }
+        }
+        if (padded_size >= prefix + 12 && plain[port_offset] == 12 && plain[port_offset + 1] == 0 &&
+            plain[port_offset + 2] == 0 && plain[port_offset + 3] == 0 &&
+            plain[prefix] == kControlMagic0 && plain[prefix + 1] == kControlMagic1 &&
+            plain[prefix + 2] == 2 && plain[prefix + 3] >= 1 && plain[prefix + 3] <= 3)
+        {
+            // This control has an exact 12-byte payload, including nonce zeros.
+            // Zero padding is ambiguous for arbitrary application data, so only
+            // this established fixed-length control may retain trailing zeros.
+            const size_t actual_size = prefix + 12;
+            for (size_t index = actual_size; index < padded_size; ++index)
+                if (plain[index] != 0) return 0;
+            return actual_size;
+        }
+    }
+    if (payload_type == kPayloadTypePath && padded_size >= 6 &&
+        plain[0] <= 64 && size_t(plain[0]) + 6 <= padded_size &&
+        (plain[1 + plain[0]] & 0x0F) == kPayloadTypeAck)
+    {
+        const size_t actual_size = size_t(plain[0]) + 6;
+        for (size_t index = actual_size; index < padded_size; ++index)
+            if (plain[index] != 0) return 0;
+        return actual_size;
+    }
+    return trimTrailingZeros(plain, padded_size);
+}
+bool isFixedNodeInfoPayload(uint32_t port, const uint8_t* payload, size_t size)
+{
+    if (port != kMeshCoreNodeInfoPortnum || !hasControlPrefix(payload, size, kMeshCoreControlKindNodeInfo)) return false;
+    return (payload[3] == kMeshCoreNodeInfoTypeInfo && size == kMeshCoreNodeInfoInfoPayloadSize) ||
+           (payload[3] == kMeshCoreNodeInfoTypeQuery && size == kMeshCoreNodeInfoQueryPayloadSize);
+}
+size_t trimGroupPlaintextPadding(const uint8_t* plain, size_t padded_size)
+{
+    if (!plain) return 0;
+    const bool tagged = padded_size >= 10 && plain[0] == kGroupDataMagic0 && plain[1] == kGroupDataMagic1;
+    const size_t prefix = tagged ? 10 : 4, port_offset = tagged ? 6 : 0;
+    if (padded_size >= prefix + 4)
+    {
+        uint32_t port = 0;
+        memcpy(&port, plain + port_offset, sizeof(port));
+        if (port == kMeshCoreNodeInfoPortnum && hasControlPrefix(plain + prefix, padded_size - prefix, kMeshCoreControlKindNodeInfo))
+        {
+            const auto type = plain[prefix + 3];
+            const size_t size = type == kMeshCoreNodeInfoTypeInfo ? kMeshCoreNodeInfoInfoPayloadSize : type == kMeshCoreNodeInfoTypeQuery ? kMeshCoreNodeInfoQueryPayloadSize
+                                                                                                                                          : 0;
+            if (!size || padded_size < prefix + size) return 0;
+            for (size_t i = prefix + size; i < padded_size; ++i)
+                if (plain[i]) return 0;
+            return prefix + size;
+        }
+    }
+    return trimTrailingZeros(plain, padded_size);
+}
+
 bool hasControlPrefix(const uint8_t* payload, size_t len, uint8_t kind)
 {
     return payload && len >= 4 &&

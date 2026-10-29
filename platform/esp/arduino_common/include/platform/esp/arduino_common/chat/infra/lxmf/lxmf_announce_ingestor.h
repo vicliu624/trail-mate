@@ -4,6 +4,8 @@
  */
 
 #pragma once
+#include "chat/infra/lxmf/lxmf_announce_projection.h"
+#include "chat/infra/reticulum/announce_verifier.h"
 
 #include "platform/esp/arduino_common/chat/infra/lxmf/lxmf_destination_registry.h"
 #include "platform/esp/arduino_common/chat/infra/lxmf/lxmf_identity.h"
@@ -34,39 +36,6 @@ struct AnnounceIngestOptions
     LocalDestinationResolver resolve_local_destination = nullptr;
 };
 
-struct AnnounceIngestResult
-{
-    enum class Status
-    {
-        Rejected,
-        Ignored,
-        Accepted,
-    };
-
-    Status status = Status::Rejected;
-    const char* reason = "invalid";
-    reticulum::ParsedAnnounce announce{};
-    uint8_t identity_hash[reticulum::kTruncatedHashSize] = {};
-    uint8_t expected_destination_hash[reticulum::kTruncatedHashSize] = {};
-    bool local_destination = false;
-    LocalDestinationKind local_kind = LocalDestinationKind::Delivery;
-    PathAnnounceDecision path_decision = PathAnnounceDecision::RejectReplay;
-    PathEntry* path = nullptr;
-    bool delivery_announce = false;
-    bool propagation_announce = false;
-    bool call_audio_announce = false;
-    bool lxst_telephony_announce = false;
-    bool nomad_node_announce = false;
-    bool contact_announce = false;
-    bool packet_has_ratchet = false;
-    char display_name[32] = {};
-    PeerInfo* learned_peer = nullptr;
-    bool identity_changed = false;
-    bool ratchet_changed = false;
-    bool display_changed = false;
-    bool address_refresh_due = false;
-    bool should_store_address = false;
-};
 
 class AnnounceIngestor
 {
@@ -81,7 +50,7 @@ class AnnounceIngestor
                 AnnounceIngestResult* out_result);
 
   private:
-    uint8_t signed_scratch_[reticulum::kReticulumMtu] = {};
+    reticulum::AnnounceVerifier verifier_;
 };
 
 } // namespace chat::lxmf::runtime

@@ -54,6 +54,19 @@ Geometry resolve(lv_obj_t* parent)
     geometry.keypad_button_height = std::max<lv_coord_t>(
         deck_compact ? 17 : (geometry.large_touch ? 24 : 17), usable_height / 5);
     geometry.footer_y = geometry.keypad_y + geometry.keypad_button_height * 5 + geometry.keypad_gap * 4 + 3;
+    // Short keyboard displays still expose every scientific/keypad action.
+    // Keep the input area usable rather than clipping the final keypad rows.
+    if (geometry.height < 200)
+    {
+        geometry.display_height = 36;
+        geometry.function_y = geometry.display_y + geometry.display_height + 2;
+        geometry.function_height = 16;
+        geometry.keypad_y = geometry.function_y + geometry.function_height + 2;
+        geometry.keypad_gap = 1;
+        geometry.keypad_button_height = std::max<lv_coord_t>(12,
+                                                             (geometry.height - geometry.keypad_y - geometry.footer_height - 7) / 5);
+        geometry.footer_y = geometry.keypad_y + geometry.keypad_button_height * 5 + 7;
+    }
     return geometry;
 }
 

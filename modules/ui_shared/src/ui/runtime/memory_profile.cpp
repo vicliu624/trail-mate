@@ -1,4 +1,5 @@
 #include "ui/runtime/memory_profile.h"
+#include "ui/ux_build_config.h"
 
 namespace ui::runtime
 {
@@ -52,7 +53,7 @@ const MemoryProfile& current_memory_profile()
 {
     static const MemoryProfile profile = []()
     {
-#if defined(TRAIL_MATE_ESP_BOARD_TAB5) || defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)
+#if defined(TRAIL_MATE_ESP_BOARD_TAB5) || defined(TRAIL_MATE_UI_P4_TOUCH)
         return make_extended_profile();
 #elif defined(ARDUINO_T_DECK) || defined(ARDUINO_T_DECK_PRO) ||                   \
     defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_LR1121) || \

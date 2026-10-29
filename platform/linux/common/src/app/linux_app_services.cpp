@@ -1,4 +1,19 @@
 #include "app/linux_app_services.h"
+#include "app/linux_app_config_blob.h"
+#include "app/linux_phone_runtime.h"
+#include "app/linux_tms_store.h"
+#include "platform/linux/application_lifecycle.h"
+#include "platform/linux/identity_restore_bridge.h"
+#include "platform/linux/mesh/linux_reticulum_identity.h"
+#include "platform/linux/runtime_paths.h"
+#include "hostlink/identity_restore_request.h"
+#include "hostlink/radio_identity_backup.h"
+#include "platform/linux/mesh/linux_radio_identity_store.h"
+#include "platform/linux/call_audio_service.h"
+#include "platform/linux/tms_import_bridge.h"
+#include "platform/linux/tms_snapshot_bridge.h"
+#include "platform/ui/hostlink_runtime.h"
+#include "platform/ui/reticulum_call_runtime.h"
 
 #include <algorithm>
 #include <array>
@@ -10,7 +25,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <deque>
+#include <new>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <type_traits>
@@ -24,13 +41,29 @@ extern char** environ;
 #endif
 
 #include "chat/domain/chat_model.h"
-#include "chat/linux_noop_mesh_adapter.h"
+#include "chat/linux_mesh_worker.h"
 #include "chat/linux_raw_lora_mesh_adapter.h"
+#if defined(TRAIL_MATE_LINUX_HAS_MEDIA)
+#include "platform/linux/runtime_paths.h"
+#include "platform/linux/vmp_radio.h"
+#include "platform/linux/voice_contacts.h"
+#include "platform/linux/voice_service.h"
+#endif
+#include "chat/domain/reticulum_network_policy.h"
+#include "chat/linux_reticulum_network_store.h"
 #include "chat/linux_sqlite_chat_store.h"
 #include "chat/usecase/chat_service.h"
 #include "chat/usecase/contact_service.h"
+#include "platform/linux/node_identity.h"
+#include "platform/linux/radio_power.h"
+#include "platform/linux/resource_pack_tasks.h"
+#include "platform/linux/reticulum_network_config_binding.h"
+#include "platform/linux/route_image_tasks.h"
+#include "platform/linux/settings_reset_binding.h"
+#include "platform/linux/settings_reset_storage.h"
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/gps_runtime.h"
+#include "platform/ui/network_runtime.h"
 #include "platform/ui/reticulum_directory_runtime.h"
 #include "platform/ui/reticulum_group_config_runtime.h"
 #include "platform/ui/settings_store.h"
@@ -57,10 +90,10 @@ namespace trailmate::linux_app
 namespace
 {
 
-constexpr const char* kConfigNamespace = "linux_app_facade";
-constexpr const char* kConfigBlobKey = "app_config_v1";
-constexpr uint32_t kConfigBlobMagic = 0x544D4346U; // TMCF
-constexpr uint32_t kConfigBlobVersion = 2U;
+constexpr const char* kConfigNamespace = ::platform::linux_runtime::settings_storage::kAppNamespace;
+constexpr const char* kConfigBlobKey = ::platform::linux_runtime::settings_storage::kAppConfigKey;
+constexpr uint32_t kConfigBlobMagic = LinuxAppConfigBlob::kMagic;
+constexpr uint32_t kConfigBlobVersion = LinuxAppConfigBlob::kVersion;
 
 constexpr ::chat::NodeId kDemoAlphaNodeId = 0x435A1001U;
 constexpr ::chat::NodeId kDemoBravoNodeId = 0x435A1002U;
@@ -143,12 +176,7 @@ std::array<DemoPeerSeed, 4> demoPeerSeeds()
     }};
 }
 
-struct PersistedConfigBlob
-{
-    uint32_t magic = kConfigBlobMagic;
-    uint32_t version = kConfigBlobVersion;
-    ::app::AppConfig config{};
-};
+using PersistedConfigBlob = LinuxAppConfigBlob;
 
 static_assert(std::is_trivially_copyable_v<::app::AppConfig>,
               "LinuxAppServices persists AppConfig as an opaque blob.");
@@ -326,14 +354,15 @@ const ::chat::MeshConfig& mesh_config_for_protocol(
     }
 }
 
-void sync_reticulum_group_config(::app::AppConfig& config)
+bool sync_reticulum_group_config(::app::AppConfig& config)
 {
-    if (!::chat::infra::isReticulumMeshProtocol(
-            ::chat::infra::normalizeMeshProtocol(config.mesh_protocol)))
-    {
-        return;
-    }
-
+    bool reset_completed = false;
+    const auto marker = ::platform::ui::settings_store::read_bool_into(kConfigNamespace,
+                                                                       ::platform::linux_runtime::settings_storage::kResetMarker, &reset_completed);
+    if (marker != ::platform::ui::settings_store::ScalarReadResult::Missing &&
+        (marker != ::platform::ui::settings_store::ScalarReadResult::Ok || reset_completed)) return false;
+    // Startup migration only. A modern application snapshot owns these groups;
+    // reloading the legacy file during apply would discard live edits.
     const auto status = ::platform::ui::reticulum_groups::load(
         config.reticulumConfig().reticulum_groups,
         ::chat::kReticulumGroupDestinationMaxCount);
@@ -343,6 +372,7 @@ void sync_reticulum_group_config(::app::AppConfig& config)
                 status.file_present ? 1U : 0U,
                 status.message,
                 status.detail);
+    return status.loaded;
 }
 
 class LinuxLoopbackMeshAdapter final : public ::chat::IMeshAdapter
@@ -769,6 +799,7 @@ class LinuxChatEventBusBridge final : public ::chat::ChatService::IncomingMessag
                                            msg.text.c_str(),
                                            rx_meta),
             0);
+        ::platform::ui::device::play_message_tone();
         if (desktop_notifications_enabled())
         {
             send_desktop_notification_async(
@@ -1208,6 +1239,15 @@ bool dispatchCoreEvent(LinuxAppServices& services, ::sys::Event* event)
 
     switch (event->type)
     {
+    case ::sys::EventType::ChatSendResult:
+    {
+        const auto& result = *static_cast<::sys::ChatSendResultEvent*>(event);
+        services.getChatService().handleSendResultForProtocol(result.msg_id,
+                                                              result.has_protocol ? result.protocol : services.getMeshProtocol(),
+                                                              result.status, 0, result.failure);
+        // Continue to the UI notification path after the durable core update.
+        return false;
+    }
     case ::sys::EventType::NodeInfoUpdate:
     {
         auto* node_event = static_cast<::sys::NodeInfoUpdateEvent*>(event);
@@ -1216,9 +1256,9 @@ bool dispatchCoreEvent(LinuxAppServices& services, ::sys::Event* event)
         update.long_name = node_event->long_name;
         update.has_last_seen = true;
         update.last_seen = node_event->event_timestamp != 0 ? node_event->event_timestamp : node_event->timestamp;
-        update.has_snr = true;
+        update.has_snr = !node_event->via_mqtt && std::isfinite(node_event->snr);
         update.snr = node_event->snr;
-        update.has_rssi = true;
+        update.has_rssi = !node_event->via_mqtt && std::isfinite(node_event->rssi);
         update.rssi = node_event->rssi;
         update.has_protocol = true;
         update.protocol = node_event->protocol;
@@ -1237,8 +1277,9 @@ bool dispatchCoreEvent(LinuxAppServices& services, ::sys::Event* event)
         }
         update.has_via_mqtt = true;
         update.via_mqtt = node_event->via_mqtt;
-        update.has_is_ignored = true;
-        update.is_ignored = node_event->is_ignored;
+        // Radio observations do not own the user's local ignore policy.
+        // Local administration uses ContactService::setNodeIgnored directly.
+        update.has_is_ignored = false;
         update.has_public_key = node_event->has_public_key_state;
         update.public_key_present = node_event->has_public_key;
         update.has_key_manually_verified = node_event->has_key_manually_verified_state;
@@ -1529,17 +1570,12 @@ struct LinuxAppServices::Implementation
           chat_model(),
           chat_store(),
           raw_lora_enabled(raw_lora_enabled_for_mode(options.runtime_mode)),
-          noop_mesh_adapter(),
-          raw_lora_mesh_adapter(self_node_id),
+          raw_lora_mesh_adapter(self_node_id, options.packet_radio, options.radio_power, raw_lora_enabled),
           loopback_mesh_adapter(self_node_id),
           mesh_adapter(demo_world_enabled
                            ? static_cast<::chat::IMeshAdapter&>(
                                  loopback_mesh_adapter)
-                       : raw_lora_enabled
-                           ? static_cast<::chat::IMeshAdapter&>(
-                                 raw_lora_mesh_adapter)
-                           : static_cast<::chat::IMeshAdapter&>(
-                                 noop_mesh_adapter)),
+                           : static_cast<::chat::IMeshAdapter&>(raw_lora_mesh_adapter)),
           chat_service(chat_model, mesh_adapter, chat_store),
           chat_event_bridge(chat_service),
           team_runtime(),
@@ -1559,15 +1595,14 @@ struct LinuxAppServices::Implementation
     {
         if (started)
         {
-            noop_mesh_adapter.setSelfNodeId(self_node_id);
             raw_lora_mesh_adapter.setSelfNodeId(self_node_id);
             loopback_mesh_adapter.setSelfNodeId(self_node_id);
             return;
         }
 
-        noop_mesh_adapter.setSelfNodeId(self_node_id);
         raw_lora_mesh_adapter.setSelfNodeId(self_node_id);
         loopback_mesh_adapter.setSelfNodeId(self_node_id);
+        if (!demo_world_enabled) (void)raw_lora_mesh_adapter.initialize();
         contact_service.begin();
         ::platform::ui::reticulum_directory::bind_mesh_peer_directory(
             &mesh_peer_directory);
@@ -1675,12 +1710,7 @@ struct LinuxAppServices::Implementation
             loopback_mesh_adapter.tick();
             return;
         }
-        if (raw_lora_enabled)
-        {
-            raw_lora_mesh_adapter.tick();
-            return;
-        }
-        noop_mesh_adapter.tick();
+        raw_lora_mesh_adapter.tick();
     }
 
     bool takePendingSendResult(::chat::MessageId& out_msg_id, bool& out_ok)
@@ -1690,12 +1720,8 @@ struct LinuxAppServices::Implementation
             return loopback_mesh_adapter.takePendingSendResult(out_msg_id,
                                                                out_ok);
         }
-        if (raw_lora_enabled)
-        {
-            return raw_lora_mesh_adapter.takePendingSendResult(out_msg_id,
-                                                               out_ok);
-        }
-        return noop_mesh_adapter.takePendingSendResult(out_msg_id, out_ok);
+        // Worker outcomes carry their own protocol and are drained separately.
+        return false;
     }
 
     LinuxAppServicesOptions options{};
@@ -1705,8 +1731,7 @@ struct LinuxAppServices::Implementation
     ::chat::ChatModel chat_model;
     LinuxSqliteChatStore chat_store;
     bool raw_lora_enabled = false;
-    ::trailmate::cardputer_zero::linux_ui::LinuxNoopMeshAdapter noop_mesh_adapter;
-    LinuxRawLoraMeshAdapter raw_lora_mesh_adapter;
+    LinuxMeshWorker raw_lora_mesh_adapter;
     LinuxLoopbackMeshAdapter loopback_mesh_adapter;
     ::chat::IMeshAdapter& mesh_adapter;
     ::chat::ChatService chat_service;
@@ -1723,11 +1748,54 @@ struct LinuxAppServices::Implementation
     ::team::TeamTrackSampler team_track_sampler;
     bool started = false;
     bool demo_seeded = false;
+    void syncPeerPublicKeys(::chat::MeshProtocol protocol)
+    {
+        if (!raw_lora_enabled || demo_world_enabled) return;
+        const auto snapshot = raw_lora_mesh_adapter.peerPublicKeys();
+        if (snapshot.protocol != protocol) return;
+        for (const auto& key : snapshot.keys)
+        {
+            ::chat::MeshPeerRecord previous;
+            const bool found = mesh_peer_directory.findByNodeId(protocol, key.node_id.value, previous).succeeded();
+            const uint8_t* existing = protocol == ::chat::MeshProtocol::Meshtastic ? previous.meshtastic.public_key : previous.meshcore.public_key;
+            const bool has_key = protocol == ::chat::MeshProtocol::Meshtastic ? previous.meshtastic.has_public_key : previous.meshcore.has_public_key;
+            if (found && has_key && std::equal(key.public_key, key.public_key + 32, existing)) continue;
+            const bool pinned = protocol == ::chat::MeshProtocol::Meshtastic ? previous.meshtastic.key_manually_verified : previous.meshcore.public_key_verified;
+            if (found && has_key && pinned) continue;
+            ::chat::MeshPeerRecord update;
+            update.valid = true;
+            update.source = ::chat::MeshPeerSource::RuntimeRx;
+            update.identity = found ? previous.identity : ::chat::makeMeshPeerNodeIdentity(protocol, key.node_id.value);
+            if (protocol == ::chat::MeshProtocol::Meshtastic)
+            {
+                update.meshtastic.has_public_key = true;
+                std::copy_n(key.public_key, 32, update.meshtastic.public_key);
+            }
+            else if (protocol == ::chat::MeshProtocol::MeshCore)
+            {
+                update.meshcore.has_public_key = true;
+                update.meshcore.node_id_hint = key.node_id.value;
+                std::copy_n(key.public_key, 32, update.meshcore.public_key);
+            }
+            else continue;
+            (void)contact_service.recordPeer(update);
+        }
+    }
+#if defined(TRAIL_MATE_LINUX_HAS_MEDIA)
+    std::array<std::shared_ptr<::platform::linux_runtime::LinuxVoiceContacts>, 2> voice_contacts;
+    std::unique_ptr<::platform::linux_runtime::IPacketRadio> voice_network_only_radio;
+    std::unique_ptr<::platform::linux_runtime::NativeVoiceService> voice;
+#endif
+    std::unique_ptr<::platform::linux_runtime::NativeCallAudioBinding> call_audio;
 };
 
 LinuxAppServices::LinuxAppServices(LinuxAppServicesOptions options)
     : options_(options)
 {
+    // Phone BLE is intentionally outside the current Linux support scope.
+    // Ignore legacy composition flags and persisted requests until it returns.
+    options_.ble_supported = false;
+    options_.phone_pairing_presenter = {};
 }
 
 LinuxAppServices::~LinuxAppServices()
@@ -1753,29 +1821,232 @@ bool LinuxAppServices::initialize()
         return true;
     }
 
-    loadPersistedConfig();
+    (void)::platform::ui::network::status(); // Warm the cached platform source before UI actions.
+    if (!ensureNodeIdentity()) return false;
+    if (!loadPersistedConfig()) return false;
+    using NetworkStore = ::platform::linux_runtime::LinuxReticulumNetworkStore;
+    const auto network_loaded = NetworkStore::load(reticulum_network_config_);
+    if (network_loaded == NetworkStore::Result::Unavailable) return false;
+    has_reticulum_network_config_ = network_loaded != NetworkStore::Result::Missing;
+    if (network_loaded == NetworkStore::Result::Invalid)
+    {
+        reticulum_network_config_ = ::chat::reticulum::ReticulumNetworkConfig{};
+        std::fprintf(stderr, "[Reticulum][Config] Invalid saved network configuration; network interfaces remain disabled\n");
+    }
     seedDefaultIdentity();
     config_persistence_runtime_.initialize();
     (void)::sys::EventBus::init();
     ensureServicesReady();
-    syncLocalIdentity();
-    applyMeshConfig();
-    applyPositionConfig();
+    if (!impl_->call_audio) impl_->call_audio = std::make_unique<::platform::linux_runtime::NativeCallAudioBinding>();
+    if (!impl_->demo_world_enabled)
+    {
+        ::platform::linux_runtime::bind_radio_power(impl_->raw_lora_mesh_adapter.powerRequests());
+    }
+    impl().mesh_adapter.setUserInfo(config_.node_name, config_.short_name);
     applyNetworkLimits();
     applyPrivacyConfig();
+    applyMeshConfig();
+    syncLocalIdentity();
+    applyPositionConfig();
     applyChatDefaults();
+#if defined(TRAIL_MATE_LINUX_HAS_MEDIA)
+    if (impl_->raw_lora_enabled && !impl_->demo_world_enabled)
+    {
+        auto* foreground = options_.foreground_radio ? options_.foreground_radio : (options_.packet_radio ? nullptr : &::platform::linux_runtime::foreground_packet_radio());
+        if (!foreground)
+        {
+            impl_->voice_network_only_radio = ::platform::linux_runtime::make_unavailable_packet_radio("No foreground radio assigned to voice");
+            foreground = impl_->voice_network_only_radio.get();
+        }
+        if (foreground)
+        {
+            ::platform::linux_runtime::VoiceServiceOptions voice;
+            voice.database = ::platform::linux_runtime::sqlite_database_path();
+            voice.self = getSelfNodeId();
+            voice.protocol = config_.mesh_protocol;
+            voice.mqtt_publish = [this](const uint8_t* bytes, size_t size, const std::atomic_bool& cancel)
+            { return impl_->raw_lora_mesh_adapter.publishVoiceMqtt(bytes, size, cancel); };
+            for (auto& contacts : impl_->voice_contacts) contacts = std::make_shared<::platform::linux_runtime::LinuxVoiceContacts>();
+            const auto contacts = impl_->voice_contacts;
+            voice.contacts = [contacts](::chat::MeshProtocol protocol) -> const ::chat::voice::vmp::IVerifiedContactSecretProvider*
+            {
+                if (protocol == ::chat::MeshProtocol::Meshtastic) return contacts[0].get();
+                if (protocol == ::chat::MeshProtocol::MeshCore) return contacts[1].get();
+                return nullptr;
+            };
+            voice.is_verified = [contacts](uint32_t peer, ::chat::MeshProtocol protocol)
+            {
+                if (protocol == ::chat::MeshProtocol::Meshtastic) return contacts[0]->contains(peer, protocol);
+                if (protocol == ::chat::MeshProtocol::MeshCore) return contacts[1]->contains(peer, protocol);
+                return false;
+            };
+            voice.changed = [](uint8_t channel, uint64_t id, bool)
+            { ::sys::EventBus::publish(new ::sys::ChatVoiceMessageEvent(channel, id), 0); };
+            impl_->voice = std::make_unique<::platform::linux_runtime::NativeVoiceService>(*foreground, std::move(voice));
+            impl_->raw_lora_mesh_adapter.setVoiceControlSink(impl_->voice.get());
+        }
+    }
+#endif
     initialized_ = true;
+    ::platform::linux_runtime::bind_tms_snapshot(this);
+    ::platform::linux_runtime::bind_tms_import(this);
+    ::platform::linux_runtime::bind_identity_restore(this, ::platform::linux_runtime::sqlite_database_path());
+    ::platform::linux_runtime::bind_settings_reset({this, [](void* owner)
+                                                    { return static_cast<LinuxAppServices*>(owner)->prepareSettingsFactoryReset(); }});
+    ::platform::linux_runtime::bind_reticulum_network_config(
+        {this,
+         [](void* owner, const ::chat::reticulum::ReticulumNetworkConfig& network)
+         { return static_cast<LinuxAppServices*>(owner)->setReticulumNetworkConfig(network); },
+         [](void* owner)
+         {
+             const auto* service = static_cast<LinuxAppServices*>(owner);
+             return service->impl_ && !service->impl_->demo_world_enabled && service->impl_->raw_lora_mesh_adapter.reticulumNetworkConfigPending();
+         }},
+        reticulum_network_config_, has_reticulum_network_config_);
+    if (options_.ble_supported)
+    {
+        phone_ = std::make_unique<LinuxPhoneRuntime>(*this, options_.phone_pairing_presenter);
+        updatePhoneRuntime();
+    }
+    // The native application owns its local HostLink endpoint. Bind frontend
+    // configuration services before admitting worker requests; shutdown stops
+    // that worker before releasing domain services. The transport defaults to
+    // loopback and retains its configurable bind address/port selection.
+    ::platform::ui::hostlink::start();
     return true;
+}
+
+bool LinuxAppServices::ensureNodeIdentity()
+{
+    if (!self_node_id_)
+    {
+        std::string identity_error;
+        self_node_id_ = options_.runtime_mode == ::platform::linux_runtime::LinuxRuntimeMode::SimulatorDemo
+                            ? 0x435A0001U
+                            : ::platform::linux_runtime::load_or_create_node_id(identity_error);
+        if (!self_node_id_)
+        {
+            std::fprintf(stderr, "[Linux] %s\n", identity_error.c_str());
+            return false;
+        }
+    }
+    return true;
+}
+
+chat::DeviceIdentityRestoreResult LinuxAppServices::restoreDeviceIdentity(const ::platform::linux_runtime::IdentityRestoreCommand& command)
+{
+    using Result = chat::DeviceIdentityRestoreResult;
+#if !defined(TRAIL_MATE_HAS_OPENSSL)
+    (void)command;
+    return Result::Unsupported;
+#else
+    namespace native = ::platform::linux_runtime;
+    namespace call = ::platform::ui::reticulum_call;
+    if (!initialized_ || !impl_ || settings_reset_pending_ || settings_import_pending_ || identity_restore_pending_ ||
+        !native::application_lifecycle_active() || native::application_restart_requested()) return Result::Unavailable;
+    const bool radio = command.target == native::IdentityRestoreTarget::Radio;
+    if (!radio && command.target != native::IdentityRestoreTarget::DeviceAuthor) return Result::InvalidInput;
+    if ((radio ? native::validate_radio_identity_restore(command.body.data(), command.size) : native::validate_identity_restore(command.body.data(), command.size)) != ::hostlink::management::Status::Ok) return Result::InvalidInput;
+    ::hostlink::management::IdentityRestoreView request;
+    ::hostlink::management::RadioIdentityRestoreView wireless;
+    if (radio)
+    {
+        if (::hostlink::management::parseRadioIdentityRestoreRequest({command.body.data(), command.size}, wireless) != ::hostlink::management::Status::Ok) return Result::InvalidInput;
+    }
+    else if (::hostlink::management::parseIdentityRestoreRequest({command.body.data(), command.size}, request) != ::hostlink::management::Status::Ok) return Result::InvalidInput;
+    if (!call::try_begin_configuration_change()) return Result::Unavailable;
+    struct CallGate
+    {
+        bool retain = false;
+        ~CallGate() { if (!retain) call::end_configuration_change(); }
+    } gate;
+#if defined(TRAIL_MATE_LINUX_HAS_MEDIA)
+    if (impl_->voice && impl_->voice->snapshot().busy) return Result::Unavailable;
+#endif
+    native::LinuxReticulumIdentity identity(native::sqlite_database_path());
+    if (!identity.begin()) return Result::StorageError;
+    const auto expected_generation = radio ? wireless.expected_author_generation : request.expected_generation;
+    const auto expected_public = radio ? wireless.expected_author.data : request.expected_public.data;
+    if (identity.generation() != expected_generation || std::memcmp(identity.publicKey().data(), expected_public, 64)) return Result::StaleIdentity;
+    native::LinuxRadioIdentityStore radios(native::sqlite_database_path());
+    if (radio)
+    {
+        native::RadioIdentitySnapshot current;
+        if (!radios.read(wireless.kind, current).ok) return Result::StorageError;
+        if (current.generation != wireless.expected_radio_generation || current.present != bool(wireless.expected_radio_public.data) ||
+            (current.present && std::memcmp(current.public_key.data(), wireless.expected_radio_public.data, 32))) return Result::StaleRadioIdentity;
+    }
+    // Once resident users stop, restart on every outcome. A failed storage
+    // transaction keeps the old key; restarting reopens its normal services.
+    struct Restart
+    {
+        ~Restart() { (void)native::request_application_restart(); }
+    } restart;
+    identity_restore_pending_ = true;
+    gate.retain = true;
+#if defined(TRAIL_MATE_LINUX_HAS_MEDIA)
+    if (impl_->voice) impl_->voice->shutdown();
+#endif
+    impl_->raw_lora_mesh_adapter.shutdown();
+    if (radio) return radios.replace(wireless.kind, wireless.expected_author_generation, wireless.expected_author.data,
+        wireless.expected_radio_generation, wireless.expected_radio_public.data, wireless.public_key.data, wireless.private_key.data, wireless.private_key.size);
+    return identity.replaceKeyPair(request.expected_generation, request.expected_public.data, request.format,
+        request.private_key.data, request.private_key.size, request.public_key.data);
+#endif
 }
 
 void LinuxAppServices::shutdown()
 {
+    ::platform::linux_runtime::unbind_identity_restore(this);
+    ::platform::linux_runtime::unbind_tms_snapshot(this);
+    ::platform::linux_runtime::unbind_tms_import(this);
+    ::platform::linux_runtime::unbind_settings_reset(this);
+    ::platform::linux_runtime::unbind_reticulum_network_config(this);
+    ::platform::ui::hostlink::stop();
+    ::platform::linux_runtime::stop_resource_pack_tasks();
+    ::platform::linux_runtime::stop_route_image_tasks();
+    // Phone callbacks use the domain services; stop them before radio/storage teardown.
+    phone_.reset();
+    if (initialized_ && config_persistence_runtime_.hasPending())
+    {
+        const auto now = ::sys::millis_now();
+        (void)config_persistence_runtime_.submit(::app::AppConfigChangeSet::allPersisted(), now,
+                                                 ::app::ConfigPersistenceUrgency::Immediate);
+        flushConfigPersistence(now);
+        if (config_persistence_runtime_.hasPending()) std::fprintf(stderr, "[Linux] Pending configuration could not be saved at shutdown\n");
+    }
+    if (impl_ && !impl_->demo_world_enabled)
+    {
+        ::platform::linux_runtime::unbind_radio_power(impl_->raw_lora_mesh_adapter.powerRequests());
+        impl_->raw_lora_mesh_adapter.shutdown();
+#if defined(TRAIL_MATE_LINUX_HAS_MEDIA)
+        impl_->raw_lora_mesh_adapter.setVoiceControlSink(nullptr);
+        if (impl_->voice) impl_->voice->shutdown();
+        impl_->voice.reset();
+#endif
+        LinuxMeshWorker::Outcome outcome;
+        while (impl_->raw_lora_mesh_adapter.takeOutcome(outcome))
+            impl_->chat_service.handleSendResultForProtocol(outcome.message, outcome.protocol,
+                                                            outcome.status, 0, outcome.failure);
+        impl_->chat_service.flushStore();
+    }
+    if (impl_) impl_->call_audio.reset();
+    if (initialized_) ::platform::ui::gps::set_enabled(false);
     initialized_ = false;
 }
 
 bool LinuxAppServices::isInitialized() const noexcept
 {
     return initialized_;
+}
+
+::platform::linux_runtime::IVoiceSource* LinuxAppServices::voiceSource()
+{
+#if defined(TRAIL_MATE_LINUX_HAS_MEDIA)
+    return impl_ ? impl_->voice.get() : nullptr;
+#else
+    return nullptr;
+#endif
 }
 
 void LinuxAppServices::setUiEventDispatcher(UiEventDispatcher dispatcher,
@@ -1796,16 +2067,12 @@ bool LinuxAppServices::dispatchUiEvent(::sys::Event* event)
 
 void LinuxAppServices::tick(std::size_t max_events)
 {
-    if (!initialized_)
+    if (!initialized_ || settings_import_pending_ || identity_restore_pending_)
     {
         return;
     }
-    flushConfigPersistence(::sys::millis_now());
-    if (::platform::ui::reticulum_groups::hasPending())
-    {
-        (void)::platform::ui::reticulum_groups::flushPending();
-    }
     updateCoreServices();
+    if (identity_restore_pending_) return;
     tickEventRuntime();
     dispatchPendingEvents(max_events);
 }
@@ -1845,6 +2112,7 @@ void LinuxAppServices::saveConfig()
 
 void LinuxAppServices::saveConfig(::app::AppConfigChangeSet changes)
 {
+    if (settings_reset_pending_ || settings_import_pending_ || identity_restore_pending_) return;
     // The Linux blob backend has no section-level writer yet. Keep the
     // scoped request explicit while preserving the complete blob contract.
     config_.mesh_protocol =
@@ -1880,6 +2148,26 @@ bool LinuxAppServices::writePersistedConfig(const ::app::AppConfig& config)
         kConfigNamespace, kConfigBlobKey, &blob, sizeof(blob));
 }
 
+bool LinuxAppServices::prepareSettingsFactoryReset()
+{
+    if (!initialized_ || identity_restore_pending_) return false;
+    if (settings_reset_pending_) return true;
+    // The legacy Linux backend stores an object representation. Clear padding
+    // and inactive text tails before constructing defaults in that storage.
+    alignas(PersistedConfigBlob) unsigned char default_bytes[sizeof(PersistedConfigBlob)]{};
+    auto* defaults = ::new (default_bytes) PersistedConfigBlob{.magic = kConfigBlobMagic,
+                                                               .version = kConfigBlobVersion,
+                                                               .config = ::app::AppConfig{}};
+    defaults->config.ble_enabled = false;
+    const bool committed = ::platform::linux_runtime::settings_storage::commit_factory_reset(defaults, sizeof(*defaults));
+    defaults->~PersistedConfigBlob();
+    if (!committed) return false;
+    settings_reset_pending_ = true;
+    config_persistence_runtime_.initialize();
+    ::platform::linux_runtime::unbind_reticulum_network_config(this);
+    return true;
+}
+
 void LinuxAppServices::commitConfigEdit(void* context,
                                         ::app::AppConfigChangeSet changes)
 {
@@ -1897,17 +2185,139 @@ void LinuxAppServices::cancelConfigEdit(void*)
 void LinuxAppServices::applyMeshConfig()
 {
     ensureServicesReady();
-    sync_reticulum_group_config(config_);
-    if (impl().raw_lora_enabled && !impl().demo_world_enabled)
+#if defined(TRAIL_MATE_LINUX_HAS_MEDIA)
+    if (impl_->voice) impl_->voice->invalidateContext();
+#endif
+    if (!impl().demo_world_enabled)
     {
+        LinuxMeshWorker::MqttSettings mqtt;
+        bool mqtt_fields_valid = true;
+        const auto capture = [&mqtt_fields_valid](const auto& value)
+        {
+            const auto length = strnlen(value, sizeof(value));
+            if (length == sizeof(value))
+            {
+                mqtt_fields_valid = false;
+                return std::string{};
+            }
+            return std::string(value, length);
+        };
+        if (config_.mesh_protocol == chat::MeshProtocol::Meshtastic)
+        {
+            mqtt.enabled = config_.meshtastic_mqtt_enabled;
+            mqtt.uplink = config_.meshtastic_mqtt_uplink_enabled;
+            mqtt.downlink = config_.meshtastic_mqtt_downlink_enabled;
+            mqtt.host = capture(config_.meshtastic_mqtt_host);
+            mqtt.port = config_.meshtastic_mqtt_port;
+            mqtt.root = capture(config_.meshtastic_mqtt_root);
+            mqtt.username = capture(config_.meshtastic_mqtt_username);
+            mqtt.password = capture(config_.meshtastic_mqtt_password);
+        }
+        else if (config_.mesh_protocol == chat::MeshProtocol::MeshCore)
+        {
+            const auto& mesh = config_.meshcore_config;
+            mqtt.enabled = mesh.meshcore_mqtt_enabled;
+            mqtt.uplink = mesh.meshcore_mqtt_uplink_enabled;
+            mqtt.downlink = mesh.meshcore_mqtt_downlink_enabled;
+            mqtt.host = capture(mesh.meshcore_mqtt_host);
+            mqtt.port = mesh.meshcore_mqtt_port;
+            mqtt.root = capture(mesh.meshcore_mqtt_root);
+            mqtt.username = capture(mesh.meshcore_mqtt_username);
+            mqtt.password = capture(mesh.meshcore_mqtt_password);
+        }
+        if (mqtt.root.empty()) mqtt.root = config_.mesh_protocol == chat::MeshProtocol::MeshCore ? app::AppConfig::kDefaultMeshCoreMqttRoot : app::AppConfig::kDefaultMeshtasticMqttRoot;
+        if (!mqtt_fields_valid) mqtt.host = "/"; // Invalid enabled settings fail closed; never use a truncated endpoint.
         impl().raw_lora_mesh_adapter.applyProtocolConfig(
-            config_.mesh_protocol, mesh_config_for_protocol(config_));
+            config_.mesh_protocol, mesh_config_for_protocol(config_), mqtt);
+        if (has_reticulum_network_config_)
+            impl().raw_lora_mesh_adapter.applyReticulumNetworkConfig(reticulum_network_config_);
+        else
+        {
+            if (::chat::reticulum::network_config_policy::build_defaults(config_.reticulumConfig(), &reticulum_network_config_))
+                impl().raw_lora_mesh_adapter.applyReticulumNetworkConfig(reticulum_network_config_);
+        }
     }
     else
     {
         impl().mesh_adapter.applyConfig(mesh_config_for_protocol(config_));
     }
     impl().chat_service.setActiveProtocol(config_.mesh_protocol);
+    impl().contact_service.setActiveProtocol(config_.mesh_protocol);
+    ::platform::linux_runtime::publish_reticulum_network_config(this, reticulum_network_config_, has_reticulum_network_config_);
+}
+
+bool LinuxAppServices::setReticulumNetworkConfig(const ::chat::reticulum::ReticulumNetworkConfig& config)
+{
+    if (!initialized_ || settings_reset_pending_ || identity_restore_pending_ || !::platform::linux_runtime::LinuxReticulumNetworkStore::save(config, config_)) return false;
+    reticulum_network_config_ = config;
+    for (size_t index = config.interface_count; index < ::chat::reticulum::kMaxNetworkInterfaces; ++index)
+        reticulum_network_config_.interfaces[index] = ::chat::reticulum::NetworkInterfaceConfig{};
+    has_reticulum_network_config_ = true;
+    ::platform::linux_runtime::publish_reticulum_network_config(this, reticulum_network_config_, true);
+    if (!impl_->demo_world_enabled) impl_->raw_lora_mesh_adapter.applyReticulumNetworkConfig(reticulum_network_config_);
+    return true;
+}
+
+bool LinuxAppServices::getReticulumNetworkConfig(::chat::reticulum::ReticulumNetworkConfig* output) const
+{
+    if (!output || !initialized_ || !has_reticulum_network_config_) return false;
+    *output = reticulum_network_config_;
+    return true;
+}
+
+bool LinuxAppServices::exportSettingsDocument(::app::tms::DocumentKind kind, std::string& output)
+{
+    if (!initialized_ || settings_reset_pending_ || settings_import_pending_ || identity_restore_pending_) return false;
+    if (config_persistence_runtime_.hasPending())
+    {
+        const auto now = ::sys::millis_now();
+        (void)config_persistence_runtime_.submit(::app::AppConfigChangeSet::allPersisted(), now,
+                                                 ::app::ConfigPersistenceUrgency::Immediate);
+        flushConfigPersistence(now);
+        if (config_persistence_runtime_.hasPending()) return false;
+    }
+    return export_linux_tms_snapshot(kind, output);
+}
+
+LinuxAppServices::SettingsImportResult LinuxAppServices::importSettingsDocument(
+    const char* bytes, size_t length, ::app::tms::DocumentKind kind, const TmsCommitOptions* commit)
+{
+    using Result = SettingsImportResult;
+    namespace call = ::platform::ui::reticulum_call;
+    if (!initialized_ || settings_reset_pending_ || settings_import_pending_ || identity_restore_pending_ ||
+        !::platform::linux_runtime::application_lifecycle_active()) return Result::Unavailable;
+    auto plan = LinuxTmsImport::prepare(bytes, length, kind);
+    if (!plan) return Result::InvalidDocument;
+    if (commit)
+    {
+        std::string current;
+        if (!exportSettingsDocument(::app::tms::DocumentKind::Working, current)) return Result::StorageError;
+    }
+#if defined(TRAIL_MATE_LINUX_HAS_MEDIA)
+    if (impl_->voice && impl_->voice->snapshot().busy) return Result::Busy;
+#endif
+    if (!call::try_begin_configuration_change()) return Result::Busy;
+    struct CallGate
+    {
+        bool retain = false;
+        ~CallGate()
+        {
+            if (!retain) ::platform::ui::reticulum_call::end_configuration_change();
+        }
+    } gate;
+    const auto committed = commit ? plan->commit(*commit) : (plan->commit() ? LinuxTmsImport::CommitResult::Committed : LinuxTmsImport::CommitResult::StorageError);
+    if (committed != LinuxTmsImport::CommitResult::Committed)
+    {
+        return committed == LinuxTmsImport::CommitResult::Conflict ? Result::Conflict : Result::StorageError;
+    }
+    gate.retain = true;
+    settings_import_pending_ = true;
+    config_persistence_runtime_.initialize();
+    ::platform::linux_runtime::unbind_reticulum_network_config(this);
+    // Existing UI loops observe the restart intent and perform normal teardown
+    // before exec. Alt+F4 still wins and applies the committed set at next start.
+    (void)::platform::linux_runtime::request_application_restart();
+    return Result::RestartPending;
 }
 
 void LinuxAppServices::applyUserInfo()
@@ -2050,7 +2460,10 @@ const ::chat::IMeshAdapter* LinuxAppServices::getMeshAdapter() const
 
 ::chat::NodeId LinuxAppServices::getSelfNodeId() const
 {
-    return 0x435A0001U;
+    if (impl_ && !impl_->demo_world_enabled &&
+        config_.mesh_protocol == ::chat::MeshProtocol::MeshCore)
+        return impl_->raw_lora_mesh_adapter.getNodeId();
+    return self_node_id_;
 }
 
 ::team::TeamController* LinuxAppServices::teamController()
@@ -2111,6 +2524,7 @@ void LinuxAppServices::setTeamModeActive(bool active)
 void LinuxAppServices::broadcastNodeInfo()
 {
     syncLocalIdentity();
+    (void)impl().mesh_adapter.broadcastSelfIdentity();
 }
 
 void LinuxAppServices::clearNodeDb()
@@ -2130,13 +2544,12 @@ void LinuxAppServices::clearMessageDb()
 
 bool LinuxAppServices::isBleEnabled() const
 {
-    return false;
+    return config_.ble_enabled && phone_ && phone_->status().ready;
 }
 
 void LinuxAppServices::setBleEnabled(bool enabled)
 {
-    (void)enabled;
-    config_.ble_enabled = false;
+    config_.ble_enabled = options_.ble_supported && enabled;
     saveConfig();
 }
 
@@ -2144,24 +2557,91 @@ void LinuxAppServices::restartDevice()
 {
     ::platform::ui::device::restart();
 }
+void LinuxAppServices::setPhonePairingPresenter(std::function<bool(const ::platform::linux_runtime::PhonePairingDisplay&)> presenter)
+{
+    options_.phone_pairing_presenter = std::move(presenter);
+    if (phone_) phone_->setPairingPresenter(options_.phone_pairing_presenter);
+}
 
 void LinuxAppServices::updateCoreServices()
 {
-    if (!impl_)
+    if (!impl_ || settings_import_pending_ || identity_restore_pending_)
     {
         return;
     }
+    ::platform::linux_runtime::service_tms_snapshot(this, [](void* owner, std::string& output)
+                                                    { return static_cast<LinuxAppServices*>(owner)->exportSettingsDocument(::app::tms::DocumentKind::Working, output); });
+    ::platform::linux_runtime::service_tms_import(this, [](void* owner, const ::platform::linux_runtime::TmsImportCommand& command)
+                                                  {
+            using Status = ::hostlink::management::Status;
+            const auto result = static_cast<LinuxAppServices*>(owner)->importSettingsDocument(command.document.data(), command.document.size(),
+                ::app::tms::DocumentKind::Working, &command.commit);
+            switch (result)
+            {
+            case SettingsImportResult::RestartPending: return Status::Ok;
+            case SettingsImportResult::Busy: return Status::Busy;
+            case SettingsImportResult::Conflict: return Status::Conflict;
+            case SettingsImportResult::InvalidDocument: return Status::InvalidField;
+            case SettingsImportResult::StorageError: return Status::StorageUnavailable;
+            default: return Status::Unsupported;
+            } });
+    if (settings_import_pending_) return;
 
+    ::platform::linux_runtime::service_identity_restore(this, [](void* owner, const ::platform::linux_runtime::IdentityRestoreCommand& command)
+        { return static_cast<LinuxAppServices*>(owner)->restoreDeviceIdentity(command); });
+    if (identity_restore_pending_) return;
+
+    // Both tick() and the explicit SDL/Cardputer loops pass through here.
+    flushConfigPersistence(::sys::millis_now());
+
+    impl_->syncPeerPublicKeys(config_.mesh_protocol);
+#if defined(TRAIL_MATE_LINUX_HAS_MEDIA)
+    if (impl_->voice)
+    {
+        bool changed = false;
+        const auto self = getSelfNodeId();
+        const ::chat::MeshProtocol protocols[] = {::chat::MeshProtocol::Meshtastic, ::chat::MeshProtocol::MeshCore};
+        for (size_t index = 0; index < impl_->voice_contacts.size(); ++index)
+            changed = impl_->voice_contacts[index]->refresh(config_.mesh_protocol == protocols[index] ? self : 0,
+                                                            protocols[index], impl_->mesh_peer_directory) ||
+                      changed;
+        if (changed) impl_->voice->invalidateContext();
+        ::chat::MeshTransportStatus voice_transport;
+        (void)impl_->raw_lora_mesh_adapter.getTransportStatus(&voice_transport);
+        // MQTT media has its own carrier owner; generic network readiness must
+        // never authorize the still-radio-only VMP session to acquire hardware.
+        impl_->voice->setContext(self, config_.mesh_protocol, voice_transport.radio_ready);
+        impl_->voice->setMqttReceiveReady(voice_transport.ready && voice_transport.network_ready &&
+                                          config_.mesh_protocol == ::chat::MeshProtocol::Meshtastic &&
+                                          config_.meshtastic_mqtt_enabled && config_.meshtastic_mqtt_downlink_enabled);
+        const bool voice_mqtt = config_.mesh_protocol == ::chat::MeshProtocol::Meshtastic && config_.meshtastic_mqtt_enabled;
+        impl_->voice->setMqttSendReady(voice_mqtt, voice_transport.ready && voice_transport.network_ready && config_.meshtastic_mqtt_uplink_enabled);
+    }
+#endif
     ::team::ui::TeamUiSnapshot snap;
     const bool has_team = ::team::ui::team_ui_snapshot_store().load(snap) && snap.in_team;
     ::platform::ui::gps::tick_service();
     impl_->team_track_sampler.update(&impl_->team_controller, has_team);
     ::platform::ui::tracker::poll();
+    updatePhoneRuntime();
+}
+
+void LinuxAppServices::updatePhoneRuntime()
+{
+    if (!phone_) return;
+    auto options = options_.phone_ble;
+    const bool compatible = config_.mesh_protocol == ::chat::MeshProtocol::Meshtastic ||
+                            config_.mesh_protocol == ::chat::MeshProtocol::MeshCore;
+    options.protocol = config_.mesh_protocol == ::chat::MeshProtocol::MeshCore
+                           ? ::platform::linux_runtime::PhoneGattProtocol::MeshCore
+                           : ::platform::linux_runtime::PhoneGattProtocol::Meshtastic;
+    phone_->configure(config_.ble_enabled && compatible, options);
+    phone_->tick();
 }
 
 void LinuxAppServices::tickEventRuntime()
 {
-    if (!impl_)
+    if (!impl_ || identity_restore_pending_)
     {
         return;
     }
@@ -2172,7 +2652,7 @@ void LinuxAppServices::tickEventRuntime()
 
 void LinuxAppServices::dispatchPendingEvents(std::size_t max_events)
 {
-    if (!impl_)
+    if (!impl_ || identity_restore_pending_)
     {
         return;
     }
@@ -2180,6 +2660,19 @@ void LinuxAppServices::dispatchPendingEvents(std::size_t max_events)
     impl_->tickMeshAdapter();
     impl_->chat_service.processIncoming();
     impl_->team_service.processIncoming();
+
+    if (!impl_->demo_world_enabled)
+    {
+        LinuxMeshWorker::Outcome outcome;
+        for (unsigned count = 0; count < 8 && impl_->raw_lora_mesh_adapter.takeOutcome(outcome); ++count)
+        {
+            impl_->chat_service.handleSendResultForProtocol(outcome.message, outcome.protocol,
+                                                            outcome.status, 0, outcome.failure);
+            ::sys::EventBus::publish(new ::sys::ChatSendResultEvent(outcome.message, outcome.status,
+                                                                    outcome.protocol, outcome.failure),
+                                     0);
+        }
+    }
 
     while (true)
     {
@@ -2230,30 +2723,44 @@ void LinuxAppServices::dispatchPendingEvents(std::size_t max_events)
     }
 }
 
-void LinuxAppServices::loadPersistedConfig()
+bool LinuxAppServices::loadPersistedConfig()
 {
-    std::vector<uint8_t> blob_bytes;
-    if (!::platform::ui::settings_store::get_blob(kConfigNamespace, kConfigBlobKey, blob_bytes) ||
-        blob_bytes.size() != sizeof(PersistedConfigBlob))
+    PersistedConfigBlob blob{};
+    size_t length = 0;
+    using Result = ::platform::ui::settings_store::BlobReadResult;
+    const auto read = ::platform::ui::settings_store::read_blob_into(kConfigNamespace, kConfigBlobKey, &blob, sizeof(blob), &length);
+    if (read == Result::Missing)
     {
         config_ = ::app::AppConfig{};
         config_.ble_enabled = false;
-        return;
+        return !sync_reticulum_group_config(config_) || writePersistedConfig(config_);
     }
-
-    PersistedConfigBlob blob{};
-    std::memcpy(&blob, blob_bytes.data(), sizeof(blob));
-    if (blob.magic != kConfigBlobMagic || blob.version != kConfigBlobVersion ||
+    if (read != Result::Ok || length != sizeof(blob))
+    {
+        std::fprintf(stderr, "[Config] Saved application configuration is %s; initialization stopped\n",
+                     read == Result::Unavailable ? "unavailable" : "invalid");
+        return false;
+    }
+    if (blob.magic != kConfigBlobMagic || (blob.version != 2U && blob.version != kConfigBlobVersion) ||
         !is_supported_protocol(blob.config.mesh_protocol))
     {
-        config_ = ::app::AppConfig{};
-        config_.ble_enabled = false;
-        return;
+        std::fprintf(stderr, "[Config] Unsupported application configuration header; initialization stopped\n");
+        return false;
     }
 
     config_ = blob.config;
     config_.mesh_protocol = ::chat::infra::normalizeMeshProtocol(config_.mesh_protocol);
-    config_.ble_enabled = false;
+    if (!options_.ble_supported) config_.ble_enabled = false;
+    if (blob.version == 2U)
+    {
+        const auto& groups = config_.reticulumConfig().reticulum_groups;
+        const bool populated = std::any_of(std::begin(groups), std::end(groups), [](const auto& group)
+                                           { return ::chat::hasReticulumDestinationIdentity(group.identity); });
+        // Preserve existing snapshot data; otherwise import the legacy source
+        // once. Version 3 also records an intentionally empty modern group list.
+        if ((populated || sync_reticulum_group_config(config_)) && !writePersistedConfig(config_)) return false;
+    }
+    return true;
 }
 
 void LinuxAppServices::seedDefaultIdentity()
@@ -2266,7 +2773,7 @@ void LinuxAppServices::seedDefaultIdentity()
     {
         copy_bounded(config_.short_name, sizeof(config_.short_name), options_.default_short_name);
     }
-    config_.ble_enabled = false;
+    if (!options_.ble_supported) config_.ble_enabled = false;
     applyChatDefaults();
 }
 
@@ -2275,6 +2782,7 @@ void LinuxAppServices::syncLocalIdentity()
     ensureServicesReady();
     impl().mesh_adapter.setUserInfo(config_.node_name, config_.short_name);
     impl().chat_service.setActiveProtocol(config_.mesh_protocol);
+    if (!getSelfNodeId()) return; // A failed protocol identity must never create a local node 0.
     impl().contact_service.updateNodeInfo(getSelfNodeId(),
                                           config_.short_name,
                                           config_.node_name,
@@ -2291,11 +2799,12 @@ void LinuxAppServices::syncLocalIdentity()
 
 void LinuxAppServices::ensureServicesReady()
 {
+    if (!ensureNodeIdentity()) throw std::runtime_error("Linux device identity is unavailable");
     if (!impl_)
     {
-        impl_ = std::make_unique<Implementation>(options_, getSelfNodeId());
+        impl_ = std::make_unique<Implementation>(options_, self_node_id_);
     }
-    impl_->ensureStarted(getSelfNodeId());
+    impl_->ensureStarted(self_node_id_);
 }
 
 } // namespace trailmate::linux_app

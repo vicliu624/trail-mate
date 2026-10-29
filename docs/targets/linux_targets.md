@@ -17,6 +17,7 @@ UX Pack presents.
 | `uconsole` | `uconsole_aio2` placeholder | Linux | `builds/linux_cmake` | `apps/linux_uconsole_gtk` | `uconsole_desktop` | transitional |
 | `linux_sim` | simulator device profile | Linux | `builds/linux_cmake` | `apps/linux_sim_shell` | `simulator_full` | transitional |
 | `cardputerzero` | Cardputer Zero portable Linux device profile | Linux | `builds/linux_cmake` | `apps/linux_cardputer_zero` | `cardputer_compact` | pending hardware validation |
+| `t_display_cm0` | `boards/t_display_cm0/device.conf` | Linux | `builds/linux_cmake` | `apps/linux_lvgl` | `t_display_p4_touch` | pending hardware validation |
 | `linux_unoq` | UNO Q device profile | Linux | `builds/linux_cmake` | future Linux UNO Q app shell | `uconsole_desktop` placeholder | planned |
 | `linux_headless` | host/headless profile | Linux | `builds/linux_cmake` | future Linux headless app shell | `headless_status` | planned |
 

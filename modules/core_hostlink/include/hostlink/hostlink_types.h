@@ -66,6 +66,7 @@ enum Capabilities : uint32_t
     CapChannelPositionPrecision = 1u << 11,
     CapSharedSignatureRecovery = 1u << 12,
     CapSharedConfirmationRecovery = 1u << 13,
+    CapAutoInterfaceIfac = 1u << 14,
 };
 
 enum class ConfigKey : uint8_t

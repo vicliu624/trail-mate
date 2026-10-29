@@ -28,11 +28,11 @@ hardware/session closure.
 Cardputer Zero uses the compact Pager visual language under a 320 x 170
 keyboard-device constraint.
 
-The shared LVGL menu profile is intentionally Pager-derived:
+The shared LVGL menu profile keeps an independent compact focus carousel:
 
 ```text
 make_cardputer_zero_profile()
-  starts from make_pager_profile()
+  owns compact geometry independently of the Pager grid
   keeps PagerFocus menu behavior
   shrinks geometry for 320 x 170
   enables keyboard directional navigation
@@ -51,7 +51,7 @@ inside business-page code.
 ## Screen Set
 
 `CardputerCompactUxPack::buildScreens()` and `cardputer_compact_manifest` both
-own the same ten product routes:
+own the same fourteen product routes:
 
 - Dashboard
 - Chat
@@ -59,16 +59,29 @@ own the same ten product routes:
 - Map
 - Sky Plot
 - Team
+- Geocaching
+- Calculator
 - Tracker
+- Protocol Probe
 - Walkie Talkie
 - Extensions
 - Settings
+- Agenda
 
-Cardputer Zero intentionally does not expose PC Link, SSTV, Protocol Probe, or
+Cardputer Zero intentionally does not expose PC Link, SSTV, or
 SD Storage / USB Disk in its product menu. SD Storage is the USB
 mass-storage card-access entry; it is not the same thing as Extensions.
 
+Protocol Probe now uses the shared production catalog and Linux packet-radio
+port, including foreground ownership and mesh restoration. A missing external
+radio remains unavailable; menu registration does not imply hardware readiness.
+
 The Cardputer Zero CMake test slice checks this manifest alignment directly.
+The earlier maintenance capture tool completed the thirteen pre-Agenda pages in
+successive sessions after resource-root configuration became idempotent for the
+same path. Agenda is included in the current fourteen-page registry and manifest
+assertions; that does not add a screenshot to the historical capture set. This is
+host UI evidence; there is still no physical Cardputer Zero test device.
 Cardputer Zero has no separate GPS-status product page. GNSS visual status is
 the Sky Plot page; raw receiver/status facts are data feeding Sky Plot,
 dashboard, tracker, team, and map behavior.

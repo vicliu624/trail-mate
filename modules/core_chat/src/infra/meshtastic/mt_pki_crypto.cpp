@@ -385,6 +385,10 @@ bool opensslAesCcmEncrypt(const uint8_t* key,
                             EVP_CTRL_CCM_SET_IVLEN,
                             static_cast<int>(kOpenSslCcmNonceLen),
                             nullptr) == 1 &&
+        EVP_CIPHER_CTX_ctrl(ctx,
+                            EVP_CTRL_CCM_SET_TAG,
+                            static_cast<int>(auth_len),
+                            nullptr) == 1 &&
         EVP_EncryptInit_ex(ctx, nullptr, nullptr, key, nonce) == 1 &&
         EVP_EncryptUpdate(ctx,
                           nullptr,

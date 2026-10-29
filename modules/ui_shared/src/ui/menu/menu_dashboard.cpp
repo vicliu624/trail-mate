@@ -3,8 +3,9 @@
 #include "platform/ui/orientation_runtime.h"
 #include "platform/ui/quick_controls_runtime.h"
 #include "ui/menu/menu_layout.h"
+#include "ui/ux_build_config.h"
 
-#if defined(TRAIL_MATE_ESP_BOARD_TAB5) || defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4) || defined(ARDUINO_T_DECK) || defined(ARDUINO_WIO_TRACKER_L2) || defined(ARDUINO_T_LORA_PAGER)
+#if defined(TRAIL_MATE_ESP_BOARD_TAB5) || defined(TRAIL_MATE_UI_P4_TOUCH) || defined(ARDUINO_T_DECK) || defined(ARDUINO_WIO_TRACKER_L2) || defined(ARDUINO_T_LORA_PAGER)
 #include "ui/app_runtime.h"
 #include "ui/localization.h"
 #include "ui/menu/dashboard/dashboard_state.h"

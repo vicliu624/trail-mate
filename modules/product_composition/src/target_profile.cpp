@@ -244,7 +244,7 @@ constexpr TargetProfile kTargetProfiles[] = {
         "cardputer_compact_manifest",
         "cardputer_compact",
         TargetPlatform::Linux,
-        TargetRenderer::Ascii,
+        TargetRenderer::Lvgl,
         TargetSupportStatus::PendingHardwareValidation,
         true,
         false,
@@ -310,6 +310,31 @@ constexpr TargetProfile kTargetProfiles[] = {
         DisplayOrientationPolicy::LandscapeLocked,
     },
     kWioTrackerL2Target,
+    {
+        "t_display_cm0",
+        "t_display_cm0",
+        "builds/linux_cmake",
+        "apps/linux_lvgl",
+        "t_display_p4_touch",
+        "t_display_p4_touch_ui",
+        "t_display_cm0_touch_manifest",
+        "t_display_p4_touch",
+        TargetPlatform::Linux,
+        TargetRenderer::Lvgl,
+        TargetSupportStatus::PendingHardwareValidation,
+        true,  // Display
+        true,  // Touch
+        true,  // Keyboard support; fitted input is detected at runtime
+        false, // Trackball
+        true,  // LR2021
+        true,  // Nordic SLM GNSS expansion; readiness is probed separately
+        true,  // Native Linux audio
+        true,  // IIO IMU; readiness remains separate from capability
+        false, // No external wireless companion
+        BleBackend::None,
+        WirelessCompanionKind::None,
+        DisplayOrientationPolicy::SensorLandscapeOnly,
+    },
 };
 
 } // namespace

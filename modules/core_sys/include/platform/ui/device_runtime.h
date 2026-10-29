@@ -11,6 +11,8 @@ struct BatteryInfo
     bool available = false;
     bool charging = false;
     int level = -1;
+    // External power and active charging are distinct (e.g. a full battery).
+    bool external_power = false;
 };
 
 struct MemoryStats

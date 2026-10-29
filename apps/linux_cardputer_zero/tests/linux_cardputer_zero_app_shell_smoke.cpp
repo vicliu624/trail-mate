@@ -95,14 +95,14 @@ int main()
     const auto* profile = shell.targetProfile();
     assert(profile != nullptr);
     assert(profile->platform == product_composition::TargetPlatform::Linux);
-    assert(profile->renderer == product_composition::TargetRenderer::Ascii);
+    assert(profile->renderer == product_composition::TargetRenderer::Lvgl);
     assert(std::strcmp(profile->app_shell, "apps/linux_cardputer_zero") == 0);
     assert(profile->has_lora);
     assert(profile->has_gps);
 
     ui::menu::MenuModel menu;
     assert(ui_lvgl_ux::buildMenuForUxPack(shell.activeUxPackId(), menu));
-    assert(menu.size() == 10);
+    assert(menu.size() == 14);
     bool has_map = false;
     bool has_gps = false;
     bool has_sky_plot = false;
@@ -149,7 +149,7 @@ int main()
     assert(has_map);
     assert(!has_gps);
     assert(has_sky_plot);
-    assert(!has_energy_sweep);
+    assert(has_energy_sweep);
     assert(has_walkie);
     assert(!has_sstv);
     assert(has_extensions);

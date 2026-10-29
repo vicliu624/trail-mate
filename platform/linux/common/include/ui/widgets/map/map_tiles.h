@@ -9,9 +9,19 @@
 
 #include "lvgl.h"
 
+#include "ui_map_runtime/map_poi/annotation_layout.h"
+#include "ui_map_runtime/map_poi/poi_types.h"
+#include "ui_presentation/map/map_poi_snapshot.h"
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <vector>
+#define TRAIL_MATE_MAP_POI_AVAILABLE 1
+namespace platform::linux_runtime
+{
+class PackagedMapSession;
+struct PackagedMapTile;
+} // namespace platform::linux_runtime
 
 #define TILE_SIZE 256
 #define TILE_RECORD_LIMIT 48
@@ -39,6 +49,8 @@ struct MapAnchor
 
 struct MapTile
 {
+    std::shared_ptr<const platform::linux_runtime::PackagedMapTile> packaged_base, packaged_major, packaged_minor, poi;
+    bool packaged_pending = false;
     int32_t x = 0;
     int32_t y = 0;
     int z = 0;
@@ -59,6 +71,8 @@ struct MapTile
 
 struct TileContext
 {
+    std::shared_ptr<platform::linux_runtime::PackagedMapSession> packaged;
+    uint32_t packaged_session = 0, poi_revision = 0;
     lv_obj_t* map_container = nullptr;
     MapAnchor* anchor = nullptr;
     std::vector<MapTile>* tiles = nullptr;
@@ -66,6 +80,8 @@ struct TileContext
     bool* has_map_data = nullptr;
     bool* has_visible_map_data = nullptr;
 };
+void map_poi_snapshot(TileContext& ctx, ui::map::MapPoiSnapshot& out);
+void visit_map_annotations(TileContext& ctx, ui::map_poi::AnnotationConsumer consume, void* user);
 
 void normalize_tile(int z, int& x, int& y);
 void latLngToTile(double lat, double lng, int zoom, int& tile_x, int& tile_y);

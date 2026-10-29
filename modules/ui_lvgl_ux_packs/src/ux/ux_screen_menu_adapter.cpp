@@ -9,6 +9,10 @@ ui::menu::MenuScreenId toMenuScreenId(ScreenId id)
 {
     switch (id)
     {
+    case ScreenId::Calculator:
+        return ui::menu::MenuScreenId::Calculator;
+    case ScreenId::Geocaching:
+        return ui::menu::MenuScreenId::Geocaching;
     case ScreenId::Calendar:
         return ui::menu::MenuScreenId::Calendar;
     case ScreenId::Dashboard:

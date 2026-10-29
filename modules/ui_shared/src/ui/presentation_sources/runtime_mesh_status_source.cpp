@@ -77,6 +77,19 @@ bool RuntimeMeshStatusSource::buildMeshStatusSnapshot(
     ui::copyText(out.radio_label, "LoRa direct path");
 #endif
 
+    chat::MeshTransportStatus transport;
+    const auto* adapter = app::messagingFacade().getMeshAdapter();
+    if (adapter && adapter->getTransportStatus(&transport))
+    {
+        out.state = transport.ready ? ui::mesh::MeshDisplayState::Ready : ui::mesh::MeshDisplayState::Off;
+        // The legacy presentation field means mesh-service readiness, across
+        // all usable bearers. Keep the view independent of Linux interfaces.
+        out.radio_ready = transport.ready;
+        ui::copyText(out.radio_label, transport.network_ready
+                                          ? (transport.radio_ready ? "LoRa + IP paths" : "IP mesh path")
+                                          : (transport.radio_ready ? "LoRa direct path" : "Transport unavailable"));
+    }
+
     char status[64]{};
     std::snprintf(status,
                   sizeof(status),

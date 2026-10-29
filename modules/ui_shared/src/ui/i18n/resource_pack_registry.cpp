@@ -73,6 +73,7 @@ constexpr const char* kPackRoot = "/trailmate/packs";
 constexpr const char* kFontPackRoot = "/trailmate/packs/fonts";
 constexpr const char* kLocalePackRoot = "/trailmate/packs/locales";
 constexpr const char* kImePackRoot = "/trailmate/packs/ime";
+std::string s_external_pack_root;
 constexpr const char* kDisabledImeSentinel = "__none__";
 constexpr std::size_t kFontLoadOverlayThresholdBytes = 64U * 1024U;
 constexpr unsigned kMaxMissingFontDiagnostics = 20;
@@ -3005,7 +3006,17 @@ void catalog_external_packs()
     catalog_external_packs_from_root(
         kFlashPackRoot, kFlashFontPackRoot, kFlashImePackRoot, kFlashLocalePackRoot);
 #endif
-    catalog_external_packs_from_root(kPackRoot, kFontPackRoot, kImePackRoot, kLocalePackRoot);
+    if (s_external_pack_root.empty())
+    {
+        catalog_external_packs_from_root(kPackRoot, kFontPackRoot, kImePackRoot, kLocalePackRoot);
+    }
+    else
+    {
+        const auto fonts = join_path(s_external_pack_root, "fonts");
+        const auto ime = join_path(s_external_pack_root, "ime");
+        const auto locales = join_path(s_external_pack_root, "locales");
+        catalog_external_packs_from_root(s_external_pack_root.c_str(), fonts.c_str(), ime.c_str(), locales.c_str());
+    }
     std::printf("%s external pack scan end fonts=%lu ime=%lu locales=%lu\n",
                 kLogTag,
                 static_cast<unsigned long>(s_font_packs.size()),
@@ -3491,6 +3502,13 @@ const char* lookup_translation(const LocalePackRecord& locale, const char* engli
 }
 
 } // namespace
+
+bool configure_external_pack_root(const std::string& root)
+{
+    if (s_registry_ready) return root == s_external_pack_root;
+    s_external_pack_root = root;
+    return true;
+}
 
 void reload_language()
 {

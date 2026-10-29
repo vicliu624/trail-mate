@@ -15,6 +15,9 @@ class LinuxSqliteChatStore final : public ::chat::IChatStore
     ~LinuxSqliteChatStore() override;
 
     void append(const ::chat::ChatMessage& msg) override;
+    bool appendDurably(const ::chat::ChatMessage& msg) override;
+    bool appendIncomingDurably(const ::chat::ChatMessage& msg) override;
+    bool hasReticulumLxmfMessageHash(const uint8_t* hash) const override;
     std::vector<::chat::ChatMessage> loadRecent(
         const ::chat::ConversationId& conv,
         std::size_t n) override;

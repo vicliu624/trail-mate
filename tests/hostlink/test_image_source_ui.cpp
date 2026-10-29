@@ -32,9 +32,11 @@ unsigned source_reads = 0, hashes = 0;
 platform::ui::route_storage::RouteImageDownloadStatus status;
 std::string queued_route;
 std::vector<platform::ui::route_storage::RouteImageCacheItem> queued;
+std::string route_root = "/routes";
 } // namespace storage_fake
 namespace platform::ui::route_storage
 {
+const char* route_dir() { return storage_fake::route_root.c_str(); }
 #include "image_reference_hash_actual.inc"
 bool route_asset_file_exists(const std::string& path)
 {
@@ -246,6 +248,10 @@ int main()
     assert(storage_fake::queued.empty()); // legacy unbound images keep old rule
     const auto package_name = "p-" + std::string(64, 'a') + ".kml";
     assert(navigation::route_asset_id_for_path("/routes/" + package_name) == package_name.substr(0, 66));
+    storage_fake::route_root = "/configured/storage/routes";
+    assert(navigation::route_asset_id_for_path(storage_fake::route_root + "/" + package_name) == package_name.substr(0, 66));
+    assert(navigation::route_asset_id_for_path("/routes/" + package_name) != package_name.substr(0, 66));
+    storage_fake::route_root = "/routes";
     assert(preview::route_asset_id_for_name(package_name) == package_name.substr(0, 66));
     auto second_package = package_name;
     second_package[65] = 'b';

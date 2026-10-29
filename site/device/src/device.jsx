@@ -6,6 +6,7 @@ import '../../styles.css';
 import './device.css';
 import brand from '../../../docs/images/logo_big.png';
 import {HostlinkConnection} from './hostlink.js';
+import {canEditInterfaceAccess} from './config-interface-capabilities.js';
 import {ManagementSession,OPERATION} from './management-protocol.js';
 import {readConfigSnapshot} from './config-snapshot.js';
 import {saveConfigDocument} from './config-save.js';
@@ -296,7 +297,7 @@ function App(){
              <h3>{collectionText[collection.name]} {numbers.format(index+1)}</h3><div className="device-fields">{row.filter(r=>!deferred.includes(r)).map(renderField)}</div>
              {deferred.length>0&&<details className="device-collection-extra" open={deferred.some(r=>invalidFields.has(r.key))||undefined}><summary>{collectionText.retained}</summary><div className="device-fields">{deferred.map(renderField)}</div></details>}
              <div className="device-collection-actions"><Button disabled={busy||pendingTransfer||invalidFields.size>0||index===0} onClick={()=>changeCollection(collection.name,'up',index)}>{collectionText.up}</Button><Button disabled={busy||pendingTransfer||invalidFields.size>0||index===collection.count-1} onClick={()=>changeCollection(collection.name,'down',index)}>{collectionText.down}</Button><Button disabled={busy||pendingTransfer||invalidFields.size>0} onClick={()=>changeCollection(collection.name,'remove',index)}>{collectionText.remove}</Button>
-               {collection.name==='interfaces'&&(row.find(r=>r.field==='type')?.value===2||row.some(r=>r.field==='ifac_size'))&&<Button disabled={busy||pendingTransfer||invalidFields.size>0} onClick={()=>changeCollection(collection.name,row.some(r=>r.field==='ifac_size')?'remove-access':'access',index)}>{row.some(r=>r.field==='ifac_size')?collectionText.removeAccess:collectionText.addAccess}</Button>}
+               {collection.name==='interfaces'&&canEditInterfaceAccess(row.find(r=>r.field==='type')?.value,info?.capabilities??0,row.some(r=>r.field==='ifac_size'))&&<Button disabled={busy||pendingTransfer||invalidFields.size>0} onClick={()=>changeCollection(collection.name,row.some(r=>r.field==='ifac_size')?'remove-access':'access',index)}>{row.some(r=>r.field==='ifac_size')?collectionText.removeAccess:collectionText.addAccess}</Button>}
              </div>
            </section>;})}
            <div className="device-collection-actions">{(collection.name==='interfaces'?[[0,collectionText.addLoRa],[1,collectionText.addAuto],[2,collectionText.addTcp]]:[[0,collectionText.addWifi]]).map(([type,label])=><Button key={type} disabled={busy||pendingTransfer||invalidFields.size>0||collection.count>=collection.capacity} onClick={()=>changeCollection(collection.name,'add',undefined,type)}>{label}</Button>)}</div>

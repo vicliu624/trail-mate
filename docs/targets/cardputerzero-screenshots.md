@@ -5,6 +5,13 @@ the shared LVGL Cardputer compact UI path. These images are evidence from the
 real Trail Mate shell route; they are not mockups, generated drawings, or a new
 Linux-panel design direction.
 
+The current product manifest has fourteen routes, including Agenda. The checked-in image matrix
+below covers ten earlier pages. Calculator, Geocaching and Protocol Probe are
+present in the source and maintenance tests; their PNGs are not checked in here.
+Agenda is also registered and tested; the historical capture selectors and image
+matrix do not establish an Agenda screenshot.
+Do not regenerate all screenshots for routine backend or documentation changes.
+
 ## Capture Path
 
 The screenshots are produced by:
@@ -31,7 +38,7 @@ cmake --build --preset linux-cardputer-zero-debug-build
 
 cd /mnt/c/Users/VicLi/Documents/Projects/trail-mate
 rm -f docs/images/cardputerzero/screenshots/*.png
-for target in dashboard chat contacts map sky_plot team tracker walkie extensions settings; do
+for target in dashboard chat contacts map sky_plot team tracker calculator geocaching energy_sweep walkie extensions settings; do
   timeout 40s env TRAIL_MATE_LORA_DISABLE=1 \
     builds/linux_cmake/build/linux-cardputer-zero-debug/apps/linux_cardputer_zero/trailmate_linux_cardputer_zero_screenshot_capture \
     /mnt/c/Users/VicLi/Documents/Projects/trail-mate/docs/images/cardputerzero/screenshots \
@@ -51,6 +58,9 @@ $targets = @(
   'sky_plot',
   'team',
   'tracker',
+  'calculator',
+  'geocaching',
+  'energy_sweep', # Capture selector for Protocol Probe.
   'walkie',
   'extensions',
   'settings'
@@ -76,11 +86,14 @@ live SX1262 endpoint. It does not change the UI route being rendered.
 | Sky Plot | `docs/images/cardputerzero/screenshots/sky-plot.png` | Real shared GNSS sky-plot page reached from the compact menu with the Cardputer Zero dense geometry. |
 | Team | `docs/images/cardputerzero/screenshots/team.png` | Real shared team page reached from the compact menu. |
 | Tracker | `docs/images/cardputerzero/screenshots/tracker.png` | Real shared tracker page reached from the compact menu. |
+| Calculator | No checked-in PNG | Registered compact route; covered by calculator engine/page tests. |
+| Geocaching | No checked-in PNG | Registered compact route; covered by compact manifest and business wiring tests. |
+| Protocol Probe | No checked-in PNG | Registered compact route; `energy_sweep` is the capture selector. Its port/session behavior has separate fixtures. |
 | Walkie Talkie | `docs/images/cardputerzero/screenshots/walkie.png` | Real shared walkie-talkie page reached from the compact menu. |
 | Extensions | `docs/images/cardputerzero/screenshots/extensions.png` | Real shared extensions page reached from the compact menu. |
 | Settings | `docs/images/cardputerzero/screenshots/settings.png` | Real shared settings page reached from the compact menu. |
 
-Excluded Cardputer Zero product entries: PC Link, SSTV, Protocol Probe, and SD
+Excluded Cardputer Zero product entries: PC Link, SSTV, and SD
 Storage / USB Disk. SD Storage is the card-access/USB
 mass-storage feature and is distinct from Extensions, which remains part of the
 Cardputer Zero product menu.

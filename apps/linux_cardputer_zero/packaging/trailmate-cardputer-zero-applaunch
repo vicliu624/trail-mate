@@ -25,7 +25,7 @@ case "$0" in
     *) script_dir=/usr/lib/trailmate-cardputer-zero ;;
 esac
 
-settings_root=${TRAIL_MATE_SETTINGS_ROOT:-${HOME:-/home/pi}/.trailmate_cardputer_zero}
+settings_root=${TRAIL_MATE_SETTINGS_ROOT:-${HOME:?HOME or TRAIL_MATE_SETTINGS_ROOT is required}/.trailmate_cardputer_zero}
 
 load_env_file()
 {
@@ -53,17 +53,6 @@ load_env_file "$settings_root/trailmate.env"
 : "${TRAIL_MATE_GPS_AUTO_SERIAL:=1}"
 : "${TRAIL_MATE_GPS_DEVICE_CANDIDATES:=/dev/serial0:/dev/ttyAMA1:/dev/ttyAMA0:/dev/ttyS0:/dev/ttyS1}"
 : "${TRAIL_MATE_DESKTOP_NOTIFICATIONS:=freedesktop}"
-
-if [ -z "${ALL_PROXY:-}${all_proxy:-}${HTTPS_PROXY:-}${https_proxy:-}${HTTP_PROXY:-}${http_proxy:-}" ] &&
-   command -v ss >/dev/null 2>&1 &&
-   ss -ltn 2>/dev/null | grep -q '127\.0\.0\.1:7890'; then
-    ALL_PROXY=http://127.0.0.1:7890
-    all_proxy=$ALL_PROXY
-    HTTPS_PROXY=$ALL_PROXY
-    https_proxy=$ALL_PROXY
-    HTTP_PROXY=$ALL_PROXY
-    http_proxy=$ALL_PROXY
-fi
 
 export TRAIL_MATE_RUNTIME_MODE
 export TRAIL_MATE_LORA_SPI TRAIL_MATE_LORA_GPIOCHIP

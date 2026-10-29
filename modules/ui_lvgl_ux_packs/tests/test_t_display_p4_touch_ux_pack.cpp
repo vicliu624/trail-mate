@@ -65,7 +65,8 @@ int main()
 
     ui_lvgl_ux::ScreenRegistry screens;
     pack.buildScreens(screens);
-    assert(screens.size() == 13);
+    assert(screens.size() == 14);
+    assert(contains(screens, ui_lvgl_ux::ScreenId::Calendar));
     assert(contains(screens, ui_lvgl_ux::ScreenId::Dashboard));
     assert(contains(screens, ui_lvgl_ux::ScreenId::Chat));
     assert(contains(screens, ui_lvgl_ux::ScreenId::Contacts));

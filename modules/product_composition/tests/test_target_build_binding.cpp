@@ -8,7 +8,8 @@ int main()
     std::size_t count = 0;
     const auto* all = product_composition::allTargetBuildBindings(&count);
     assert(all != nullptr);
-    assert(count == 12);
+    assert(count == 13);
+    assert(product_composition::findTargetBuildBinding("t_display_cm0") != nullptr);
 
     const auto* bindings = product_composition::esp32LvglTargetBuildBindings(&count);
     assert(bindings != nullptr);

@@ -3,7 +3,9 @@
 #include "platform/ui/reticulum_receive_runtime.h"
 
 #include "chat/infra/mesh_peer_directory_core.h"
+#include "platform/linux/peer_directory.h"
 #include "platform/linux/runtime_paths.h"
+#include "platform/linux/storage_monitor.h"
 #include "platform/ui/device_runtime.h"
 
 #include <algorithm>
@@ -16,6 +18,12 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#if defined(__linux__)
+#include <atomic>
+#include <cerrno>
+#include <fcntl.h>
+#include <unistd.h>
+#endif
 
 namespace platform::ui::reticulum_directory
 {
@@ -86,10 +94,11 @@ class LinuxMeshPeerDirectoryBlobStore final
     : public chat::IMeshPeerDirectoryBlobStore
 {
   public:
+    LinuxMeshPeerDirectoryBlobStore() : path_(path_under_sd(kMeshPeerDirectoryRelativePath)) {}
     chat::MeshPeerDirectoryBlobLoadResult loadBlob(std::vector<uint8_t>& out) override
     {
         out.clear();
-        const auto path = path_under_sd(kMeshPeerDirectoryRelativePath);
+        const auto& path = path_;
         std::error_code ec;
         if (!std::filesystem::exists(path, ec))
         {
@@ -133,11 +142,54 @@ class LinuxMeshPeerDirectoryBlobStore final
             return false;
         }
 
-        const auto path = path_under_sd(kMeshPeerDirectoryRelativePath);
+        const auto& path = path_;
         if (!::platform::linux_runtime::ensure_directory(path.parent_path()))
         {
             return false;
         }
+
+#if defined(__linux__)
+        struct Descriptor
+        {
+            int value = -1;
+            ~Descriptor()
+            {
+                if (value >= 0) ::close(value);
+            }
+        } directory, file;
+        static std::atomic<uint64_t> sequence{0};
+        const auto parent = path.parent_path().string();
+        const auto filename = path.filename().string();
+        char temporary[96];
+        const auto count = std::snprintf(temporary, sizeof(temporary), ".%s.tmp.%lu.%llu", filename.c_str(),
+                                         static_cast<unsigned long>(::getpid()), static_cast<unsigned long long>(++sequence));
+        if (count <= 0 || static_cast<size_t>(count) >= sizeof(temporary)) return false;
+        directory.value = ::open(parent.c_str(), O_DIRECTORY | O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+        if (directory.value < 0) return false;
+        file.value = ::openat(directory.value, temporary, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600);
+        if (file.value < 0) return false;
+        bool saved = true;
+        size_t offset = 0;
+        while (offset < len)
+        {
+            const auto written = ::write(file.value, data + offset, len - offset);
+            if (written < 0 && errno == EINTR) continue;
+            if (written <= 0)
+            {
+                saved = false;
+                break;
+            }
+            offset += static_cast<size_t>(written);
+        }
+        saved = saved && ::fsync(file.value) == 0;
+        const auto closed = ::close(file.value);
+        file.value = -1;
+        saved = saved && closed == 0;
+        if (saved) saved = ::renameat(directory.value, temporary, directory.value, filename.c_str()) == 0;
+        if (saved) saved = ::fsync(directory.value) == 0;
+        if (!saved) ::unlinkat(directory.value, temporary, 0);
+        return saved;
+#else
 
         const std::filesystem::path temp_path = path.string() + ".tmp";
         {
@@ -170,13 +222,17 @@ class LinuxMeshPeerDirectoryBlobStore final
             return false;
         }
         return true;
+#endif
     }
 
     void clearBlob() override
     {
         std::error_code ec;
-        std::filesystem::remove(path_under_sd(kMeshPeerDirectoryRelativePath), ec);
+        std::filesystem::remove(path_, ec);
     }
+
+  private:
+    std::filesystem::path path_; // Pinned before the storage thread starts.
 };
 
 LinuxMeshPeerDirectoryBlobStore& local_mesh_peer_directory_blob_store()
@@ -185,9 +241,9 @@ LinuxMeshPeerDirectoryBlobStore& local_mesh_peer_directory_blob_store()
     return store;
 }
 
-chat::MeshPeerDirectoryCore& local_mesh_peer_directory()
+::platform::linux_runtime::LinuxPeerDirectory& local_mesh_peer_directory()
 {
-    static chat::MeshPeerDirectoryCore directory(
+    static ::platform::linux_runtime::LinuxPeerDirectory directory(
         local_mesh_peer_directory_blob_store());
     return directory;
 }
@@ -315,7 +371,7 @@ chat::IMeshPeerDirectory* require_mesh_peer_directory(Status& out)
         return s_bound_mesh_peer_directory;
     }
 
-    chat::MeshPeerDirectoryCore& directory = local_mesh_peer_directory();
+    auto& directory = local_mesh_peer_directory();
     if (!s_local_mesh_peer_directory_begun)
     {
         const chat::MeshPeerDirectoryStatus status = directory.begin();
@@ -824,7 +880,9 @@ Status stream_upsert_line(const char* relative_path,
 {
     Status out{};
     out.supported = true;
-    out.sd_present = ::platform::ui::device::card_ready();
+    out.sd_present = ::platform::linux_runtime::probe_storage_root(
+                         ::platform::linux_runtime::resolve_paths().sd_root)
+                         .available;
     if (!out.sd_present)
     {
         set_status(out, "SD card required", logical_path);
@@ -994,7 +1052,9 @@ Status record_announce(const AnnounceRecord& record)
 {
     Status out{};
     out.supported = true;
-    out.sd_present = ::platform::ui::device::card_ready();
+    out.sd_present = ::platform::linux_runtime::probe_storage_root(
+                         ::platform::linux_runtime::resolve_paths().sd_root)
+                         .available;
     if (!record.valid ||
         zero_hash(record.destination_hash, kReticulumHashSize) ||
         zero_hash(record.identity_hash, kReticulumHashSize))
@@ -1139,7 +1199,9 @@ Status load_announces(AnnounceRecord* out_records,
 {
     Status out{};
     out.supported = true;
-    out.sd_present = ::platform::ui::device::card_ready();
+    out.sd_present = ::platform::linux_runtime::probe_storage_root(
+                         ::platform::linux_runtime::resolve_paths().sd_root)
+                         .available;
     if (out_count)
     {
         *out_count = 0;

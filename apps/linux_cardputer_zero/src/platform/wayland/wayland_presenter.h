@@ -21,6 +21,7 @@ class WaylandPresenter final : public SurfacePresenter
     [[nodiscard]] bool pump() override;
     [[nodiscard]] std::vector<app::InputEvent> drainInput() override;
     void present(const core::Canvas& canvas) override;
+    void setTextInputState(const app::TextInputState&) override;
 
   private:
     struct Impl;

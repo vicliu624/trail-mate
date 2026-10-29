@@ -8,6 +8,7 @@ struct Slot
 {
     uint32_t generation = 0;
     FocusOwner owner = FocusOwner::Notification;
+    bool exclusive = false;
 };
 Slot slots[12];
 uint32_t sequence = 0;
@@ -28,17 +29,21 @@ void register_music_focus_client(MusicFocusClient client)
     Lock lock;
     music = client;
 }
-FocusToken request_focus(FocusOwner owner)
+namespace
+{
+FocusToken reserve_focus(FocusOwner owner, bool exclusive)
 {
     FocusToken token;
     MusicFocusClient client;
     {
         Lock lock;
+        for (const auto& slot : slots)
+            if (slot.generation && (exclusive || slot.exclusive)) return {};
         for (unsigned index = 0; index < 12; index++)
             if (!slots[index].generation)
             {
                 if (++sequence == 0) ++sequence;
-                slots[index] = {sequence, owner};
+                slots[index] = {sequence, owner, exclusive};
                 token = {sequence, static_cast<uint8_t>(index)};
                 break;
             }
@@ -54,6 +59,9 @@ FocusToken request_focus(FocusOwner owner)
     }
     return token;
 }
+} // namespace
+FocusToken request_focus(FocusOwner owner) { return reserve_focus(owner, false); }
+FocusToken request_exclusive_focus(FocusOwner owner) { return reserve_focus(owner, true); }
 void release_focus(FocusToken token)
 {
     if (!token || token.slot >= 12) return;

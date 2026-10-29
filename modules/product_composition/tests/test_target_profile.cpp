@@ -8,7 +8,13 @@ int main()
     std::size_t count = 0;
     const auto* all = product_composition::allTargetProfiles(&count);
     assert(all != nullptr);
-    assert(count == 12);
+    assert(count == 13);
+    const auto* cm0 = product_composition::findTargetProfile("t_display_cm0");
+    assert(cm0 != nullptr);
+    assert(cm0->platform == product_composition::TargetPlatform::Linux);
+    assert(cm0->renderer == product_composition::TargetRenderer::Lvgl);
+    assert(std::strcmp(cm0->ux_pack_id, "t_display_p4_touch") == 0);
+    assert(std::strcmp(cm0->app_shell, "apps/linux_lvgl") == 0);
 
     const auto* profiles = product_composition::esp32LvglTargetProfiles(&count);
     assert(profiles != nullptr);
@@ -102,7 +108,7 @@ int main()
 
     const auto* cardputer = product_composition::findTargetProfile("cardputerzero");
     assert(cardputer != nullptr);
-    assert(cardputer->renderer == product_composition::TargetRenderer::Ascii);
+    assert(cardputer->renderer == product_composition::TargetRenderer::Lvgl);
     assert(cardputer->platform == product_composition::TargetPlatform::Linux);
     assert(std::strcmp(cardputer->app_shell, "apps/linux_cardputer_zero") == 0);
     assert(cardputer->status ==

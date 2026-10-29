@@ -1,4 +1,5 @@
 #include "platform/wayland/wayland_presenter.h"
+#include "platform/wayland/wayland_text_input.h"
 
 #include "xdg-decoration-unstable-v1-client-protocol.h"
 #include "xdg-shell-client-protocol.h"
@@ -196,6 +197,7 @@ struct WaylandPresenter::Impl
         {
             throw std::runtime_error("wl_compositor_create_surface failed");
         }
+        if (text_manager && seat) text_input = std::make_unique<WaylandTextInput>(text_manager, seat, surface, pending_inputs);
 
         xdg_surface_obj = xdg_wm_base_get_xdg_surface(wm, surface);
         xdg_surface_add_listener(xdg_surface_obj, &kSurfaceListener, this);
@@ -228,6 +230,8 @@ struct WaylandPresenter::Impl
 
     ~Impl()
     {
+        text_input.reset();
+        if (text_manager) zwp_text_input_manager_v3_destroy(text_manager);
         for (auto& buffer : buffers)
         {
             if (buffer.buffer != nullptr)
@@ -413,6 +417,16 @@ struct WaylandPresenter::Impl
         char utf8[64] = {};
         const int len =
             xkb_state_key_get_utf8(xkb_state_, keycode, utf8, sizeof(utf8));
+        if (len > 0 && len < static_cast<int>(sizeof(utf8)) && text_state.enabled && app::validUtf8(utf8) &&
+            static_cast<unsigned char>(utf8[0]) >= 0x20 && pending_inputs.size() < 128)
+        {
+            app::InputEvent event;
+            event.key = app::InputKey::TextEdit;
+            event.edit.focus = text_state.focus;
+            event.edit.commit = utf8;
+            pending_inputs.push_back(std::move(event));
+            return;
+        }
         if (len == 1)
         {
             const auto value = static_cast<unsigned char>(utf8[0]);
@@ -435,6 +449,10 @@ struct WaylandPresenter::Impl
             self->compositor = static_cast<wl_compositor*>(
                 wl_registry_bind(registry, name, &wl_compositor_interface,
                                  std::min(version, 4U)));
+        }
+        else if (std::strcmp(interface, zwp_text_input_manager_v3_interface.name) == 0)
+        {
+            self->text_manager = static_cast<zwp_text_input_manager_v3*>(wl_registry_bind(registry, name, &zwp_text_input_manager_v3_interface, 1));
         }
         else if (std::strcmp(interface, wl_shm_interface.name) == 0)
         {
@@ -606,6 +624,9 @@ struct WaylandPresenter::Impl
     bool configured{false};
     bool running{true};
     std::vector<app::InputEvent> pending_inputs{};
+    zwp_text_input_manager_v3* text_manager = nullptr;
+    std::unique_ptr<WaylandTextInput> text_input;
+    app::TextInputState text_state;
 };
 
 const wl_registry_listener WaylandPresenter::Impl::kRegistryListener{
@@ -647,6 +668,11 @@ const wl_buffer_listener WaylandPresenter::Impl::kBufferListener{
 WaylandPresenter::WaylandPresenter() : impl_(std::make_unique<Impl>()) {}
 
 WaylandPresenter::~WaylandPresenter() = default;
+void WaylandPresenter::setTextInputState(const app::TextInputState& state)
+{
+    impl_->text_state = state;
+    if (impl_->text_input) impl_->text_input->update(state);
+}
 
 bool WaylandPresenter::pump()
 {

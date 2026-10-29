@@ -785,6 +785,7 @@ if(BUILD_TESTING)
 
     add_executable(trailmate_reticulum_announce_vectors_smoke
         "${TRAIL_MATE_REPO_ROOT}/tests/reticulum_conformance/test_reticulum_announce_vectors.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/reticulum/announce_verifier.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/reticulum/reticulum_wire.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/meshcore/crypto/ed25519/fe.c"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/meshcore/crypto/ed25519/ge.c"
@@ -798,7 +799,7 @@ if(BUILD_TESTING)
         PRIVATE
             "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include")
     target_compile_definitions(trailmate_reticulum_announce_vectors_smoke
-        PRIVATE TRAIL_MATE_RETICULUM_PARSE_ONLY=1)
+        PRIVATE TRAIL_MATE_RETICULUM_HASH_ONLY=1)
     target_compile_features(trailmate_reticulum_announce_vectors_smoke
         PRIVATE cxx_std_17)
     add_test(NAME trailmate_reticulum_announce_vectors_smoke
@@ -848,26 +849,28 @@ if(BUILD_TESTING)
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/reticulum/lxst_call_state_machine.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/reticulum/lxst_telephony_wire.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/reticulum/reticulum_wire.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_destination_registry.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_delivery_attempt_ledger.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_destination_registry.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_delivery_attempt_ledger.cpp"
         "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_delivery_notifier.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_delivery_planner.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_delivery_runtime.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_link_manager.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_link_runtime.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_delivery_planner.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_delivery_runtime.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_link_manager.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_link_runtime.cpp"
         "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_lxst_telephony_client.cpp"
         "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_network_page_client.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_packet_router.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_path_manager.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_peer_directory.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_packet_router.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_path_manager.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_peer_directory.cpp"
         "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_ping_service.cpp"
         "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_propagation_client.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_propagation_runtime.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_propagation_service_runtime.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_resource_runtime.cpp"
-        "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_transport_runtime.cpp")
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_propagation_runtime.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_propagation_service_runtime.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_propagation_sync.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_resource_runtime.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_transport_runtime.cpp")
     target_include_directories(trailmate_reticulum_runtime_state_contract_smoke
         PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include"
             "${TRAIL_MATE_REPO_ROOT}/modules/core_team/include"
             "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/include")

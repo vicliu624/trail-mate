@@ -1,6 +1,6 @@
 #include "ui/screens/sstv/sstv_page_runtime.h"
 
-#if defined(ARDUINO) || defined(ESP_PLATFORM) || defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+#if defined(ARDUINO) || defined(ESP_PLATFORM) || defined(TRAIL_MATE_PLATFORM_LINUX)
 
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/screen_runtime.h"
@@ -411,10 +411,8 @@ void refresh_cb(lv_timer_t*)
 
 void ensure_frame_dsc()
 {
-    if (s_frame_ready)
-    {
-        return;
-    }
+    // Adapters may refresh an owner-thread frame copy in this getter. Cache
+    // descriptor storage, not the act of acquiring the latest pixels.
     const uint16_t* frame = platform::ui::sstv::framebuffer();
     if (!frame)
     {

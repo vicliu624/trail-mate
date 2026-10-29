@@ -1,4 +1,5 @@
 #include "chat/infra/reticulum/reticulum_wire.h"
+#include "chat/infra/reticulum/announce_verifier.h"
 
 #include "chat/infra/meshcore/crypto/ed25519/ed_25519.h"
 
@@ -319,6 +320,21 @@ void expectVector(const AnnounceVector& vector)
     }
 
     assert(validateAnnounceLikeReference(packet, announce) == vector.validate_announce);
+    chat::reticulum::AnnounceVerifier verifier;
+    uint8_t identity[16], destination[16];
+    const auto verify = [](const uint8_t* public_key, const uint8_t* signature, const uint8_t* data, size_t size)
+    { return ed25519_verify(signature, data, size, public_key) != 0; };
+    assert((verifier.verify(packet, announce, identity, destination, verify) == nullptr) == vector.validate_announce);
+    assert(verifier.verify(packet, announce, identity, destination, nullptr));
+    for (size_t index : {size_t(packet.destination_hash - raw.data()), packet.header_len,
+                         packet.header_len + 64, packet.header_len + 74, raw.size() - 1})
+    {
+        auto changed = raw;
+        changed[index] ^= 1;
+        chat::reticulum::ParsedPacket tampered;
+        assert(chat::reticulum::parsePacket(changed.data(), changed.size(), &tampered));
+        assert(verifier.verify(tampered, announce, identity, destination, verify));
+    }
 }
 
 } // namespace

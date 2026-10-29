@@ -10,6 +10,15 @@ namespace sys
 {
 struct Event;
 }
+namespace ui::geocaching
+{
+class Source;
+}
+
+namespace platform::linux_runtime
+{
+class LinuxGeocachingSource;
+}
 
 namespace trailmate::cardputer_zero::linux_ui
 {
@@ -22,12 +31,15 @@ class MinimalLinuxAppFacade final : public ::app::IAppFacade
 {
   public:
     MinimalLinuxAppFacade();
+    explicit MinimalLinuxAppFacade(::trailmate::linux_app::LinuxAppServicesOptions options);
     ~MinimalLinuxAppFacade() override;
 
     MinimalLinuxAppFacade(const MinimalLinuxAppFacade&) = delete;
     MinimalLinuxAppFacade& operator=(const MinimalLinuxAppFacade&) = delete;
 
     bool initialize();
+    ::ui::geocaching::Source* geocachingSource();
+    ::platform::linux_runtime::IVoiceSource* voiceSource();
     void shutdown();
     bool is_initialized() const noexcept;
 
@@ -72,6 +84,7 @@ class MinimalLinuxAppFacade final : public ::app::IAppFacade
     const ::ble::BleManager* getBleManager() const override;
     bool isBleEnabled() const override;
     void setBleEnabled(bool enabled) override;
+    void setPhonePairingPresenter(std::function<bool(const ::platform::linux_runtime::PhonePairingDisplay&)>);
     void restartDevice() override;
     ::chat::ui::IChatUiRuntime* getChatUiRuntime() override;
     void setChatUiRuntime(::chat::ui::IChatUiRuntime* runtime) override;
@@ -87,6 +100,7 @@ class MinimalLinuxAppFacade final : public ::app::IAppFacade
     static void cancelConfigEdit(void* context);
 
     ::trailmate::linux_app::LinuxAppServices services_;
+    std::unique_ptr<::platform::linux_runtime::LinuxGeocachingSource> geocaching_;
     ::chat::ui::IChatUiRuntime* chat_ui_runtime_ = nullptr;
 };
 

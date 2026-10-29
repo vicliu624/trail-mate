@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -18,10 +19,14 @@
 #if defined(__linux__)
 #include <cerrno>
 #include <fcntl.h>
+#include <sys/file.h>
+#include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
 #endif
 
+#include "platform/linux/gnss_source.h"
+#include "platform/linux/iio_sensors.h"
 #include "platform/linux/runtime_packet_log.h"
 
 namespace platform::ui::gps
@@ -85,6 +90,11 @@ struct GsvCollector
 
 struct RuntimeState
 {
+    std::unique_ptr<::platform::linux_runtime::AsyncGpioPower> power;
+    int last_power_error = 0;
+    ::platform::linux_runtime::NordicSlmGnss slm;
+    bool slm_serial = false;
+    uint32_t slm_retry_ms = 0;
     GpsState data{};
     std::array<GnssSatInfo, ::gps::kMaxGnssSats> sats{};
     std::size_t sat_count = 0;
@@ -102,6 +112,7 @@ struct RuntimeState
     std::size_t file_offset = 0;
     std::array<char, kLineBufferSize> line_buffer{};
     std::size_t line_length = 0;
+    bool line_overflow = false;
     std::string last_open_failure_path{};
     uint32_t last_open_failure_log_ms = 0;
     uint32_t source_opened_ms = 0;
@@ -122,6 +133,7 @@ struct RuntimeState
 };
 
 bool s_suspended = false;
+std::atomic_bool s_power_ready{false};
 bool s_enabled = true;
 uint32_t s_collection_interval_ms = 1000;
 uint8_t s_power_strategy = 0;
@@ -1058,6 +1070,19 @@ void parse_gsv_locked(const char* talker, const std::array<char*, kMaxFields>& f
 
 void parse_sentence_locked(const char* sentence, uint32_t ts)
 {
+    if (s_runtime.slm_serial)
+    {
+        GpsState fix;
+        if (sentence && s_runtime.slm.line(sentence, ts, fix))
+        {
+            s_runtime.data = fix;
+            s_runtime.status.fix = ::gps::GnssFix::FIX3D;
+            s_runtime.last_rx_ms = s_runtime.last_fix_ms = ts;
+            if (fix.speed_mps > 0.5) s_runtime.last_motion_ms = ts;
+        }
+        ::platform::linux_runtime::publish_gnss_source_ready(s_runtime.slm.ready());
+        return;
+    }
     const bool checksum_ok = verify_checksum(sentence);
     if (sentence && sentence[0] == '$')
     {
@@ -1126,16 +1151,19 @@ void append_bytes_and_process_locked(const char* buffer, std::size_t length)
         const char ch = buffer[i];
         if (ch == '\r' || ch == '\n')
         {
-            if (s_runtime.line_length > 0)
+            if (!s_runtime.line_overflow && s_runtime.line_length > 0)
             {
                 s_runtime.line_buffer[s_runtime.line_length] = '\0';
                 parse_sentence_locked(s_runtime.line_buffer.data(), now_ms());
                 s_runtime.line_length = 0;
             }
+            s_runtime.line_length = 0;
+            s_runtime.line_overflow = false;
             continue;
         }
+        if (s_runtime.line_overflow) continue;
 
-        if (s_runtime.line_length == 0 && ch != '$')
+        if (s_runtime.line_length == 0 && ch != '$' && !s_runtime.slm_serial)
         {
             continue;
         }
@@ -1147,6 +1175,7 @@ void append_bytes_and_process_locked(const char* buffer, std::size_t length)
         else
         {
             s_runtime.line_length = 0;
+            s_runtime.line_overflow = true;
         }
     }
 }
@@ -1179,6 +1208,13 @@ std::string requested_source_path(bool* out_is_serial,
         return std::string(file);
     }
 
+    const auto configured = ::platform::linux_runtime::gnss_source_options();
+    if (!configured.device.empty())
+    {
+        if (out_is_serial) *out_is_serial = true;
+        return configured.device;
+    }
+
 #if defined(__linux__)
     if (!auto_serial_probe_enabled())
     {
@@ -1206,11 +1242,13 @@ std::string requested_source_path(bool* out_is_serial,
 #if defined(__linux__)
 int serial_baud_for_path(const std::string& path)
 {
+    const auto configured = ::platform::linux_runtime::gnss_source_options();
     if (s_receiver_init_config.baud != 0 &&
         supported_baud(static_cast<int>(s_receiver_init_config.baud)))
     {
         return static_cast<int>(s_receiver_init_config.baud);
     }
+    if (configured.baud && !env_configured(kGpsBaudEnv)) return configured.baud;
 
     const int default_baud =
         (!env_configured(kGpsBaudEnv) &&
@@ -1245,22 +1283,49 @@ void close_serial_locked()
 {
     if (s_runtime.serial_fd >= 0)
     {
+        if (s_runtime.slm_serial)
+        {
+            // Best-effort stop without blocking the UI/service thread on an
+            // unresponsive USB modem. This is not a modem power-off claim.
+            static constexpr char stop[] = "AT#XGPS=0\r\n";
+            (void)write(s_runtime.serial_fd, stop, sizeof(stop) - 1);
+        }
         close(s_runtime.serial_fd);
         s_runtime.serial_fd = -1;
     }
+    s_runtime.slm_serial = false;
+    s_runtime.slm_retry_ms = 0;
+    s_runtime.slm.reset();
+    ::platform::linux_runtime::publish_gnss_source_ready(false);
 }
 
 bool open_serial_locked(const std::string& path, int* out_error)
 {
     close_serial_locked();
 
-    const int fd = open(path.c_str(), O_RDONLY | O_NOCTTY | O_NONBLOCK);
+    const auto configured = ::platform::linux_runtime::gnss_source_options();
+    const bool slm = configured.protocol == "nordic_slm";
+    int selection_error = 0;
+    const auto resolved = ::platform::linux_runtime::resolve_gnss_serial_device(path, selection_error);
+    if (resolved.empty())
+    {
+        if (out_error) *out_error = selection_error ? selection_error : ENOENT;
+        return false;
+    }
+    const int fd = open(resolved.c_str(), (slm ? O_RDWR : O_RDONLY) | O_NOCTTY | O_NONBLOCK | O_CLOEXEC);
     if (fd < 0)
     {
         if (out_error)
         {
             *out_error = errno;
         }
+        return false;
+    }
+
+    if (slm && flock(fd, LOCK_EX | LOCK_NB) != 0)
+    {
+        if (out_error) *out_error = errno;
+        close(fd);
         return false;
     }
 
@@ -1281,6 +1346,9 @@ bool open_serial_locked(const std::string& path, int* out_error)
     cfsetispeed(&tio, baud);
     cfsetospeed(&tio, baud);
     tio.c_cflag |= (CLOCAL | CREAD);
+#ifdef CRTSCTS
+    if (slm) tio.c_cflag &= ~CRTSCTS;
+#endif
     if (tcsetattr(fd, TCSANOW, &tio) != 0)
     {
         if (out_error)
@@ -1292,6 +1360,13 @@ bool open_serial_locked(const std::string& path, int* out_error)
     }
 
     s_runtime.serial_fd = fd;
+    s_runtime.slm_serial = slm;
+    if (configured.modem_lines)
+    {
+        int lines = TIOCM_DTR | TIOCM_RTS;
+        (void)ioctl(fd, TIOCMBIS, &lines);
+    }
+    if (slm) s_runtime.slm.start(configured.gnss_only_setup, now_ms());
     if (out_error)
     {
         *out_error = 0;
@@ -1307,6 +1382,7 @@ void reset_source_locked()
 #endif
     s_runtime.file_offset = 0;
     s_runtime.line_length = 0;
+    s_runtime.line_overflow = false;
     s_runtime.source_path.clear();
     s_runtime.source_is_serial = false;
     s_runtime.source_is_auto_candidate = false;
@@ -1368,7 +1444,36 @@ void ensure_source_open_locked()
         {
             reset_source_locked();
         }
+        if (s_runtime.power) s_runtime.power->request(false);
+        s_power_ready = false;
         return;
+    }
+
+    const auto power_options = ::platform::linux_runtime::gnss_source_options().power;
+    if (requested_serial && power_options.line >= 0)
+    {
+        if (!s_runtime.power) s_runtime.power = ::platform::linux_runtime::make_gnss_power_control();
+        s_runtime.power->request(true);
+        const auto power = s_runtime.power->snapshot();
+        s_power_ready = power.state == ::platform::linux_runtime::AsyncGpioPower::State::Ready;
+        if (power.state != ::platform::linux_runtime::AsyncGpioPower::State::Ready)
+        {
+            ::platform::linux_runtime::publish_gnss_source_ready(false);
+            if (power.error && power.error != s_runtime.last_power_error)
+                append_gps_system_log_locked("GPS power unavailable", "GNSS enable line could not be acquired",
+                                             {{.kind = ::platform::linux_runtime::PacketLogSegmentKind::Error, .label = "errno", .text = std::to_string(power.error)}});
+            s_runtime.last_power_error = power.error;
+            return;
+        }
+        s_runtime.last_power_error = 0;
+    }
+    else if (s_runtime.power)
+    {
+#if defined(__linux__)
+        close_serial_locked();
+#endif
+        s_runtime.power->request(false);
+        s_power_ready = false;
     }
 
     const bool source_changed =
@@ -1531,7 +1636,7 @@ void poll_serial_source_locked()
     }
 
     char buffer[256];
-    for (;;)
+    for (unsigned batch = 0; batch < 16; ++batch)
     {
         const ssize_t got = read(s_runtime.serial_fd, buffer, sizeof(buffer));
         if (got > 0)
@@ -1542,6 +1647,7 @@ void poll_serial_source_locked()
         }
         if (got == 0)
         {
+            reset_source_locked();
             break;
         }
         if (errno == EAGAIN || errno == EWOULDBLOCK)
@@ -1566,16 +1672,39 @@ void poll_serial_source_locked()
     }
 
     const uint32_t now = now_ms();
+    if (s_runtime.slm_serial)
+    {
+        if (s_runtime.slm.failed())
+        {
+            if (!s_runtime.slm_retry_ms) s_runtime.slm_retry_ms = now + 30000;
+            if (static_cast<int32_t>(now - s_runtime.slm_retry_ms) >= 0)
+            {
+                s_runtime.slm.start(::platform::linux_runtime::gnss_source_options().gnss_only_setup, now);
+                s_runtime.slm_retry_ms = 0;
+            }
+        }
+        const auto command = s_runtime.slm.pending(now);
+        ::platform::linux_runtime::publish_gnss_source_ready(s_runtime.slm.ready());
+        if (s_runtime.slm.failed())
+        {
+            s_runtime.data.valid = false;
+            s_runtime.status.fix = ::gps::GnssFix::NOFIX;
+        }
+        if (!command.empty())
+        {
+            const auto sent = write(s_runtime.serial_fd, command.data(), command.size());
+            if (sent > 0) s_runtime.slm.wrote(static_cast<std::size_t>(sent), now);
+        }
+    }
     if (!s_runtime.waiting_log_emitted &&
         s_runtime.source_opened_ms != 0 &&
         s_runtime.last_rx_ms == 0 &&
         (now - s_runtime.source_opened_ms) >= 1000U)
     {
         append_gps_system_log_locked(
-            "GPS serial waiting for NMEA",
-            s_runtime.last_serial_byte_ms == 0
-                ? "Serial source is open; no NMEA bytes have arrived yet"
-                : "Serial bytes have arrived; waiting for a complete NMEA sentence",
+            s_runtime.slm_serial ? "GPS modem waiting for position" : "GPS serial waiting for NMEA",
+            s_runtime.slm_serial ? "Waiting for SLM initialization and a valid #XGPS position record" : s_runtime.last_serial_byte_ms == 0 ? "Serial source is open; no NMEA bytes have arrived yet"
+                                                                                                                                           : "Serial bytes have arrived; waiting for a complete NMEA sentence",
             {
                 {.kind = ::platform::linux_runtime::PacketLogSegmentKind::Meta,
                  .label = "path",
@@ -1841,8 +1970,8 @@ GpsDiagnosticsSnapshot diagnostics()
 
     if (external_source_active_locked())
     {
-        snapshot.ready = true;
-        snapshot.has_fix = s_runtime.data.valid;
+        snapshot.ready = !s_runtime.slm_serial || s_runtime.slm.ready();
+        snapshot.has_fix = make_external_state_locked().valid;
         snapshot.satellites = s_runtime.data.satellites;
         snapshot.sats_in_view = s_runtime.status.sats_in_view;
         snapshot.sats_in_use = s_runtime.status.sats_in_use;
@@ -1877,7 +2006,9 @@ GpsDiagnosticsSnapshot diagnostics()
 
     if (!snapshot.ready)
     {
-        snapshot.code = ::gps::GpsDiagnosticCode::TransportNotReady;
+        snapshot.code = !source_requested && !env_state_configured() && !demo_defaults_enabled() && !auto_serial_probe_enabled()
+                            ? ::gps::GpsDiagnosticCode::NotConfigured
+                            : ::gps::GpsDiagnosticCode::TransportNotReady;
     }
     else if (snapshot.last_rx_age_ms != 0xFFFFFFFFUL && snapshot.last_rx_age_ms > kExternalSourceStaleMs)
     {
@@ -1896,22 +2027,22 @@ GpsDiagnosticsSnapshot diagnostics()
 
 uint32_t last_motion_ms()
 {
+    const auto imu = ::platform::linux_runtime::linux_imu_snapshot();
     if (!runtime_active())
     {
-        return 0;
+        return imu.ready ? imu.last_motion_ms : 0;
     }
 
     std::lock_guard<std::mutex> lock(s_mutex);
-    if (external_source_active_locked())
-    {
-        return s_runtime.last_motion_ms;
-    }
-
-    if (s_runtime.last_motion_ms == 0)
+    if (!external_source_active_locked() && s_runtime.last_motion_ms == 0)
     {
         s_runtime.last_motion_ms = now_ms();
     }
-    return s_runtime.last_motion_ms;
+    const auto gps_motion = s_runtime.last_motion_ms;
+    if (!imu.ready || !imu.last_motion_ms) return gps_motion;
+    if (!gps_motion) return imu.last_motion_ms;
+    const auto now = now_ms();
+    return uint32_t(now - imu.last_motion_ms) < uint32_t(now - gps_motion) ? imu.last_motion_ms : gps_motion;
 }
 
 void tick_service()
@@ -1923,6 +2054,8 @@ void tick_service()
     if (!runtime_active())
     {
         reset_source_locked();
+        if (s_runtime.power) s_runtime.power->request(false);
+        s_power_ready = false;
         return;
     }
 
@@ -1979,7 +2112,8 @@ bool is_enabled()
 
 bool is_powered()
 {
-    return !s_suspended && s_enabled && env_flag_or_default(kGpsPoweredEnv, true);
+    if (s_suspended || !s_enabled || !env_flag_or_default(kGpsPoweredEnv, true)) return false;
+    return ::platform::linux_runtime::gnss_source_options().power.line < 0 || s_power_ready.load();
 }
 
 void set_enabled(bool enabled)
@@ -1988,7 +2122,9 @@ void set_enabled(bool enabled)
     if (!enabled)
     {
         std::lock_guard<std::mutex> lock(s_mutex);
-        clear_payload_locked();
+        reset_source_locked();
+        if (s_runtime.power) s_runtime.power->request(false);
+        s_power_ready = false;
     }
 }
 
@@ -2067,6 +2203,10 @@ void release_power_lease(const char* reason)
 void suspend_runtime()
 {
     s_suspended = true;
+    std::lock_guard<std::mutex> lock(s_mutex);
+    reset_source_locked();
+    if (s_runtime.power) s_runtime.power->request(false);
+    s_power_ready = false;
 }
 
 void resume_runtime()

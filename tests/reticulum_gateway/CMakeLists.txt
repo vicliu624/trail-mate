@@ -91,7 +91,7 @@ else()
 endif()
 add_test(NAME reticulum_native_discovery COMMAND reticulum_native_discovery)
 
-set(PATH_SOURCE "${REPO}/platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_path_manager.cpp")
+set(PATH_SOURCE "${REPO}/modules/core_chat/src/infra/lxmf/lxmf_path_manager.cpp")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${PATH_SOURCE}")
 file(READ "${PATH_SOURCE}" SOURCE)
 extract_between("void PathManager::retireInterface(" "LinkRelayEntry& PathManager::upsertLinkRelay(" RETIRE)
@@ -134,6 +134,7 @@ add_test(NAME reticulum_gateway_candidates COMMAND reticulum_gateway_candidates)
 
 set(ED25519_DIR "${REPO}/modules/core_chat/src/infra/meshcore/crypto/ed25519")
 target_sources(reticulum_gateway PRIVATE
+    "${REPO}/modules/core_chat/src/infra/reticulum/interface_access_codec.cpp"
     "${REPO}/platform/esp/arduino_common/src/chat/infra/reticulum/ifac_codec.cpp"
     ${ED25519_DIR}/keypair.c ${ED25519_DIR}/sign.c ${ED25519_DIR}/sha512.c
     ${ED25519_DIR}/ge.c ${ED25519_DIR}/fe.c ${ED25519_DIR}/sc.c)
@@ -153,6 +154,8 @@ if(MSVC)
 else()
     target_compile_options(reticulum_ifac PRIVATE -UNDEBUG -Wall -Wextra)
 endif()
+target_sources(reticulum_ifac PRIVATE
+    "${REPO}/modules/core_chat/src/infra/reticulum/interface_access_codec.cpp")
 add_test(NAME reticulum_ifac COMMAND reticulum_ifac "${CMAKE_CURRENT_LIST_DIR}/ifac_vectors.tsv")
 
 set(NETWORK_SOURCE "${REPO}/platform/esp/arduino_common/src/platform_ui_reticulum_network_config_runtime.cpp")
@@ -161,11 +164,11 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${NETWORK_SOURCE
 file(READ "${NETWORK_SOURCE}" SOURCE)
 extract_between("bool bounded_text(" "void reset_config(" NETWORK_HELPERS)
 extract_between("bool validate_config(" "void activate(" NETWORK_VALIDATE)
-file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/network_validation.inc" "${NETWORK_HELPERS}\n${NETWORK_VALIDATE}")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/network_validation.inc" "#include \"chat/domain/reticulum_network_validation.h\"\n${NETWORK_HELPERS}\n${NETWORK_VALIDATE}")
 file(READ "${TMS_SOURCE}" SOURCE)
-extract_between("constexpr std::size_t kNetworkInterfaceFieldCount" "enum Seen" TMS_CONSTANTS)
-extract_between("bool mark_network_once(" "bool valid_text_blob(" TMS_NETWORK)
-file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/network_tms.inc" "${TMS_CONSTANTS}\n${TMS_NETWORK}")
+extract_between("constexpr std::size_t kNetworkInterfaceFieldCount" "struct ParseState" TMS_CONSTANTS)
+extract_between("tms::RecordConsumeResult consume_network_record(" "bool write_i32_setting(" TMS_NETWORK)
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/network_tms.inc" "#include \"app/reticulum_network_records.h\"\n${TMS_CONSTANTS}\n${TMS_NETWORK}")
 add_executable(reticulum_access_config test_access_config.cpp
     "${REPO}/modules/core_sys/src/app/tms_config_codec.cpp"
     "${REPO}/modules/core_chat/src/infra/mesh_protocol_utils.cpp")
@@ -197,7 +200,7 @@ add_test(NAME reticulum_gateway_handoff COMMAND reticulum_gateway_handoff)
 extract_between("bool LxmfAdapter::dispatchLxmfPayload(" "const LxmfAdapter::PropagationPeerState*" DISPATCH)
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/dispatch_actual.inc" "${DISPATCH}")
 add_executable(reticulum_dispatch_status test_dispatch_status.cpp
-    "${REPO}/platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_delivery_planner.cpp")
+    "${REPO}/modules/core_chat/src/infra/lxmf/lxmf_delivery_planner.cpp")
 target_compile_features(reticulum_dispatch_status PRIVATE cxx_std_17)
 target_include_directories(reticulum_dispatch_status PRIVATE "${CMAKE_CURRENT_BINARY_DIR}"
     "${REPO}/modules/core_chat/include" "${REPO}/platform/esp/arduino_common/include")

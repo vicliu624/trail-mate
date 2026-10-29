@@ -8,11 +8,19 @@
 #include <fstream>
 #include <string>
 #include <string_view>
+#include <mutex>
+#include <optional>
 
 namespace platform::linux_runtime
 {
 namespace
 {
+struct ConfiguredPaths
+{
+    std::mutex mutex;
+    std::optional<RuntimePaths> paths;
+};
+ConfiguredPaths& configured_paths() { static ConfiguredPaths value; return value; }
 
 std::string sanitize_component(const char* value)
 {
@@ -42,6 +50,11 @@ std::string sanitize_component(const char* value)
 RuntimePaths resolve_paths()
 {
     RuntimePaths paths{};
+    {
+        auto& configured = configured_paths();
+        std::lock_guard<std::mutex> lock(configured.mutex);
+        if (configured.paths) paths = *configured.paths;
+    }
 
     // 1. Explicit overrides
     const char* settings_env = std::getenv("TRAIL_MATE_SETTINGS_ROOT");
@@ -112,6 +125,34 @@ RuntimePaths resolve_paths()
     return paths;
 }
 
+RuntimePaths xdg_application_paths()
+{
+    const char* home = std::getenv("HOME");
+    const auto base = home && home[0] ? std::filesystem::path(home) : std::filesystem::current_path();
+    const auto choose = [&](const char* key, const std::filesystem::path& fallback)
+    {
+        const char* value = std::getenv(key);
+        return value && value[0] && std::filesystem::path(value).is_absolute() ?
+               std::filesystem::path(value) / "trailmate" : fallback / "trailmate";
+    };
+    RuntimePaths paths;
+    paths.settings_root = choose("XDG_STATE_HOME", base / ".local" / "state");
+    paths.state_root = paths.settings_root;
+    paths.sd_root = choose("XDG_DATA_HOME", base / ".local" / "share");
+    paths.cache_root = choose("XDG_CACHE_HOME", base / ".cache");
+    return paths;
+}
+
+bool configure_runtime_paths(const RuntimePaths& paths)
+{
+    if (!paths.settings_root.is_absolute() || !paths.sd_root.is_absolute() || !paths.cache_root.is_absolute()) return false;
+    auto& configured = configured_paths();
+    std::lock_guard<std::mutex> lock(configured.mutex);
+    if (configured.paths) return false;
+    configured.paths = paths;
+    return true;
+}
+
 std::filesystem::path settings_file(const char* ns)
 {
     const RuntimePaths paths = resolve_paths();
@@ -129,6 +170,13 @@ std::filesystem::path sd_child(std::string_view relative)
 {
     const RuntimePaths paths = resolve_paths();
     return paths.sd_root / relative;
+}
+
+std::filesystem::path resource_pack_root()
+{
+    const char* configured = std::getenv("TRAIL_MATE_RESOURCE_PACK_ROOT");
+    if (configured && configured[0]) return std::filesystem::absolute(configured).lexically_normal();
+    return std::filesystem::absolute(sd_child("trailmate/packs")).lexically_normal();
 }
 
 bool ensure_directory(const std::filesystem::path& path)

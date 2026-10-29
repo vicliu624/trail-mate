@@ -39,6 +39,7 @@ platformio.ini text eol=lf
 
 # Scripts
 *.sh text eol=lf
+apps/linux_cardputer_zero/packaging/trailmate-cardputer-zero-applaunch text eol=lf
 *.bat text eol=crlf
 *.ps1 text eol=crlf
 *.cmd text eol=crlf
@@ -76,4 +77,6 @@ libdeps/** binary
 
 # Keep existing line endings for these
 *.patch text -eol
+# Vendor patch context includes significant blank-line prefixes and old whitespace.
+boards/t_display_cm0/kernel/*.patch -whitespace
 

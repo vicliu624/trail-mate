@@ -33,6 +33,9 @@ struct ImeInfo
 
 using LocaleChangeCompletion = void (*)(bool changed, void* user_data);
 
+// Set by the composition before the first registry access, on the LVGL owner.
+// Empty selects the platform's historical removable-storage path.
+bool configure_external_pack_root(const std::string& root);
 void reload_language();
 std::size_t locale_count();
 const LocaleInfo* locale_at(std::size_t index);

@@ -26,6 +26,7 @@ struct MusicFocusClient
 };
 void register_music_focus_client(MusicFocusClient client);
 FocusToken request_focus(FocusOwner owner);
+FocusToken request_exclusive_focus(FocusOwner owner);
 void release_focus(FocusToken token);
 bool music_blocked();
 class FocusScope
@@ -34,6 +35,8 @@ class FocusScope
 
   public:
     explicit FocusScope(FocusOwner owner) : token_(request_focus(owner)) {}
+    FocusScope(FocusOwner owner, bool exclusive)
+        : token_(exclusive ? request_exclusive_focus(owner) : request_focus(owner)) {}
     ~FocusScope() { release_focus(token_); }
     explicit operator bool() const { return bool(token_); }
     FocusScope(const FocusScope&) = delete;

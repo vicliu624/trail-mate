@@ -23,6 +23,8 @@ enum class PageId
     NodeStatus,
     Diagnostics,
     Calendar,
+    Calculator,
+    Geocaching,
 };
 
 struct PageManifestItem

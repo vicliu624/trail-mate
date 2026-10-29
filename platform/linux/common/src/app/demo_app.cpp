@@ -58,6 +58,8 @@ void DemoApp::handleInput(const InputEvent& event) noexcept
 
     switch (event.key)
     {
+    case InputKey::TextEdit:
+        break; // Native text edits belong to the focused UI editor.
     case InputKey::Character:
         if (event.text != '\0')
         {

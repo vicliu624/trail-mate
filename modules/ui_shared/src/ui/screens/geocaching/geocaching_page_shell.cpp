@@ -245,7 +245,11 @@ void keyEvent(lv_event_t* event)
         else if (page->details) closeDetails();
         else if (page->host) ::ui::page::request_exit(page->host);
     }
-    else if (page->editor && page->group && lv_group_get_editing(page->group)) return;
+    else if (page->editor && page->group &&
+             (lv_group_get_editing(page->group) ||
+              (lv_indev_active() && lv_indev_get_type(lv_indev_active()) == LV_INDEV_TYPE_KEYPAD &&
+               (lv_obj_check_type(lv_event_get_target_obj(event), &lv_textarea_class) ||
+                lv_obj_check_type(lv_event_get_target_obj(event), &lv_dropdown_class))))) return;
     else if (!page->details && !page->editor && lv_event_get_target(event) == page->rows[0] &&
              (key == LV_KEY_DOWN || key == LV_KEY_RIGHT || key == LV_KEY_UP || key == LV_KEY_LEFT))
     {

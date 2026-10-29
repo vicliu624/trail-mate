@@ -43,7 +43,7 @@ int main(int argc, char** argv)
     const std::string cmake = read_file(
         repo_root / "apps/linux_cardputer_zero/CMakeLists.txt");
     assert(contains(cmake, "TRAIL_MATE_CARDPUTER_ZERO_BUILD_DEVICE"));
-    assert(contains(cmake, "TRAIL_MATE_CARDPUTER_ZERO_PACKAGE_VERSION \"0.1.38-alpha\""));
+    assert(contains(cmake, "TRAIL_MATE_CARDPUTER_ZERO_PACKAGE_VERSION \"${TRAIL_MATE_DEBIAN_PROJECT_VERSION}\""));
     assert(contains(cmake, "src/cardputer_zero_wayland_main.cpp"));
     assert(contains(cmake, "src/platform/wayland/wayland_presenter.cpp"));
     assert(contains(cmake, "pkg_check_modules(WAYLAND_CLIENT REQUIRED IMPORTED_TARGET wayland-client)"));
@@ -86,6 +86,7 @@ int main(int argc, char** argv)
     assert(contains(cmake, "gdal-bin"));
     assert(contains(cmake, "unzip"));
     assert(contains(cmake, "ca-certificates"));
+    assert(contains(cmake, "network-manager"));
     assert(contains(cmake, "CPACK_DEBIAN_PACKAGE_SHLIBDEPS OFF"));
     assert(not_contains(cmake, "NO_LEGACY_PRESENTATION"));
     assert(contains(cmake, "CMAKE_SYSTEM_PROCESSOR MATCHES \"^(aarch64|arm64|ARM64)$\""));
@@ -158,13 +159,13 @@ int main(int argc, char** argv)
     assert(contains(launcher, "TRAIL_MATE_GPS_AUTO_SERIAL:=1"));
     assert(contains(launcher, "TRAIL_MATE_GPS_DEVICE_CANDIDATES:=/dev/serial0:/dev/ttyAMA1:/dev/ttyAMA0:/dev/ttyS0:/dev/ttyS1"));
     assert(not_contains(launcher, "TRAIL_MATE_GPS_DEVICE=/dev/serial0"));
-    assert(contains(launcher, "settings_root=${TRAIL_MATE_SETTINGS_ROOT:-${HOME:-/home/pi}/.trailmate_cardputer_zero}"));
+    assert(contains(launcher, "settings_root=${TRAIL_MATE_SETTINGS_ROOT:-${HOME:?HOME or TRAIL_MATE_SETTINGS_ROOT is required}/.trailmate_cardputer_zero}"));
     assert(contains(launcher, "load_env_file /etc/trailmate-cardputer-zero.env"));
     assert(contains(launcher, "load_env_file \"$settings_root/trailmate.env\""));
     assert(contains(launcher, "TRAIL_MATE_EARTHDATA_TOKEN"));
     assert(contains(launcher, "TRAIL_MATE_DESKTOP_NOTIFICATIONS:=freedesktop"));
-    assert(contains(launcher, "127\\.0\\.0\\.1:7890"));
-    assert(contains(launcher, "ALL_PROXY=http://127.0.0.1:7890"));
+    assert(not_contains(launcher, "7890"));
+    assert(not_contains(launcher, "/home/pi"));
     assert(contains(launcher, "export TRAIL_MATE_RUNTIME_MODE"));
     assert(contains(launcher, "export TRAIL_MATE_LORA_SPI TRAIL_MATE_LORA_GPIOCHIP"));
     assert(contains(launcher, "export TRAIL_MATE_GPS_BAUD TRAIL_MATE_GPS_AUTO_SERIAL"));
@@ -205,7 +206,7 @@ int main(int argc, char** argv)
         repo_root /
         "apps/linux_cardputer_zero/tools/build_cardputer_zero_deb.sh");
     assert(contains(package_script, "/tmp/trailmate-cardputer-zero-package"));
-    assert(contains(package_script, "package_version=\"${TRAIL_MATE_CARDPUTER_ZERO_PACKAGE_VERSION:-0.1.38-alpha}\""));
+    assert(contains(package_script, "scripts/project_version.py\" --debian"));
     assert(contains(package_script, "package_build_type=\"${TRAIL_MATE_CARDPUTER_ZERO_PACKAGE_BUILD_TYPE:-Release}\""));
     assert(contains(package_script, "docker_platform=\"${TRAIL_MATE_CARDPUTER_ZERO_DOCKER_PLATFORM:-linux/arm64}\""));
     assert(contains(package_script, "builder_image=\"${TRAIL_MATE_CARDPUTER_ZERO_BUILDER_IMAGE:-trailmate-cardputer-zero-builder:bookworm-arm64}\""));
@@ -250,7 +251,7 @@ int main(int argc, char** argv)
     assert(contains(builder_compose, "platform: ${TRAIL_MATE_CARDPUTER_ZERO_DOCKER_PLATFORM:-linux/arm64}"));
     assert(contains(builder_compose, "dockerfile: Dockerfile.cardputer-zero-builder"));
     assert(contains(builder_compose, "TRAIL_MATE_CARDPUTER_ZERO_APT_MIRROR"));
-    assert(contains(builder_compose, "TRAIL_MATE_CARDPUTER_ZERO_PACKAGE_VERSION:-0.1.38-alpha"));
+    assert(contains(builder_compose, "TRAIL_MATE_CARDPUTER_ZERO_PACKAGE_VERSION:-}"));
     assert(contains(builder_compose, "TRAIL_MATE_CARDPUTER_ZERO_PACKAGE_BUILD_TYPE:-Release"));
     assert(contains(builder_compose, "cardputer-zero-cmake-build:/work/build"));
     assert(contains(builder_compose, "command: [\"/bin/sleep\", \"infinity\"]"));

@@ -4,6 +4,7 @@
  */
 
 #pragma once
+#include "platform/esp/arduino_common/chat/infra/lxmf/lxmf_identity.h"
 
 #include "platform/esp/arduino_common/chat/infra/lxmf/lxmf_propagation_runtime.h"
 #include "platform/esp/arduino_common/chat/infra/lxmf/lxmf_propagation_service_runtime.h"

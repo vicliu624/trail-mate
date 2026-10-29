@@ -4,6 +4,7 @@
 #include "gps/kml/image_sources.h"
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/navigation_runtime.h"
+#include "platform/ui/network_runtime.h"
 #include "platform/ui/route_storage.h"
 #include "platform/ui/tracker_runtime.h"
 #include "platform/ui/wifi_runtime.h"
@@ -1582,7 +1583,7 @@ std::vector<platform::ui::route_storage::RouteImageCacheItem> route_preview_cach
 {
     std::vector<platform::ui::route_storage::RouteImageCacheItem> items;
     items.reserve(s_preview_images.size());
-    const bool package = track_sharing::isInstalledPackageRoute(route_path_for_name(s_preview_route_name));
+    const bool package = track_sharing::isInstalledPackageRouteAtRoot(route_path_for_name(s_preview_route_name), platform::ui::route_storage::route_dir());
     for (const auto& image : s_preview_images)
     {
         if (!image.downloaded && !package)
@@ -1832,7 +1833,7 @@ void pause_route_preview_download_poll_timer()
 void ensure_route_preview_image_cache_build(bool refresh_state)
 {
     const auto path = route_path_for_name(s_preview_route_name);
-    const bool package = track_sharing::isInstalledPackageRoute(path);
+    const bool package = track_sharing::isInstalledPackageRouteAtRoot(path, platform::ui::route_storage::route_dir());
     if (refresh_state)
     {
         refresh_preview_image_storage_state(true);
@@ -2625,24 +2626,19 @@ void on_route_preview_download_clicked(lv_event_t*)
         return;
     }
 
-    if (track_sharing::isInstalledPackageRoute(route_path_for_name(s_preview_route_name)))
+    if (track_sharing::isInstalledPackageRouteAtRoot(route_path_for_name(s_preview_route_name), platform::ui::route_storage::route_dir()))
     {
         ensure_route_preview_image_cache_build(false);
         return;
     }
-    const auto wifi = platform::ui::wifi::status();
-    if (!wifi.supported || !wifi.connected)
+    const auto network = platform::ui::network::status();
+    if (!network.supported || !network.connected)
     {
-        s_preview_status_text = "Wi-Fi required";
+        s_preview_status_text = "Network connection required";
         s_preview_download_state = RoutePreviewDownloadState::Failed;
-        std::printf("[RoutePreview][down] blocked reason=wifi_required supported=%u enabled=%u connected=%u credentials=%u state=%u msg=%s\n",
-                    wifi.supported ? 1U : 0U,
-                    wifi.enabled ? 1U : 0U,
-                    wifi.connected ? 1U : 0U,
-                    wifi.has_credentials ? 1U : 0U,
-                    static_cast<unsigned>(wifi.state),
-                    wifi.message);
-        show_route_preview_notice("Wi-Fi required");
+        std::printf("[RoutePreview][down] blocked reason=network_required supported=%u connected=%u\n",
+                    network.supported ? 1U : 0U, network.connected ? 1U : 0U);
+        show_route_preview_notice("Network connection required");
         update_route_preview_status();
         update_route_preview_buttons();
         return;
@@ -2694,13 +2690,11 @@ void on_route_preview_download_clicked(lv_event_t*)
         return;
     }
 
-    std::printf("[RoutePreview][down] starting asset=%s saved=%u/%u queued=%u wifi_ssid=%s ip=%s\n",
+    std::printf("[RoutePreview][down] starting asset=%s saved=%u/%u queued=%u\n",
                 s_preview_asset_id.c_str(),
                 static_cast<unsigned>(saved_count),
                 static_cast<unsigned>(total),
-                static_cast<unsigned>(items.size()),
-                wifi.ssid,
-                wifi.ip);
+                static_cast<unsigned>(items.size()));
     update_route_preview_status();
     update_route_preview_buttons();
 

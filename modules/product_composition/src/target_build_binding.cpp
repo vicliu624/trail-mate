@@ -94,6 +94,8 @@ constexpr TargetBuildBinding kTargetBuildBindings[] = {
         "platformio",
     },
     kWioTrackerL2Build,
+    {"t_display_cm0", "builds/linux_cmake", "apps/linux_lvgl",
+     "boards/t_display_cm0/device.conf", "linux_desktop"},
 };
 
 } // namespace

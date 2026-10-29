@@ -64,6 +64,13 @@ struct MeshCapabilities
     bool supports_reticulum_audio_call = false;
 };
 
+struct MeshTransportStatus
+{
+    bool ready = false;
+    bool radio_ready = false;
+    bool network_ready = false;
+};
+
 struct ReticulumLocalIdentityInfo
 {
     bool ready = false;
@@ -309,6 +316,15 @@ class IMeshAdapter
         return false;
     }
 
+    // Optional Reticulum control intent. Native adapters may acknowledge queue
+    // admission; true does not establish a path or message delivery. The owner
+    // reports physical failures separately and never changes chat readiness.
+    virtual bool requestDirectoryPath(const uint8_t destination[16])
+    {
+        (void)destination;
+        return false;
+    }
+
     /**
      * @brief Check if PKI is ready (if supported)
      */
@@ -523,6 +539,9 @@ class IMeshAdapter
      * @brief Process any pending send queue work
      */
     virtual void processSendQueue() {}
+    // Optional live bearer facts; legacy adapters retain their existing UI
+    // projection until they provide this port. No device names enter the UI.
+    virtual bool getTransportStatus(MeshTransportStatus*) const { return false; }
 };
 
 } // namespace chat

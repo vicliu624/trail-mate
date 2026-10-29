@@ -237,6 +237,10 @@ void applyAction(KeyAction action)
 
 void clicked(lv_event_t* event)
 {
+    // Keypad Enter is handled as Equals by keyEvent. LVGL also synthesizes a
+    // click on release; applying the focused digit again would replace it.
+    const auto* input = lv_indev_active();
+    if (input && lv_indev_get_type(input) == LV_INDEV_TYPE_KEYPAD) return;
     const auto action = static_cast<KeyAction>(reinterpret_cast<uintptr_t>(lv_event_get_user_data(event)));
     applyAction(action);
 }
@@ -523,7 +527,8 @@ void buildPage(lv_obj_t* parent)
                     layout.display_height - result_y - 2);
     lv_label_set_long_mode(s_ui.result, LV_LABEL_LONG_DOT);
     lv_obj_set_style_text_align(s_ui.result, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_set_style_text_font(s_ui.result, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(s_ui.result,
+                               layout.display_height < 40 ? &lv_font_montserrat_12 : &lv_font_montserrat_20, 0);
     lv_obj_set_style_text_color(s_ui.result, lv_color_hex(kDisplayValue), 0);
 
     const lv_coord_t function_margin = layout.outer_margin;

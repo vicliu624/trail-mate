@@ -253,6 +253,7 @@ docs/.doctrees/
 # build artifacts
 build/
 build.*/
+/build_t_display_p4_tft/
 
 # idf component manager
 managed_components/

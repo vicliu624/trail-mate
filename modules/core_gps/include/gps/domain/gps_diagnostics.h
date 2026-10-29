@@ -15,6 +15,7 @@ enum class GpsDiagnosticCode : uint8_t
     NoTraffic,
     TrafficStalled,
     NoFix,
+    NotConfigured,
 };
 
 struct GpsDiagnosticsSnapshot
@@ -55,6 +56,8 @@ inline const char* gpsDiagnosticCodeName(GpsDiagnosticCode code)
         return "GPSD_UART_TRAFFIC_STALLED";
     case GpsDiagnosticCode::NoFix:
         return "GPSD_NO_FIX";
+    case GpsDiagnosticCode::NotConfigured:
+        return "GPSD_NOT_CONFIGURED";
     }
     return "GPSD_UNKNOWN";
 }

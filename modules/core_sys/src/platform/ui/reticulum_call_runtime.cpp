@@ -65,6 +65,11 @@ struct RuntimeState
     bool duplex_mode_request_pending = false;
     bool sleep_wake_lease = false;
     bool sleep_wake_lease_applied = false;
+    uint64_t call_generation = 1;
+    bool media_starting = false;
+    bool configuration_change = false;
+    unsigned outgoing_admissions = 0;
+    uint32_t failed_dial_revision = 0;
     // Call audio is inactive for the normal device lifetime. Keep its 16 fixed
     // packet slots out of the always-resident control state and, on ESP, prefer
     // PSRAM once media actually starts. The fixed depth and drop-oldest policy
@@ -262,16 +267,20 @@ bool release_sleep_wake_lease_locked()
     return true;
 }
 
-void close_call(State final_state, bool request_remote_close);
+void close_call(State final_state, bool request_remote_close, uint64_t expected_generation = 0);
 
 bool start_media_if_needed()
 {
     MediaHooks hooks{};
     bool should_start = false;
     bool queue_provision_failed = false;
+    bool already_starting = false;
+    uint64_t generation = 0;
     {
         RuntimeLock lock(s_state.mutex);
         hooks = s_state.hooks;
+        generation = s_state.call_generation;
+        already_starting = s_state.media_starting;
         s_state.snapshot.media_supported =
             hooks.is_supported ? hooks.is_supported() : false;
         should_start = s_state.snapshot.accepted &&
@@ -294,28 +303,33 @@ bool start_media_if_needed()
                 // scheduled task cannot observe a transient inactive state and
                 // exit immediately.
                 s_state.snapshot.media_active = true;
+                s_state.media_starting = true;
                 s_state.snapshot.updated_ms = now_ms();
             }
         }
     }
     if (queue_provision_failed)
     {
-        close_call(State::Failed, true);
+        close_call(State::Failed, true, generation);
         return false;
     }
     if (!should_start)
     {
-        return true;
+        return !already_starting;
     }
     if (!hooks.start || !hooks.start())
     {
-        close_call(State::Failed, true);
+        close_call(State::Failed, true, generation);
         return false;
     }
-    return true;
+    RuntimeLock lock(s_state.mutex);
+    const bool current = s_state.call_generation == generation && s_state.snapshot.media_active &&
+                         s_state.snapshot.accepted && s_state.snapshot.link_active;
+    if (current) s_state.media_starting = false;
+    return current;
 }
 
-void close_call(State final_state, bool request_remote_close)
+void close_call(State final_state, bool request_remote_close, uint64_t expected_generation)
 {
     MediaHooks hooks{};
     RealtimeHooks realtime_hooks{};
@@ -326,6 +340,9 @@ void close_call(State final_state, bool request_remote_close)
     bool keep_exclusive = false;
     {
         RuntimeLock lock(s_state.mutex);
+        if (expected_generation && s_state.call_generation != expected_generation) return;
+        ++s_state.call_generation;
+        s_state.media_starting = false;
         hooks = s_state.hooks;
         realtime_hooks = s_state.realtime_hooks;
         copy_hash(link_id, s_state.snapshot.link_id);
@@ -479,6 +496,12 @@ void set_microphone_muted(bool muted)
 {
     RuntimeLock lock(s_state.mutex);
     s_state.snapshot.microphone_muted = muted;
+    if (muted)
+        if (auto* queues = audio_queues_locked())
+        {
+            s_state.snapshot.tx_dropped += static_cast<uint32_t>(queues->outbound.size());
+            queues->outbound.clear();
+        }
     s_state.snapshot.updated_ms = now_ms();
 }
 
@@ -486,6 +509,12 @@ void set_speaker_muted(bool muted)
 {
     RuntimeLock lock(s_state.mutex);
     s_state.snapshot.speaker_muted = muted;
+    if (muted)
+        if (auto* queues = audio_queues_locked())
+        {
+            s_state.snapshot.rx_dropped += static_cast<uint32_t>(queues->inbound.size());
+            queues->inbound.clear();
+        }
     s_state.snapshot.updated_ms = now_ms();
 }
 
@@ -493,11 +522,18 @@ void set_ptt_pressed(bool pressed)
 {
     RuntimeLock lock(s_state.mutex);
     s_state.snapshot.ptt_pressed = pressed;
+    if (!pressed && s_state.snapshot.duplex_mode == DuplexMode::Half)
+        if (auto* queues = audio_queues_locked())
+        {
+            s_state.snapshot.tx_dropped += static_cast<uint32_t>(queues->outbound.size());
+            queues->outbound.clear();
+        }
     s_state.snapshot.updated_ms = now_ms();
 }
 
 bool set_duplex_mode(DuplexMode mode)
 {
+    if (mode != DuplexMode::Full && mode != DuplexMode::Half) return false;
     RuntimeLock lock(s_state.mutex);
     if (s_state.snapshot.state != State::Active)
     {
@@ -509,6 +545,12 @@ bool set_duplex_mode(DuplexMode mode)
     }
     s_state.snapshot.duplex_mode = mode;
     s_state.snapshot.ptt_pressed = false;
+    if (mode == DuplexMode::Half)
+        if (auto* queues = audio_queues_locked())
+        {
+            s_state.snapshot.tx_dropped += static_cast<uint32_t>(queues->outbound.size());
+            queues->outbound.clear();
+        }
     s_state.snapshot.updated_ms = now_ms();
     s_state.duplex_mode_request_pending = true;
     return true;
@@ -516,9 +558,16 @@ bool set_duplex_mode(DuplexMode mode)
 
 void apply_remote_duplex_mode(DuplexMode mode)
 {
+    if (mode != DuplexMode::Full && mode != DuplexMode::Half) return;
     RuntimeLock lock(s_state.mutex);
     s_state.snapshot.duplex_mode = mode;
     s_state.snapshot.ptt_pressed = false;
+    if (mode == DuplexMode::Half)
+        if (auto* queues = audio_queues_locked())
+        {
+            s_state.snapshot.tx_dropped += static_cast<uint32_t>(queues->outbound.size());
+            queues->outbound.clear();
+        }
     s_state.snapshot.updated_ms = now_ms();
 }
 
@@ -570,8 +619,10 @@ bool begin_incoming_identifying(const Peer& peer)
     RealtimeHooks realtime_hooks{};
     uint8_t link_id[kHashSize] = {};
     bool start_soft_preempt = false;
+    uint64_t generation = 0;
     {
         RuntimeLock lock(s_state.mutex);
+        if (s_state.configuration_change) return false;
         if (s_state.snapshot.state == State::Active ||
             s_state.snapshot.state == State::Incoming ||
             s_state.snapshot.state == State::Outgoing)
@@ -579,6 +630,9 @@ bool begin_incoming_identifying(const Peer& peer)
             return hashes_equal(s_state.snapshot.link_id, peer.link_id);
         }
         s_state.snapshot = Snapshot{};
+        ++s_state.call_generation;
+        generation = s_state.call_generation;
+        s_state.media_starting = false;
         s_state.duplex_mode_request_pending = false;
         s_state.snapshot.supported = true;
         s_state.snapshot.incoming = true;
@@ -598,10 +652,16 @@ bool begin_incoming_identifying(const Peer& peer)
     if (start_soft_preempt &&
         !begin_soft_preempt_outside_lock(realtime_hooks, link_id))
     {
-        close_call(State::Failed, true);
+        close_call(State::Failed, true, generation);
         return false;
     }
-    return true;
+    bool current;
+    {
+        RuntimeLock lock(s_state.mutex);
+        current = s_state.call_generation == generation;
+    }
+    if (!current) end_realtime_outside_lock(realtime_hooks, link_id);
+    return current;
 }
 
 bool mark_incoming_ringing(const uint8_t link_id[kHashSize])
@@ -612,6 +672,7 @@ bool mark_incoming_ringing(const uint8_t link_id[kHashSize])
     }
 
     RealtimeHooks realtime_hooks{};
+    uint64_t generation = 0;
     {
         RuntimeLock lock(s_state.mutex);
         if (!hashes_equal(s_state.snapshot.link_id, link_id) ||
@@ -630,14 +691,21 @@ bool mark_incoming_ringing(const uint8_t link_id[kHashSize])
         s_state.snapshot.realtime_phase = RealtimePhase::IncomingRinging;
         s_state.snapshot.updated_ms = now_ms();
         realtime_hooks = s_state.realtime_hooks;
+        generation = s_state.call_generation;
     }
 
     if (!begin_ringing_alert_outside_lock(realtime_hooks, link_id))
     {
-        close_call(State::Failed, true);
+        close_call(State::Failed, true, generation);
         return false;
     }
-    return true;
+    bool current;
+    {
+        RuntimeLock lock(s_state.mutex);
+        current = s_state.call_generation == generation;
+    }
+    if (!current) end_realtime_outside_lock(realtime_hooks, link_id);
+    return current;
 }
 
 bool begin_outgoing(const Peer& peer)
@@ -649,6 +717,7 @@ bool begin_outgoing(const Peer& peer)
     RealtimeHooks realtime_hooks{};
     {
         RuntimeLock lock(s_state.mutex);
+        if (s_state.configuration_change) return false;
         if (s_state.snapshot.state == State::Active ||
             s_state.snapshot.state == State::Incoming ||
             s_state.snapshot.state == State::Outgoing)
@@ -656,15 +725,19 @@ bool begin_outgoing(const Peer& peer)
             return hashes_equal(s_state.snapshot.link_id, peer.link_id);
         }
         realtime_hooks = s_state.realtime_hooks;
+        ++s_state.outgoing_admissions;
     }
     if (!begin_exclusive_outside_lock(realtime_hooks, peer.link_id))
     {
+        RuntimeLock lock(s_state.mutex);
+        --s_state.outgoing_admissions;
         return false;
     }
     set_speaker_volume(100);
     bool started = false;
     {
         RuntimeLock lock(s_state.mutex);
+        --s_state.outgoing_admissions;
         if (s_state.snapshot.state == State::Active ||
             s_state.snapshot.state == State::Incoming ||
             s_state.snapshot.state == State::Outgoing)
@@ -678,6 +751,8 @@ bool begin_outgoing(const Peer& peer)
         else
         {
             s_state.snapshot = Snapshot{};
+            ++s_state.call_generation;
+            s_state.media_starting = false;
             s_state.duplex_mode_request_pending = false;
             s_state.snapshot.supported = true;
             s_state.snapshot.incoming = false;
@@ -702,6 +777,36 @@ bool begin_outgoing(const Peer& peer)
     return false;
 }
 
+bool try_begin_configuration_change()
+{
+    RuntimeLock lock(s_state.mutex);
+    if (s_state.configuration_change || s_state.outgoing_admissions ||
+        s_state.snapshot.realtime_phase != RealtimePhase::Idle || s_state.media_starting ||
+        s_state.snapshot.media_active || s_state.hangup_requested ||
+        s_state.snapshot.state == State::Incoming || s_state.snapshot.state == State::Outgoing ||
+        s_state.snapshot.state == State::Active) return false;
+    s_state.configuration_change = true;
+    return true;
+}
+
+void end_configuration_change()
+{
+    RuntimeLock lock(s_state.mutex);
+    s_state.configuration_change = false;
+}
+
+bool report_dial_failure(const Peer& peer)
+{
+    RuntimeLock lock(s_state.mutex);
+    if (s_state.snapshot.realtime_phase != RealtimePhase::Idle ||
+        s_state.snapshot.state == State::Incoming || s_state.snapshot.state == State::Outgoing || s_state.snapshot.state == State::Active) return false;
+    s_state.snapshot = Snapshot{};
+    s_state.snapshot.state = State::Failed;
+    apply_peer_locked(peer);
+    if (++s_state.failed_dial_revision == 0) ++s_state.failed_dial_revision;
+    s_state.snapshot.failed_dial_revision = s_state.failed_dial_revision;
+    return true;
+}
 void update_peer(const Peer& peer)
 {
     if (hash_is_empty(peer.link_id))
@@ -756,7 +861,7 @@ bool prepare_media(const uint8_t link_id[kHashSize])
         }
         if (s_state.snapshot.media_active)
         {
-            return true;
+            return !s_state.media_starting;
         }
     }
     if (!start_media_if_needed())
@@ -766,7 +871,7 @@ bool prepare_media(const uint8_t link_id[kHashSize])
     RuntimeLock lock(s_state.mutex);
     return hashes_equal(s_state.snapshot.link_id, link_id) &&
            s_state.snapshot.accepted && s_state.snapshot.link_active &&
-           s_state.snapshot.media_active;
+           s_state.snapshot.media_active && !s_state.media_starting;
 }
 
 bool mark_call_active(const uint8_t link_id[kHashSize])
@@ -779,7 +884,7 @@ bool mark_call_active(const uint8_t link_id[kHashSize])
     if (!hashes_equal(s_state.snapshot.link_id, link_id) ||
         !s_state.snapshot.accepted ||
         !s_state.snapshot.link_active ||
-        !s_state.snapshot.media_active ||
+        !s_state.snapshot.media_active || s_state.media_starting ||
         (s_state.snapshot.state != State::Incoming &&
          s_state.snapshot.state != State::Outgoing &&
          s_state.snapshot.state != State::Active))
@@ -802,28 +907,44 @@ void notify_link_closed(const uint8_t link_id[kHashSize])
     {
         return;
     }
+    uint64_t generation = 0;
     {
         RuntimeLock lock(s_state.mutex);
         if (!hashes_equal(s_state.snapshot.link_id, link_id))
         {
             return;
         }
+        generation = s_state.call_generation;
     }
-    close_call(State::Ended, false);
+    close_call(State::Ended, false, generation);
 }
 
 void notify_media_failed()
 {
     bool should_close = false;
+    uint64_t generation = 0;
     {
         RuntimeLock lock(s_state.mutex);
         should_close = s_state.snapshot.accepted &&
                        s_state.snapshot.media_active;
+        generation = s_state.call_generation;
     }
     if (should_close)
     {
-        close_call(State::Failed, true);
+        close_call(State::Failed, true, generation);
     }
+}
+
+void notify_media_failed_for_link(const uint8_t link_id[kHashSize])
+{
+    if (hash_is_empty(link_id)) return;
+    uint64_t generation = 0;
+    {
+        RuntimeLock lock(s_state.mutex);
+        if (!hashes_equal(s_state.snapshot.link_id, link_id) || !s_state.snapshot.accepted || !s_state.snapshot.media_active) return;
+        generation = s_state.call_generation;
+    }
+    close_call(State::Failed, true, generation);
 }
 
 void service_ui_runtime()

@@ -95,6 +95,7 @@ struct Snapshot
     uint32_t rx_bytes = 0;
     uint32_t tx_bytes = 0;
     uint32_t active_since_ms = 0;
+    uint32_t failed_dial_revision = 0;
 };
 
 struct AudioPacket
@@ -139,12 +140,21 @@ bool begin_incoming(const Peer& peer);
 bool begin_incoming_identifying(const Peer& peer);
 bool mark_incoming_ringing(const uint8_t link_id[kHashSize]);
 bool begin_outgoing(const Peer& peer);
+// Atomically excludes new calls only when signalling, media and closing work
+// are idle. Also rejects outgoing admissions currently executing external hooks.
+// Release on a failed replacement; retain through successful restart teardown.
+bool try_begin_configuration_change();
+void end_configuration_change();
+// Async admission failure: publish a UI fact without taking over an active call.
+bool report_dial_failure(const Peer& peer);
 void update_peer(const Peer& peer);
 void mark_link_active(const uint8_t link_id[kHashSize]);
 bool prepare_media(const uint8_t link_id[kHashSize]);
 bool mark_call_active(const uint8_t link_id[kHashSize]);
 void notify_link_closed(const uint8_t link_id[kHashSize]);
 void notify_media_failed();
+// Asynchronous media owners must bind failures to their original link.
+void notify_media_failed_for_link(const uint8_t link_id[kHashSize]);
 void service_ui_runtime();
 
 bool accept();

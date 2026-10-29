@@ -1,4 +1,5 @@
 #include "ui/menu/menu_runtime.h"
+#include "ui/ux_build_config.h"
 
 #include <cstdio>
 #include <cstring>
@@ -207,7 +208,7 @@ bool isScreenBrightnessKey(char key)
 
 bool pagerMenuKeyboardBacklightShortcutEnabled()
 {
-#if defined(ARDUINO_T_LORA_PAGER)
+#if defined(ARDUINO_T_LORA_PAGER) || defined(TRAIL_MATE_PLATFORM_LINUX)
     return platform::ui::device::supports_keyboard_backlight();
 #else
     return false;
@@ -216,7 +217,7 @@ bool pagerMenuKeyboardBacklightShortcutEnabled()
 
 bool screenshotShortcutHelpEnabled()
 {
-#if defined(ARDUINO_T_LORA_PAGER) || defined(ARDUINO_T_DECK) || defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)
+#if defined(ARDUINO_T_LORA_PAGER) || defined(ARDUINO_T_DECK) || defined(TRAIL_MATE_UI_P4_TOUCH)
     return true;
 #else
     return false;
@@ -277,7 +278,7 @@ void openMenuHelpModal()
         rows[row_count++] = {"Enter", nullptr, "Open app"};
 #if defined(ARDUINO_T_DECK) || defined(ARDUINO_WIO_TRACKER_L2)
         rows[row_count++] = {"A", nullptr, "Widgets at left edge"};
-#elif defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)
+#elif defined(TRAIL_MATE_UI_P4_TOUCH)
         rows[row_count++] = {"Swipe", nullptr, "More dashboard widgets"};
 #endif
     }
@@ -511,7 +512,6 @@ void refreshBatteryLabel()
         platform::ui::device::handle_low_battery(battery);
         ui_format_battery(battery.level, battery.charging, battery_str, sizeof(battery_str));
         ui::tdeck_pro::text_shell::set_battery_text(battery_str);
-        refreshBottomBar();
         return;
     }
 #endif
@@ -528,7 +528,7 @@ void refreshBatteryLabel()
     if (level < 0)
     {
         s_runtime.watch_face_battery = -1;
-        lv_label_set_text(s_runtime.battery_label, charging ? "USB" : "--");
+        lv_label_set_text(s_runtime.battery_label, (charging || battery.external_power) ? "USB" : "--");
         updateWatchFaceTime();
         return;
     }
@@ -538,6 +538,8 @@ void refreshBatteryLabel()
     s_runtime.watch_face_battery = level;
 
     ui_format_battery(level, charging, battery_str, sizeof(battery_str));
+    if (battery.external_power && !charging)
+        std::snprintf(battery_str, sizeof(battery_str), "%d%% USB", level);
 
     static char last_battery_str[32] = "";
     if (strcmp(battery_str, last_battery_str) != 0)
@@ -548,7 +550,6 @@ void refreshBatteryLabel()
     }
 
     updateWatchFaceTime();
-    refreshBottomBar();
 }
 
 void updateWalkieRecordBars()
@@ -805,7 +806,9 @@ void createTimers()
     return;
 #else
     constexpr uint32_t time_update_interval_ms = 60000;
-    constexpr uint32_t battery_update_interval_ms = 60000;
+    uint32_t battery_update_interval_ms = s_runtime.hooks.status_refresh_interval_ms;
+    if (battery_update_interval_ms < 1000) battery_update_interval_ms = 1000;
+    if (battery_update_interval_ms > 60000) battery_update_interval_ms = 60000;
 
     s_runtime.time_timer = lv_timer_create(
         [](lv_timer_t* timer)
@@ -822,6 +825,7 @@ void createTimers()
         {
             (void)timer;
             refreshBatteryLabel();
+            refreshBottomBar();
         },
         battery_update_interval_ms,
         nullptr);

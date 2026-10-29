@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+if [ "$1" = remove ]; then
+    if [ -d /run/systemd/system ]; then
+        deb-systemd-invoke stop trailmate-cm0-rtc.service >/dev/null 2>&1 || true
+    fi
+    deb-systemd-helper disable trailmate-cm0-rtc.service >/dev/null 2>&1 || true
+fi

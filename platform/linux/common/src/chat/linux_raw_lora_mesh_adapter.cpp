@@ -1,4 +1,14 @@
 #include "chat/linux_raw_lora_mesh_adapter.h"
+#include "chat/infra/meshcore/meshcore_payload_helpers.h"
+#include "chat/infra/reticulum/interface_policy.h"
+#include "chat/infra/reticulum/reticulum_wire.h"
+#include "chat/linux_mesh_mqtt_bridge.h"
+#include "chat/linux_meshcore_advert_wire.h"
+#include "chat/linux_meshcore_direct_wire.h"
+#include "chat/linux_meshcore_group_wire.h"
+#include "chat/runtime/meshcore_runtime.h"
+#include "platform/linux/mesh/linux_radio_identity_store.h"
+#include "platform/linux/runtime_paths.h"
 
 #include <algorithm>
 #include <array>
@@ -51,6 +61,13 @@ constexpr std::uint32_t kNodeInfoReplySuppressMs = 60000;
 constexpr std::uint32_t kKeyVerificationTimeoutMs = 60000;
 constexpr std::size_t kMaxPkiNodes = 16;
 constexpr std::size_t kPkiKeySize = 32;
+template <class Event>
+void publish_meshtastic_key_event(Event* event)
+{
+    event->has_protocol = true;
+    event->protocol = ::chat::MeshProtocol::Meshtastic;
+    ::sys::EventBus::publish(event, 0);
+}
 
 struct MeshtasticAirPlan
 {
@@ -785,7 +802,7 @@ bool build_meshtastic_wire_packet(const std::uint8_t* data_payload,
     entry.segments.push_back({
         .kind = ::platform::linux_runtime::PacketLogSegmentKind::Checksum,
         .label = "crc",
-        .text = "SX1262",
+        .text = "radio",
     });
     return entry;
 }
@@ -844,6 +861,34 @@ void append_mqtt_system_log(const char* title,
     {
         return to_sx126x_lora_config(
             ::chat::meshtastic::deriveRadioConfig(config));
+    }
+    if (protocol == ::chat::MeshProtocol::MeshCore)
+    {
+        ::platform::linux_runtime::Sx126xLoRaConfig out;
+        out.freq_mhz = config.meshcore_freq_mhz;
+        out.bw_khz = config.meshcore_bw_khz;
+        out.sf = config.meshcore_sf;
+        out.cr = config.meshcore_cr;
+        out.tx_power_dbm = std::clamp<std::int8_t>(config.tx_power, -9, 22);
+        out.preamble_len = 16;
+        out.sync_word = 0x12;
+        out.crc_len = 2;
+        return out;
+    }
+
+    if (protocol == ::chat::MeshProtocol::Reticulum)
+    {
+        ::platform::linux_runtime::Sx126xLoRaConfig out;
+        out.freq_mhz = config.override_frequency_mhz > 0 ? config.override_frequency_mhz : 869.525f;
+        out.bw_khz = config.bandwidth_khz > 0 ? config.bandwidth_khz : 125.0f;
+        out.sf = std::clamp<uint8_t>(config.spread_factor ? config.spread_factor : 9, 5, 12);
+        out.cr = std::clamp<uint8_t>(config.coding_rate ? config.coding_rate : 5, 5, 8);
+        out.tx_power_dbm = std::clamp<int8_t>(config.tx_power ? config.tx_power : 17, -9, 22);
+        out.preamble_len = ::chat::rnode::recommendPreambleSymbols(
+            static_cast<uint32_t>(std::lround(out.bw_khz * 1000.0f)), out.sf, out.cr);
+        out.sync_word = 0x12;
+        out.crc_len = 2;
+        return out;
     }
 
     auto out = ::platform::linux_runtime::Sx126xRadio::
@@ -1004,15 +1049,160 @@ void append_meshtastic_air_log(
 
 } // namespace
 
+struct LinuxRawLoraMeshAdapter::MqttScratch
+{
+    LinuxMeshMqttBridge::Incoming incoming;
+    ::platform::linux_runtime::RadioPacket packet;
+    meshtastic_Data decoded{};
+    std::array<uint8_t, 256> plaintext{}, wire{};
+};
+
+bool LinuxRawLoraMeshAdapter::mqttActive() const { return mqtt_ && mqtt_->active(); }
+void LinuxRawLoraMeshAdapter::setMqttBridge(LinuxMeshMqttBridge* bridge)
+{
+    if (mqtt_ == bridge) return;
+    resetTransportContext();
+    mqtt_ = bridge;
+    if (bridge && !mqtt_scratch_) mqtt_scratch_ = std::make_unique<MqttScratch>();
+}
+void LinuxRawLoraMeshAdapter::resetTransportContext()
+{
+    suspendRadio();
+    incoming_text_.clear();
+    incoming_data_.clear();
+    raw_packets_.clear();
+    meshcore_seen_ = {};
+    meshcore_seen_cursor_ = 0;
+}
+void LinuxRawLoraMeshAdapter::networkMetadata(::chat::RxMeta& metadata) const
+{
+    if (!mqttActive()) return;
+    metadata.origin = ::chat::RxOrigin::External;
+    metadata.direct = false;
+    metadata.hop_count = metadata.hop_limit = 0xFF;
+    metadata.rssi_dbm_x10 = metadata.snr_db_x10 = std::numeric_limits<int16_t>::min();
+    metadata.freq_hz = metadata.bw_hz = 0;
+    metadata.sf = metadata.cr = 0;
+}
+void LinuxRawLoraMeshAdapter::consumeMqtt()
+{
+    if (!mqtt_scratch_) return;
+    auto& scratch = *mqtt_scratch_;
+    for (unsigned count = 0; count < 4 && mqtt_->receive(scratch.incoming); ++count)
+    {
+        const auto& incoming = scratch.incoming;
+        if (incoming.kind == LinuxMeshMqttBridge::Incoming::Kind::Meshtastic)
+        {
+            if (active_protocol_ == ::chat::MeshProtocol::Meshtastic && incoming.meshtastic.packet)
+                (void)consumeMeshtasticMqtt(*incoming.meshtastic.packet, incoming.meshtastic.channel, incoming.meshtastic.pki);
+        }
+        else if (incoming.kind == LinuxMeshMqttBridge::Incoming::Kind::MeshCore && active_protocol_ == ::chat::MeshProtocol::MeshCore)
+        {
+            scratch.packet = {};
+            scratch.packet.size = incoming.meshcore.size;
+            scratch.packet.rssi_dbm = -127;
+            std::memcpy(scratch.packet.data.data(), incoming.meshcore.bytes.data(), incoming.meshcore.size);
+            // Internet frames never enter raw-radio VMP ingress or RF forwarding.
+            if (!parseMeshCoreAdvert(scratch.packet) && !parseMeshCoreDirect(scratch.packet)) (void)parseMeshCoreGroup(scratch.packet);
+            parseMeshCoreControl(scratch.packet);
+        }
+        else if (incoming.kind == LinuxMeshMqttBridge::Incoming::Kind::Vmp && active_protocol_ == ::chat::MeshProtocol::Meshtastic && mqtt_voice_sink_)
+        {
+            (void)mqtt_voice_sink_(incoming.vmp.data(), incoming.vmp_size);
+        }
+    }
+}
+bool LinuxRawLoraMeshAdapter::consumeMeshtasticMqtt(const meshtastic_MeshPacket& packet, ::chat::ChannelId channel, bool pki)
+{
+    if (!mqtt_scratch_ || packet.from == self_node_id_) return false;
+    const auto plan = build_meshtastic_air_plan(config_);
+    size_t key_size = 0;
+    const auto* key = psk_for_channel(plan, channel, &key_size);
+    ::chat::meshtastic::PacketHeaderWire header{};
+    header.from = packet.from;
+    header.to = packet.to;
+    header.id = packet.id;
+    header.channel = pki ? 0 : channel_hash_for(plan, channel);
+    header.flags = (packet.hop_limit & 7) | ((packet.hop_start & 7) << 5) | ::chat::meshtastic::PACKET_FLAGS_VIA_MQTT_MASK |
+                   (packet.want_ack ? ::chat::meshtastic::PACKET_FLAGS_WANT_ACK_MASK : 0);
+    header.next_hop = static_cast<uint8_t>(packet.next_hop);
+    header.relay_node = static_cast<uint8_t>(packet.relay_node);
+    auto& scratch = *mqtt_scratch_;
+    const meshtastic_Data* decoded = nullptr;
+    bool encrypted = false;
+    if (packet.which_payload_variant == meshtastic_MeshPacket_decoded_tag)
+    {
+        if (pki || packet.pki_encrypted) return false;
+        decoded = &packet.decoded;
+    }
+    else if (packet.which_payload_variant == meshtastic_MeshPacket_encrypted_tag)
+    {
+        size_t size = scratch.plaintext.size();
+        if (pki)
+        {
+            if (header.to != self_node_id_ || !decryptPkiPayload(header.from, header.id, packet.encrypted.bytes, packet.encrypted.size, scratch.plaintext.data(), &size)) return false;
+        }
+        else if (!::chat::meshtastic::decryptPayload(header, packet.encrypted.bytes, packet.encrypted.size, key, key_size, scratch.plaintext.data(), &size)) return false;
+        auto stream = pb_istream_from_buffer(scratch.plaintext.data(), size);
+        std::memset(&scratch.decoded, 0, sizeof(scratch.decoded));
+        if (!pb_decode(&stream, meshtastic_Data_fields, &scratch.decoded)) return false;
+        decoded = &scratch.decoded;
+        encrypted = true;
+    }
+    if (!decoded || decoded->portnum == meshtastic_PortNum_ADMIN_APP ||
+        (decoded->portnum == meshtastic_PortNum_KEY_VERIFICATION_APP && (!pki || !encrypted))) return false;
+    scratch.packet = {};
+    scratch.packet.rssi_dbm = -127;
+    auto metadata = make_meshtastic_rx_meta(header, scratch.packet);
+    networkMetadata(metadata);
+    return consumeMeshtasticData(header, *decoded, scratch.packet, channel, metadata, encrypted, pki ? nullptr : key, pki ? 0 : key_size);
+}
+bool LinuxRawLoraMeshAdapter::transmitMeshtasticFrame(const uint8_t* bytes, size_t size)
+{
+    if (!mqttActive()) return radio_.transmit(bytes, size);
+    if (!mqtt_scratch_) return false;
+    ::chat::meshtastic::PacketHeaderWire header{};
+    size_t payload_size = mqtt_scratch_->wire.size();
+    if (!::chat::meshtastic::parseWirePacket(bytes, size, &header, mqtt_scratch_->wire.data(), &payload_size)) return false;
+    if (header.channel == 0)
+        return mqtt_->publishMeshtasticPayload(header, ::chat::ChannelId::PRIMARY, mqtt_scratch_->wire.data(), payload_size, true);
+    const auto plan = build_meshtastic_air_plan(config_);
+    ::chat::ChannelId channel;
+    if (!channel_from_hash(plan, header.channel, &channel)) return false;
+    size_t key_size = 0;
+    const auto* key = psk_for_channel(plan, channel, &key_size);
+    size_t plain_size = mqtt_scratch_->plaintext.size();
+    if (!::chat::meshtastic::decryptPayload(header, mqtt_scratch_->wire.data(), payload_size, key, key_size, mqtt_scratch_->plaintext.data(), &plain_size)) return false;
+    return mqtt_->publishMeshtasticPayload(header, channel, mqtt_scratch_->plaintext.data(), plain_size, false);
+}
+
 LinuxRawLoraMeshAdapter::LinuxRawLoraMeshAdapter(::chat::NodeId self_node_id)
-    : radio_(::platform::linux_runtime::Sx126xRadio::instance()),
+    : LinuxRawLoraMeshAdapter(::platform::linux_runtime::mesh_packet_radio(), self_node_id)
+{
+}
+
+LinuxRawLoraMeshAdapter::LinuxRawLoraMeshAdapter(::platform::linux_runtime::IPacketRadio& radio, ::chat::NodeId self_node_id)
+    : LinuxRawLoraMeshAdapter(radio, self_node_id, nullptr)
+{
+}
+
+LinuxRawLoraMeshAdapter::LinuxRawLoraMeshAdapter(::platform::linux_runtime::IPacketRadio& radio, ::chat::NodeId self_node_id, Clock retry_clock)
+    : radio_(radio),
+      retry_clock_(retry_clock ? retry_clock : ::sys::millis_now),
       self_node_id_(self_node_id)
 {
 }
 
 bool LinuxRawLoraMeshAdapter::hardwareCandidatePresent()
 {
-    return ::platform::linux_runtime::Sx126xRadio::hardwareCandidatePresent();
+    return ::platform::linux_runtime::mesh_packet_radio().hardwareCandidatePresent();
+}
+
+LinuxRawLoraMeshAdapter::~LinuxRawLoraMeshAdapter()
+{
+    volatile uint8_t* bytes = pki_private_key_.data();
+    for (size_t i = 0; i < pki_private_key_.size(); ++i) bytes[i] = 0;
+    if (radio_acquired_) radio_.release();
 }
 
 bool LinuxRawLoraMeshAdapter::begin()
@@ -1022,8 +1212,24 @@ bool LinuxRawLoraMeshAdapter::begin()
 
 void LinuxRawLoraMeshAdapter::tick()
 {
+    updateMeshCoreVerification();
+    meshcore_wire::DirectOutcome expired;
+    while (meshcore_direct_.expire(::sys::millis_now(), expired))
+        publishMeshCoreDirectOutcome(expired, ::chat::MessageStatus::Failed, true);
     if (!ensureRadioReady())
     {
+        return;
+    }
+    if (mqttActive())
+    {
+        consumeMqtt();
+        if (active_protocol_ == ::chat::MeshProtocol::MeshCore && tx_enabled_)
+        {
+            meshcore_wire::Frame reply;
+            const auto now = ::sys::millis_now();
+            if (meshcore_direct_.takeReply(now, !meshcore_discovery_.listening(now), reply) || meshcore_discovery_.takeResponse(now, reply))
+                (void)transmitMeshCoreFrame(reply.bytes.data(), reply.size);
+        }
         return;
     }
     for (int i = 0; i < 4; ++i)
@@ -1033,6 +1239,10 @@ void LinuxRawLoraMeshAdapter::tick()
         {
             break;
         }
+        if (packet.size > packet.data.size()) continue;
+        // VMP control is a separate raw carrier, never a generic mesh payload.
+        // The core classifier also consumes malformed envelopes/full sinks.
+        if (voice_control_ingress_.tryConsume(packet.data.data(), packet.size, {packet.rssi_dbm, packet.snr_db})) continue;
         const bool meshtastic =
             active_protocol_ == ::chat::MeshProtocol::Meshtastic;
         ::platform::linux_runtime::append_packet_log(
@@ -1048,14 +1258,46 @@ void LinuxRawLoraMeshAdapter::tick()
                       packet.data.data(),
                       packet.size,
                       "LoRa raw RX",
-                      "SX1262 packet received."));
+                      "Linux LoRa packet received."));
+        if (raw_packets_.size() >= 64) raw_packets_.pop_front();
         raw_packets_.push_back(packet);
-        const bool parsed_trailmate = parseFrame(packet);
-        if (!parsed_trailmate && meshtastic &&
-            !parseMeshtasticPacket(packet))
+        if (active_protocol_ == ::chat::MeshProtocol::MeshCore)
+        {
+            if (meshcore_identity_.ready() &&
+                meshcore_repeater_.receive(config_, meshcore_identity_.publicKey(), packet,
+                                           ::sys::millis_now(), random_packet_id_seed()) == meshcore_wire::Repeater::Disposition::Transit)
+                continue;
+            if (!parseMeshCoreAdvert(packet) && !parseMeshCoreDirect(packet)) (void)parseMeshCoreGroup(packet);
+            parseMeshCoreControl(packet);
+        }
+        else if (active_protocol_ == ::chat::MeshProtocol::Reticulum && reticulum_sink_)
+        {
+            reticulum_rx_.size = reticulum_rx_.data.size();
+            bool complete = false;
+            if (packet.size <= packet.data.size() &&
+                ::chat::rnode::feedAirPacket(&reticulum_reassembly_, packet.data.data(), packet.size,
+                                             reticulum_rx_.data.data(), &reticulum_rx_.size, &complete) &&
+                complete)
+            {
+                reticulum_rx_.rssi_dbm = packet.rssi_dbm;
+                reticulum_rx_.snr_db = packet.snr_db;
+                reticulum_sink_(reticulum_context_, reticulum_rx_);
+            }
+        }
+        else if (meshtastic && !parseMeshtasticPacket(packet))
         {
             append_meshtastic_air_log(packet);
         }
+    }
+    if (active_protocol_ == ::chat::MeshProtocol::MeshCore && tx_enabled_ && radio_.isOnline())
+    {
+        meshcore_wire::Frame response;
+        const auto now = ::sys::millis_now();
+        const bool reply = meshcore_direct_.takeReply(now, !meshcore_discovery_.listening(now), response);
+        if ((reply || meshcore_discovery_.takeResponse(now, response) ||
+             (!meshcore_discovery_.listening(now) && meshcore_repeater_.take(now, response))) &&
+            !transmitMeshCoreFrame(response.bytes.data(), response.size))
+            append_lora_system_log("MeshCore scheduled response failed", radio_.lastError());
     }
     logRadioStatsChanges();
     logRxMonitorHeartbeat();
@@ -1075,8 +1317,119 @@ bool LinuxRawLoraMeshAdapter::takePendingSendResult(::chat::MessageId& out_msg_i
     return true;
 }
 
+void LinuxRawLoraMeshAdapter::setSendResultSink(SendResultSink sink, void* context)
+{
+    send_result_sink_ = sink;
+    send_result_context_ = context;
+}
+void LinuxRawLoraMeshAdapter::setReticulumPacketSink(ReticulumPacketSink sink, void* context)
+{
+    reticulum_sink_ = sink;
+    reticulum_context_ = context;
+}
+bool LinuxRawLoraMeshAdapter::sendReticulumControl(const uint8_t* bytes, size_t size)
+{
+    if (active_protocol_ != ::chat::MeshProtocol::Reticulum || !tx_enabled_ || !bytes || !size ||
+        size > ::chat::reticulum::kReticulumMtu || !ensureRadioReady()) return false;
+    const auto sequence = reticulum_sequence_;
+    reticulum_sequence_ = static_cast<uint8_t>((sequence + 1U) & 0x0FU);
+    if (!::chat::rnode::encodeAirPacketSet(bytes, size, sequence, &reticulum_tx_)) return false;
+    return radio_.transmit(reticulum_tx_.first, reticulum_tx_.first_len) &&
+           (reticulum_tx_.count == 1 || radio_.transmit(reticulum_tx_.second, reticulum_tx_.second_len));
+}
+void LinuxRawLoraMeshAdapter::setVoiceControlSink(::chat::voice::vmp::IControlEnvelopeSink* sink)
+{
+    voice_control_ingress_.setSink(sink);
+}
+void LinuxRawLoraMeshAdapter::setMessageIdSource(MessageIdSource source, void* context)
+{
+    message_id_source_ = source;
+    message_id_context_ = context;
+}
+void LinuxRawLoraMeshAdapter::publishSendResult(::chat::MessageId id, ::chat::MeshProtocol protocol,
+                                                ::chat::MessageStatus status, ::chat::delivery::SendFailureKind failure)
+{
+    if (send_result_sink_) send_result_sink_(send_result_context_, id, protocol, status, failure);
+    else ::sys::EventBus::publish(new ::sys::ChatSendResultEvent(id, status, protocol, failure), 0);
+}
+std::vector<::chat::NodeId> LinuxRawLoraMeshAdapter::encryptedPeerIds() const
+{
+    std::vector<::chat::NodeId> peers;
+    if (active_protocol_ == ::chat::MeshProtocol::MeshCore)
+        for (const auto& peer : meshcore_peer_keys_) peers.push_back(peer.first);
+    else if (active_protocol_ == ::chat::MeshProtocol::Meshtastic)
+        for (const auto& peer : node_public_keys_) peers.push_back(peer.first);
+    return peers;
+}
+std::vector<::mesh::PeerPublicKey> LinuxRawLoraMeshAdapter::peerPublicKeys() const
+{
+    std::vector<::mesh::PeerPublicKey> keys;
+    const auto append = [&](const auto& source)
+    {
+        keys.reserve(source.size());
+        for (const auto& [node, bytes] : source)
+        {
+            ::mesh::PeerPublicKey key;
+            key.node_id = ::mesh::NodeId{node};
+            std::copy(bytes.begin(), bytes.end(), key.public_key);
+            keys.push_back(key);
+        }
+    };
+    if (active_protocol_ == ::chat::MeshProtocol::Meshtastic) append(node_public_keys_);
+    else if (active_protocol_ == ::chat::MeshProtocol::MeshCore) append(meshcore_peer_keys_);
+    // Key discovery alone must never publish user verification.
+    return keys;
+}
+void LinuxRawLoraMeshAdapter::cancelPendingSends()
+{
+    meshcore_repeater_.reset();
+    meshcore_direct_routes_ = {};
+    cancelMeshCoreVerification();
+    meshcore_wire::DirectOutcome cancelled;
+    while (meshcore_direct_.cancel(cancelled))
+        publishMeshCoreDirectOutcome(cancelled, ::chat::MessageStatus::Failed, false);
+    meshcore_direct_.clearReplies();
+    meshcore_discovery_.reset();
+}
+void LinuxRawLoraMeshAdapter::suspendRadio()
+{
+    reticulum_reassembly_.reset();
+    cancelPendingSends();
+    if (kv_state_ != KeyVerificationState::Idle)
+    {
+        auto* failed = new ::sys::KeyVerificationFinalEvent(kv_remote_node_, kv_nonce_, true, "");
+        failed->runtime_failure = true;
+        publish_meshtastic_key_event(failed);
+        resetKeyVerificationState();
+    }
+    if (radio_acquired_) radio_.release();
+    radio_acquired_ = started_ = false;
+    radio_retry_.reset();
+    last_status_ = "Radio disabled by user";
+}
+
 ::chat::MeshCapabilities LinuxRawLoraMeshAdapter::getCapabilities() const
 {
+    if (active_protocol_ != ::chat::MeshProtocol::Meshtastic)
+    {
+        ::chat::MeshCapabilities capabilities{};
+        capabilities.supports_broadcast_appdata = active_protocol_ == ::chat::MeshProtocol::MeshCore;
+        capabilities.provides_appdata_sender = active_protocol_ == ::chat::MeshProtocol::MeshCore;
+        if (active_protocol_ == ::chat::MeshProtocol::MeshCore)
+        {
+            capabilities.supports_discovery_actions = true;
+            capabilities.supports_node_info = true;
+            capabilities.supports_node_info_query = true;
+            capabilities.supports_node_info_reply = true;
+            capabilities.supports_node_info_reannounce = true;
+            capabilities.supports_unicast_text = true;
+            capabilities.supports_unicast_appdata = true;
+            capabilities.supports_appdata_ack = true;
+            capabilities.supports_protocol_ack_tracking = true;
+            // BLE identity import/export is a separate, currently unbound port.
+        }
+        return capabilities;
+    }
     return {
         .supports_unicast_text = true,
         .supports_unicast_appdata = true,
@@ -1113,6 +1466,13 @@ bool LinuxRawLoraMeshAdapter::sendTextWithId(::chat::ChannelId channel,
                                              ::chat::MessageId* out_msg_id,
                                              ::chat::NodeId peer)
 {
+    meshcore_send_failure_ = ::chat::MeshOperationFailure::Unknown;
+    if (active_protocol_ == ::chat::MeshProtocol::MeshCore &&
+        (text.empty() || static_cast<uint8_t>(channel) >= ::chat::kMeshCoreChannelMaxCount))
+    {
+        meshcore_send_failure_ = ::chat::MeshOperationFailure::InvalidInput;
+        return false;
+    }
     if (text.empty())
     {
         return false;
@@ -1144,18 +1504,24 @@ bool LinuxRawLoraMeshAdapter::sendTextWithId(::chat::ChannelId channel,
                                     text.size(),
                                     false,
                                     false)
-            : sendFrame(PacketKind::Text,
-                        channel,
-                        dest,
-                        msg_id,
-                        0,
-                        bytes,
-                        text.size());
+            : active_protocol_ == ::chat::MeshProtocol::MeshCore &&
+                  ((dest != kBroadcastNodeId)
+                       ? sendMeshCoreDirect(dest, msg_id, 0, bytes, text.size(), true, true)
+                       : sendMeshCoreGroup(channel, dest, 0, bytes, text.size(), true));
     if (msg_id != 0)
     {
         pending_results_.push_back({.msg_id = msg_id, .ok = ok});
     }
     return ok;
+}
+
+::chat::MeshSendResult LinuxRawLoraMeshAdapter::sendTextDetailed(::chat::ChannelId channel,
+                                                                 const std::string& text, ::chat::MessageId forced_msg_id, ::chat::NodeId peer)
+{
+    ::chat::MessageId id = 0;
+    const bool sent = sendTextWithId(channel, text, forced_msg_id, &id, peer);
+    return sent ? ::chat::MeshSendResult::success(id)
+                : ::chat::MeshSendResult::fail(meshcore_send_failure_, id);
 }
 
 bool LinuxRawLoraMeshAdapter::pollIncomingText(::chat::MeshIncomingText* out)
@@ -1182,6 +1548,8 @@ bool LinuxRawLoraMeshAdapter::sendAppData(::chat::ChannelId channel,
                                           ::chat::MessageId packet_id,
                                           bool want_response)
 {
+    if (active_protocol_ == ::chat::MeshProtocol::MeshCore &&
+        static_cast<uint8_t>(channel) >= ::chat::kMeshCoreChannelMaxCount) return false;
     if (payload == nullptr || len == 0)
     {
         return false;
@@ -1208,13 +1576,355 @@ bool LinuxRawLoraMeshAdapter::sendAppData(::chat::ChannelId channel,
                                      want_ack,
                                      want_response);
     }
-    return sendFrame(PacketKind::AppData,
-                     channel,
-                     effective_dest,
-                     effective_id,
-                     portnum,
-                     payload,
-                     len);
+    if (active_protocol_ == ::chat::MeshProtocol::MeshCore && !want_response)
+    {
+        if (effective_dest != kBroadcastNodeId)
+            return sendMeshCoreDirect(effective_dest, 0, portnum, payload, len, want_ack, false);
+        if (!want_ack) return sendMeshCoreGroup(channel, effective_dest, portnum, payload, len, false);
+    }
+    return false;
+}
+
+bool LinuxRawLoraMeshAdapter::rememberMeshCoreSignature(uint32_t signature)
+{
+    const uint32_t now = ::sys::millis_now();
+    for (const auto& seen : meshcore_seen_)
+        if (seen.valid && seen.signature == signature && uint32_t(now - seen.timestamp) < 60000) return false;
+    meshcore_seen_[meshcore_seen_cursor_] = {signature, now, true};
+    meshcore_seen_cursor_ = (meshcore_seen_cursor_ + 1) % meshcore_seen_.size();
+    return true;
+}
+
+void LinuxRawLoraMeshAdapter::publishMeshCoreDirectOutcome(const meshcore_wire::DirectOutcome& outcome,
+                                                           ::chat::MessageStatus status, bool timeout)
+{
+    if (timeout)
+    {
+        const auto peer = meshcore_peer_keys_.find(outcome.peer);
+        if (peer != meshcore_peer_keys_.end()) meshcore_direct_routes_.forget(peer->second);
+    }
+    if (!outcome.message) return;
+    // A prompt ACK may arrive before the UI drains the queued physical-send result.
+    pending_results_.erase(std::remove_if(pending_results_.begin(), pending_results_.end(),
+                                          [&](const PendingResult& item)
+                                          { return item.msg_id == outcome.message; }),
+                           pending_results_.end());
+    publishSendResult(outcome.message, ::chat::MeshProtocol::MeshCore, status,
+                      timeout ? ::chat::delivery::SendFailureKind::AckTimeout : ::chat::delivery::SendFailureKind::Unknown);
+}
+
+bool LinuxRawLoraMeshAdapter::sendMeshCoreDirect(::chat::NodeId peer, ::chat::MessageId message,
+                                                 uint32_t port, const uint8_t* bytes, std::size_t size, bool want_ack, bool text)
+{
+    auto reject = [&](::chat::MeshOperationFailure failure)
+    { meshcore_send_failure_ = failure; return false; };
+    using Failure = ::chat::MeshOperationFailure;
+    if (!tx_enabled_) return reject(Failure::TxDisabled);
+    if (!meshcore_identity_.ready()) return reject(Failure::LocalIdentityMissing);
+    if (!peer || peer == kBroadcastNodeId || peer == getNodeId() || !bytes || !size) return reject(Failure::InvalidInput);
+    if (meshcore_discovery_.listening(::sys::millis_now())) return reject(Failure::Busy);
+    const auto key = meshcore_peer_keys_.find(peer);
+    if (key == meshcore_peer_keys_.end()) return reject(Failure::PeerKeyMissing);
+    if (!ensureRadioReady()) return reject(Failure::RadioOffline);
+    meshcore_wire::DirectOutcome expired;
+    while (meshcore_direct_.expire(::sys::millis_now(), expired))
+        publishMeshCoreDirectOutcome(expired, ::chat::MessageStatus::Failed, true);
+    meshcore_wire::Frame frame;
+    uint32_t ack = 0;
+    const auto profile = config_.meshcore_send_profile == ::chat::MeshCorePayloadSendProfile::V1Only
+                             ? ::chat::meshcore::PayloadProfile::V1
+                             : ::chat::meshcore::PayloadProfile::V2;
+    const bool encoded = text
+                             ? meshcore_wire::encodeDirectText(meshcore_identity_, key->second, profile,
+                                                               std::string(reinterpret_cast<const char*>(bytes), size), now_seconds(), frame, ack)
+                             : meshcore_wire::encodeDirectData(meshcore_identity_, key->second, profile,
+                                                               port, bytes, size, want_ack, frame, ack);
+    if (!encoded) return reject(Failure::EncodeFailed);
+    if (!mqttActive()) (void)meshcore_direct_routes_.apply(key->second, profile, ::sys::millis_now(), frame);
+    if (ack && !meshcore_direct_.canTrack(peer, ack, message)) return reject(Failure::Busy);
+    if (!transmitMeshCoreFrame(frame.bytes.data(), frame.size)) return reject(Failure::RadioTxFailed);
+    if (ack) (void)meshcore_direct_.track(peer, ack, message, ::sys::millis_now());
+    meshcore_send_failure_ = Failure::None;
+    return true;
+}
+
+bool LinuxRawLoraMeshAdapter::parseMeshCoreDirect(const ::platform::linux_runtime::RadioPacket& packet)
+{
+    if (packet.size > packet.data.size()) return false;
+    ::chat::meshcore::ParsedPacket parsed;
+    if (!::chat::meshcore::parsePacket(packet.data.data(), packet.size, &parsed)) return false;
+    const uint8_t* short_ack = nullptr;
+    if (parsed.payload_type == 3 && parsed.payload_len == 4) short_ack = parsed.payload;
+    else if (parsed.payload_type == 10 && parsed.payload_len == 5 && (parsed.payload[0] & 0x0F) == 3)
+        short_ack = parsed.payload + 1;
+    if (short_ack)
+    {
+        meshcore_wire::DirectOutcome delivered;
+        if (meshcore_direct_.acknowledgeLegacy(read_u32(short_ack), ::sys::millis_now(), delivered))
+            publishMeshCoreDirectOutcome(delivered, ::chat::MessageStatus::Delivered, false);
+        return true;
+    }
+    if (parsed.payload_type != 2 && parsed.payload_type != 7 && parsed.payload_type != 8) return false;
+    const auto profile = ::chat::meshcore::payloadProfileFromVersion(parsed.payload_ver);
+    const auto hashes = ::chat::meshcore::payloadHashBytes(profile);
+    if (parsed.payload_len < 2 * hashes || std::memcmp(parsed.payload, meshcore_identity_.publicKey().data(), hashes)) return false;
+    for (const auto& peer : meshcore_peer_keys_)
+    {
+        if (std::memcmp(parsed.payload + hashes, peer.second.data(), hashes)) continue;
+        meshcore_wire::DirectIncoming message;
+        if (!meshcore_wire::decodeDirect(meshcore_identity_, peer.second, packet.data.data(), packet.size, message)) continue;
+        if (mqttActive()) message.return_path_size = 0;
+        const auto now = ::sys::millis_now();
+        if (message.kind == meshcore_wire::DirectKind::Ack)
+        {
+            meshcore_wire::DirectOutcome delivered;
+            if (meshcore_direct_.acknowledge(peer.first, message.ack, now, delivered))
+            {
+                if (!mqttActive()) (void)meshcore_direct_routes_.remember(peer.second, message, now);
+                publishMeshCoreDirectOutcome(delivered, ::chat::MessageStatus::Delivered, false);
+            }
+            return true;
+        }
+        if (tx_enabled_ && message.want_ack)
+        {
+            meshcore_wire::Frame reply;
+            if (meshcore_wire::encodeDirectAck(meshcore_identity_, peer.second, message, reply))
+                (void)meshcore_direct_.enqueue(peer.first, message.signature, reply, now);
+        }
+        if (!rememberMeshCoreSignature(message.signature)) return true;
+        if (message.kind == meshcore_wire::DirectKind::Data && message.port == meshcore_wire::Verification::port)
+        {
+            receiveMeshCoreVerification(peer.first, message.payload.data(), message.size);
+            return true;
+        }
+        ::chat::RxMeta meta{};
+        meta.origin = ::chat::RxOrigin::Mesh;
+        meta.rx_timestamp_s = now_seconds();
+        meta.rx_timestamp_ms = now;
+        meta.time_source = ::chat::RxTimeSource::DeviceUtc;
+        meta.direct = true;
+        meta.hop_count = static_cast<uint8_t>(parsed.path_hop_count);
+        meta.rssi_dbm_x10 = static_cast<int16_t>(packet.rssi_dbm * 10);
+        meta.snr_db_x10 = static_cast<int16_t>(packet.snr_db * 10);
+        meta.freq_hz = packet.freq_hz;
+        meta.bw_hz = packet.bw_hz;
+        meta.sf = packet.sf;
+        meta.cr = packet.cr;
+        networkMetadata(meta);
+        if (message.kind == meshcore_wire::DirectKind::Text)
+        {
+            ::chat::MeshIncomingText incoming{};
+            incoming.from = peer.first;
+            incoming.to = getNodeId();
+            incoming.msg_id = message.signature;
+            incoming.channel = ::chat::ChannelId::PRIMARY;
+            incoming.timestamp = message.timestamp >= 1577836800U ? message.timestamp : meta.rx_timestamp_s;
+            incoming.encrypted = true;
+            incoming.rx_meta = meta;
+            incoming.text.assign(reinterpret_cast<const char*>(message.payload.data()), message.size);
+            if (incoming_text_.size() >= 64) incoming_text_.pop_front();
+            incoming_text_.push_back(std::move(incoming));
+        }
+        else
+        {
+            ::chat::MeshIncomingData incoming;
+            incoming.from = peer.first;
+            incoming.to = getNodeId();
+            incoming.portnum = message.port;
+            incoming.packet_id = message.signature;
+            incoming.want_response = message.want_ack;
+            incoming.payload.assign(message.payload.begin(), message.payload.begin() + message.size);
+            incoming.rx_meta = meta;
+            if (consumeMeshCoreNodeInfo(incoming)) return true;
+            if (incoming_data_.size() >= 64) incoming_data_.pop_front();
+            incoming_data_.push_back(std::move(incoming));
+        }
+        return true;
+    }
+    return false;
+}
+
+bool LinuxRawLoraMeshAdapter::transmitMeshCoreFrame(const uint8_t* bytes, size_t size)
+{
+    const bool sent = mqttActive() ? mqtt_->publishMeshCore(bytes, size) : radio_.transmit(bytes, size);
+    if (sent) meshcore_repeater_.sent(bytes, size, ::sys::millis_now());
+    return sent;
+}
+
+bool LinuxRawLoraMeshAdapter::sendMeshCoreAdvert(bool broadcast)
+{
+    if (!tx_enabled_ || meshcore_discovery_.listening(::sys::millis_now()) || !ensureRadioReady()) return false;
+    meshcore_wire::Frame frame;
+    return meshcore_wire::encodeAdvert(meshcore_identity_, config_,
+                                       short_name_.empty() ? long_name_ : short_name_,
+                                       now_seconds(), broadcast, frame) &&
+           transmitMeshCoreFrame(frame.bytes.data(), frame.size);
+}
+
+::chat::MeshActionResult LinuxRawLoraMeshAdapter::startMeshCoreDiscovery()
+{
+    using Failure = ::chat::MeshOperationFailure;
+    if (!tx_enabled_) return ::chat::MeshActionResult::fail(Failure::TxDisabled);
+    if (!meshcore_identity_.ready()) return ::chat::MeshActionResult::fail(Failure::LocalIdentityMissing);
+    if (meshcore_discovery_.listening(::sys::millis_now())) return ::chat::MeshActionResult::fail(Failure::Busy);
+    if (!ensureRadioReady()) return ::chat::MeshActionResult::fail(Failure::RadioOffline);
+    uint32_t tag = 0;
+    for (unsigned attempt = 0; attempt < 4 && !tag; ++attempt)
+        if (!secure_random_bytes(reinterpret_cast<uint8_t*>(&tag), sizeof(tag)))
+            return ::chat::MeshActionResult::fail(Failure::CryptoFailed);
+    meshcore_wire::Frame request;
+    if (!tag || !meshcore_discovery_.makeRequest(config_, tag, request)) return ::chat::MeshActionResult::fail(Failure::EncodeFailed);
+    if (!transmitMeshCoreFrame(request.bytes.data(), request.size)) return ::chat::MeshActionResult::fail(Failure::RadioTxFailed);
+    meshcore_discovery_.arm(tag, ::sys::millis_now());
+    append_lora_system_log("MeshCore local scan started", "Collecting matching local discovery responses for five seconds.");
+    return ::chat::MeshActionResult::success();
+}
+
+void LinuxRawLoraMeshAdapter::parseMeshCoreControl(const ::platform::linux_runtime::RadioPacket& packet)
+{
+    meshcore_wire::DiscoveredPeer peer;
+    if (!meshcore_discovery_.receive(config_, meshcore_identity_.publicKey(), packet,
+                                     ::sys::millis_now(), now_seconds(), random_packet_id_seed(), &peer)) return;
+    if (meshcore_peer_keys_.find(peer.node) != meshcore_peer_keys_.end())
+    {
+        // Preserve the name learned from a signed advertisement.
+        ::sys::EventBus::publish(new ::sys::NodeProtocolUpdateEvent(peer.node,
+                                                                    now_seconds(), static_cast<uint8_t>(::chat::MeshProtocol::MeshCore)),
+                                 0);
+        return;
+    }
+    char name[16]{};
+    std::snprintf(name, sizeof(name), "MC-%08lX", static_cast<unsigned long>(peer.node));
+    auto* update = new ::sys::NodeInfoUpdateEvent(peer.node, name, name,
+                                                  static_cast<float>(peer.snr_qdb) / 4.0f, packet.rssi_dbm, now_seconds(),
+                                                  static_cast<uint8_t>(::chat::MeshProtocol::MeshCore), peer.role, 0);
+    // Discovery controls are unsigned; do not learn a trusted encryption key.
+    update->via_mqtt = mqttActive();
+    ::sys::EventBus::publish(update, 0);
+}
+
+bool LinuxRawLoraMeshAdapter::parseMeshCoreAdvert(const ::platform::linux_runtime::RadioPacket& packet)
+{
+    ::mesh::MeshProtocolEvent advert;
+    if (!meshcore_wire::decodeAdvert(packet.data.data(), packet.size, advert) ||
+        advert.peer.value == getNodeId()) return false;
+    const auto peer = advert.peer.value;
+    const auto existing = meshcore_peer_keys_.find(peer);
+    if (existing != meshcore_peer_keys_.end() &&
+        (std::memcmp(existing->second.data(), advert.peer_key.public_key, 32) ||
+         advert.advert.timestamp < meshcore_peer_epochs_[peer])) return false;
+    ::chat::meshcore::ParsedPacket parsed;
+    if (!::chat::meshcore::parsePacket(packet.data.data(), packet.size, &parsed) ||
+        !rememberMeshCoreSignature(::chat::meshcore::packetSignature(4, 0, parsed.payload, parsed.payload_len))) return false;
+    ::mesh::PeerPublicKey key = advert.peer_key;
+    key.updated_at_ms = advert.advert.timestamp; // This protocol's persisted ordering value is sender epoch.
+    key.verified = false;                        // Valid signature proves key possession, not manual peer verification.
+    ::platform::linux_runtime::mesh::LinuxSqlitePeerKeyStore store({"meshcore", "peer_keys", 64});
+    if (!store.put(key).ok)
+    {
+        append_lora_system_log("MeshCore peer storage failed", "Signed advert was not accepted because its key could not be persisted.");
+        return false;
+    }
+    if (existing == meshcore_peer_keys_.end() && meshcore_peer_keys_.size() >= 64)
+    {
+        meshcore_peer_epochs_.erase(meshcore_peer_keys_.begin()->first);
+        meshcore_peer_keys_.erase(meshcore_peer_keys_.begin());
+    }
+    std::array<uint8_t, 32> public_key;
+    std::memcpy(public_key.data(), key.public_key, public_key.size());
+    meshcore_peer_keys_[peer] = public_key;
+    meshcore_peer_epochs_[peer] = advert.advert.timestamp;
+    auto* update = new ::sys::NodeInfoUpdateEvent(peer,
+                                                  advert.advert.has_name ? advert.advert.name : "",
+                                                  advert.advert.has_name ? advert.advert.name : "", packet.snr_db, packet.rssi_dbm,
+                                                  now_seconds(), static_cast<uint8_t>(::chat::MeshProtocol::MeshCore),
+                                                  ::chat::meshcore::mapAdvertTypeToRole(advert.advert.node_type), advert.advert.hops);
+    update->has_public_key_state = true;
+    update->via_mqtt = mqttActive();
+    update->has_public_key = true;
+    const bool published = ::sys::EventBus::publish(update, 0);
+    if (published && advert.advert.has_location)
+        ::sys::EventBus::publish(new ::sys::NodePositionUpdateEvent(peer,
+                                                                    advert.advert.latitude_i6 * 10, advert.advert.longitude_i6 * 10,
+                                                                    false, 0, now_seconds(), 0, 0, 0, 0, 0),
+                                 0);
+    return published;
+}
+
+bool LinuxRawLoraMeshAdapter::sendMeshCoreGroup(::chat::ChannelId channel, ::chat::NodeId dest,
+                                                uint32_t portnum, const uint8_t* payload,
+                                                std::size_t len, bool text)
+{
+    if (!tx_enabled_ || meshcore_discovery_.listening(::sys::millis_now()) ||
+        (dest && dest != kBroadcastNodeId) || !payload || !len || !ensureRadioReady()) return false;
+    meshcore_wire::Frame frame;
+    bool encoded;
+    if (text)
+    {
+        const auto& name = short_name_.empty() ? long_name_ : short_name_;
+        const std::string decorated = (name.empty() ? std::string{} : name + ": ") +
+                                      std::string(reinterpret_cast<const char*>(payload), len);
+        encoded = meshcore_wire::encodeText(config_, channel, decorated, now_seconds(), frame);
+    }
+    else encoded = meshcore_wire::encodeData(config_, channel, getNodeId(), portnum, payload, len, frame);
+    if (!encoded || !transmitMeshCoreFrame(frame.bytes.data(), frame.size)) return false;
+    meshcore_wire::Incoming sent;
+    if (meshcore_wire::decode(config_, frame.bytes.data(), frame.size, sent))
+        (void)rememberMeshCoreSignature(sent.signature);
+    return true;
+}
+
+bool LinuxRawLoraMeshAdapter::parseMeshCoreGroup(const ::platform::linux_runtime::RadioPacket& packet)
+{
+    meshcore_wire::Incoming incoming;
+    if (!meshcore_wire::decode(config_, packet.data.data(), packet.size, incoming) ||
+        incoming.sender == getNodeId() || !rememberMeshCoreSignature(incoming.signature)) return false;
+    ::chat::RxMeta meta{};
+    meta.origin = ::chat::RxOrigin::Mesh;
+    meta.rx_timestamp_s = now_seconds();
+    meta.time_source = ::chat::RxTimeSource::DeviceUtc;
+    meta.rx_timestamp_ms = ::sys::millis_now();
+    meta.hop_count = incoming.hops;
+    meta.channel_hash = incoming.channel_hash;
+    meta.rssi_dbm_x10 = static_cast<int16_t>(packet.rssi_dbm * 10.0f);
+    meta.snr_db_x10 = static_cast<int16_t>(packet.snr_db * 10.0f);
+    meta.freq_hz = packet.freq_hz;
+    meta.bw_hz = packet.bw_hz;
+    meta.sf = packet.sf;
+    meta.cr = packet.cr;
+    networkMetadata(meta);
+    if (incoming.text)
+    {
+        ::chat::MeshIncomingText text{};
+        text.from = incoming.sender;
+        text.to = kBroadcastNodeId;
+        text.msg_id = incoming.signature ? incoming.signature : nextMessageId();
+        text.channel = incoming.channel;
+        text.timestamp = incoming.timestamp >= 1577836800U ? incoming.timestamp : meta.rx_timestamp_s;
+        text.text.assign(reinterpret_cast<const char*>(incoming.payload.data()), incoming.size);
+        text.encrypted = true;
+        // Group plain text has no cryptographic sender identity.
+        text.source_unverified = true;
+        text.rx_meta = meta;
+        if (incoming_text_.size() >= 64) incoming_text_.pop_front();
+        incoming_text_.push_back(std::move(text));
+    }
+    else
+    {
+        ::chat::MeshIncomingData data;
+        data.from = incoming.sender;
+        data.to = kBroadcastNodeId;
+        data.channel = incoming.channel;
+        data.channel_hash = incoming.channel_hash;
+        data.packet_id = incoming.signature;
+        data.portnum = incoming.port;
+        data.payload.assign(incoming.payload.begin(), incoming.payload.begin() + incoming.size);
+        data.rx_meta = meta;
+        if (consumeMeshCoreNodeInfo(data)) return true;
+        if (incoming_data_.size() >= 64) incoming_data_.pop_front();
+        incoming_data_.push_back(std::move(data));
+    }
+    return true;
 }
 
 bool LinuxRawLoraMeshAdapter::pollIncomingData(::chat::MeshIncomingData* out)
@@ -1235,6 +1945,11 @@ bool LinuxRawLoraMeshAdapter::pollIncomingData(::chat::MeshIncomingData* out)
 bool LinuxRawLoraMeshAdapter::requestNodeInfo(::chat::NodeId dest,
                                               bool want_response)
 {
+    if (active_protocol_ == ::chat::MeshProtocol::MeshCore)
+    {
+        if ((dest == 0 || dest == kBroadcastNodeId) && !want_response) return sendMeshCoreAdvert(true);
+        return sendMeshCoreNodeInfo(dest, want_response, ::chat::ChannelId::PRIMARY);
+    }
     if (active_protocol_ != ::chat::MeshProtocol::Meshtastic)
     {
         append_lora_system_log(
@@ -1249,6 +1964,68 @@ bool LinuxRawLoraMeshAdapter::requestNodeInfo(::chat::NodeId dest,
                                     ::chat::ChannelId::PRIMARY);
 }
 
+bool LinuxRawLoraMeshAdapter::sendMeshCoreNodeInfo(::chat::NodeId peer, bool query, ::chat::ChannelId channel)
+{
+    namespace mc = ::chat::meshcore;
+    std::array<uint8_t, mc::kMeshCoreNodeInfoInfoPayloadSize> payload{};
+    size_t size = 0;
+    if (query)
+    {
+        if (!mc::buildNodeInfoQueryControlPayload(true, payload.data(), payload.size(), &size)) return false;
+    }
+    else
+    {
+        char fallback[10]{};
+        std::snprintf(fallback, sizeof(fallback), "%04lX", static_cast<unsigned long>(getNodeId() & 0xFFFF));
+        mc::MeshCoreNodeInfoBuildInfo info;
+        info.node_id = getNodeId();
+        info.timestamp = now_seconds();
+        info.role = 0; // MeshCore chat/client role, independent of the board.
+        info.short_name = short_name_.empty() ? fallback : short_name_.c_str();
+        info.long_name = long_name_.empty() ? info.short_name : long_name_.c_str();
+        if (!mc::buildNodeInfoInfoControlPayload(info, payload.data(), payload.size(), &size)) return false;
+    }
+    return sendAppData(channel, mc::kMeshCoreNodeInfoPortnum, payload.data(), size, peer, false);
+}
+bool LinuxRawLoraMeshAdapter::consumeMeshCoreNodeInfo(const ::chat::MeshIncomingData& incoming)
+{
+    namespace rt = ::chat::runtime;
+    if (incoming.portnum != ::chat::meshcore::kMeshCoreNodeInfoPortnum) return false;
+    rt::IncomingPacket packet;
+    packet.protocol = ::chat::MeshProtocol::MeshCore;
+    packet.channel = incoming.channel;
+    packet.from = incoming.from;
+    packet.to = incoming.to;
+    packet.packet_id = incoming.packet_id;
+    packet.portnum = incoming.portnum;
+    packet.rx_meta = incoming.rx_meta;
+    if (!packet.payload.assign(incoming.payload.data(), incoming.payload.size())) return true;
+    rt::RuntimeContext context;
+    context.self_node = getNodeId();
+    rt::ProtocolEffects effects;
+    rt::MeshCoreRuntime::handleIncomingNodeInfoControl(packet, context, effects);
+    for (const auto& effect : effects.items)
+    {
+        if (const auto* reply = std::get_if<rt::SendNodeInfoEffect>(&effect))
+            (void)sendMeshCoreNodeInfo(reply->peer, false, reply->channel);
+        else if (const auto* info = std::get_if<rt::PublishNodeInfoEffect>(&effect))
+        {
+            // A private authenticated sender cannot rename another peer.
+            if (!info->node_id || info->node_id == getNodeId() ||
+                (incoming.to == getNodeId() && info->node_id != incoming.from)) continue;
+            const auto& meta = info->rx_meta;
+            const float unknown = std::numeric_limits<float>::quiet_NaN();
+            auto* update = new ::sys::NodeInfoUpdateEvent(info->node_id, info->short_name.c_str(), info->long_name.c_str(),
+                                                          meta.snr_db_x10 == std::numeric_limits<int16_t>::min() ? unknown : meta.snr_db_x10 / 10.0f,
+                                                          meta.rssi_dbm_x10 == std::numeric_limits<int16_t>::min() ? unknown : meta.rssi_dbm_x10 / 10.0f,
+                                                          info->timestamp >= 1577836800U ? info->timestamp : now_seconds(),
+                                                          static_cast<uint8_t>(::chat::MeshProtocol::MeshCore), info->role, info->hops);
+            update->via_mqtt = mqttActive();
+            ::sys::EventBus::publish(update, 0);
+        }
+    }
+    return true;
+}
 bool LinuxRawLoraMeshAdapter::triggerDiscoveryAction(
     ::chat::MeshDiscoveryAction action)
 {
@@ -1258,6 +2035,20 @@ bool LinuxRawLoraMeshAdapter::triggerDiscoveryAction(
 ::chat::MeshActionResult LinuxRawLoraMeshAdapter::triggerDiscoveryActionDetailed(
     ::chat::MeshDiscoveryAction action)
 {
+    if (active_protocol_ == ::chat::MeshProtocol::MeshCore)
+    {
+        if (action == ::chat::MeshDiscoveryAction::ScanLocal)
+            return startMeshCoreDiscovery();
+        if (action != ::chat::MeshDiscoveryAction::SendIdLocal && action != ::chat::MeshDiscoveryAction::SendIdBroadcast)
+            return ::chat::MeshActionResult::fail(::chat::MeshOperationFailure::InvalidInput);
+        if (!tx_enabled_) return ::chat::MeshActionResult::fail(::chat::MeshOperationFailure::TxDisabled);
+        if (!meshcore_identity_.ready()) return ::chat::MeshActionResult::fail(::chat::MeshOperationFailure::LocalIdentityMissing);
+        if (meshcore_discovery_.listening(::sys::millis_now()))
+            return ::chat::MeshActionResult::fail(::chat::MeshOperationFailure::Busy);
+        return sendMeshCoreAdvert(action == ::chat::MeshDiscoveryAction::SendIdBroadcast)
+                   ? ::chat::MeshActionResult::success()
+                   : ::chat::MeshActionResult::fail(::chat::MeshOperationFailure::RadioTxFailed);
+    }
     if (active_protocol_ != ::chat::MeshProtocol::Meshtastic)
     {
         append_lora_system_log(
@@ -1307,8 +2098,113 @@ bool LinuxRawLoraMeshAdapter::triggerDiscoveryAction(
                     ::chat::MeshOperationFailure::RadioTxFailed);
 }
 
+bool LinuxRawLoraMeshAdapter::meshCoreVerificationNumber(::chat::NodeId peer, uint64_t nonce, uint32_t& number) const
+{
+    const auto key = meshcore_peer_keys_.find(peer);
+    if (key == meshcore_peer_keys_.end() || !meshcore_identity_.ready()) return false;
+    struct Shared
+    {
+        std::array<uint8_t, 32> bytes{};
+        ~Shared()
+        {
+            volatile uint8_t* cursor = bytes.data();
+            for (size_t i = 0; i < bytes.size(); ++i) cursor[i] = 0;
+        }
+    } shared;
+    return meshcore_identity_.sharedSecret(key->second.data(), shared.bytes.data()) &&
+           meshcore_wire::Verification::number(shared.bytes.data(), getNodeId(), peer, nonce, number);
+}
+bool LinuxRawLoraMeshAdapter::publishMeshCoreVerification(const meshcore_wire::Verification::Action& value)
+{
+    using Verification = meshcore_wire::Verification;
+    auto action = value;
+    bool sent = true;
+    if (action.send && !sendMeshCoreDirect(action.peer, 0, Verification::port,
+                                           action.payload.data(), action.payload.size(), true, false))
+    {
+        Verification::Action ignored;
+        (void)meshcore_verification_.cancel(ignored);
+        action.prompt = Verification::Prompt::Failed;
+        sent = false;
+    }
+    switch (action.prompt)
+    {
+    case Verification::Prompt::ShowNumber:
+    {
+        auto* event = new ::sys::KeyVerificationNumberInformEvent(action.peer, action.nonce, action.number);
+        event->has_protocol = true;
+        event->protocol = ::chat::MeshProtocol::MeshCore;
+        return ::sys::EventBus::publish(event, 0) && sent;
+    }
+    case Verification::Prompt::EnterNumber:
+    {
+        auto* event = new ::sys::KeyVerificationNumberRequestEvent(action.peer, action.nonce);
+        event->has_protocol = true;
+        event->protocol = ::chat::MeshProtocol::MeshCore;
+        return ::sys::EventBus::publish(event, 0) && sent;
+    }
+    case Verification::Prompt::Compare:
+    case Verification::Prompt::Failed:
+    {
+        char code[12]{};
+        if (action.prompt == Verification::Prompt::Compare) ::chat::meshcore::formatVerificationCode(action.number, code, sizeof(code));
+        auto* event = new ::sys::KeyVerificationFinalEvent(action.peer, action.nonce, action.sender, code);
+        event->runtime_failure = action.prompt == Verification::Prompt::Failed;
+        event->has_protocol = true;
+        event->protocol = ::chat::MeshProtocol::MeshCore;
+        return ::sys::EventBus::publish(event, 0) && sent;
+    }
+    default:
+        return sent;
+    }
+}
+void LinuxRawLoraMeshAdapter::cancelMeshCoreVerification()
+{
+    meshcore_wire::Verification::Action action;
+    if (meshcore_verification_.cancel(action)) (void)publishMeshCoreVerification(action);
+}
+void LinuxRawLoraMeshAdapter::updateMeshCoreVerification()
+{
+    if (!meshcore_verification_.peer()) return;
+    const auto key = meshcore_peer_keys_.find(meshcore_verification_.peer());
+    if (active_protocol_ != ::chat::MeshProtocol::MeshCore || !tx_enabled_ || !(mqttActive() ? mqtt_->ready() : radio_.isOnline()) ||
+        key == meshcore_peer_keys_.end() || !meshcore_verification_.matches(key->second))
+    {
+        cancelMeshCoreVerification();
+        return;
+    }
+    meshcore_wire::Verification::Action action;
+    if (meshcore_verification_.expire(retry_clock_(), action)) (void)publishMeshCoreVerification(action);
+}
+void LinuxRawLoraMeshAdapter::receiveMeshCoreVerification(::chat::NodeId peer, const uint8_t* bytes, size_t size)
+{
+    updateMeshCoreVerification();
+    if (!tx_enabled_ || !bytes || size != 12) return;
+    const auto key = meshcore_peer_keys_.find(peer);
+    if (key == meshcore_peer_keys_.end()) return;
+    uint64_t nonce = 0;
+    for (unsigned i = 0; i < 8; ++i) nonce |= uint64_t(bytes[4 + i]) << (8 * i);
+    uint32_t number = 0xffffffffu;
+    if (bytes[3] == 1 && !meshCoreVerificationNumber(peer, nonce, number)) return;
+    meshcore_wire::Verification::Action action;
+    if (meshcore_verification_.receive(peer, key->second, bytes, size, number, retry_clock_(), action))
+        (void)publishMeshCoreVerification(action);
+}
 bool LinuxRawLoraMeshAdapter::startKeyVerification(::chat::NodeId node_id)
 {
+    if (active_protocol_ == ::chat::MeshProtocol::MeshCore)
+    {
+        updateMeshCoreVerification();
+        const auto peer = meshcore_peer_keys_.find(node_id);
+        uint64_t nonce = 0;
+        uint32_t number = 0;
+        if (!tx_enabled_ || !node_id || node_id == getNodeId() || peer == meshcore_peer_keys_.end() ||
+            !secure_random_bytes(reinterpret_cast<uint8_t*>(&nonce), sizeof(nonce)) || !nonce ||
+            !meshCoreVerificationNumber(node_id, nonce, number)) return false;
+        meshcore_wire::Verification::Action action;
+        return meshcore_verification_.start(node_id, peer->second, nonce, number, retry_clock_(), action) && publishMeshCoreVerification(action);
+    }
+    if (active_protocol_ != ::chat::MeshProtocol::Meshtastic) return false;
     updateKeyVerificationState();
     if (kv_state_ != KeyVerificationState::Idle ||
         node_id == 0 || node_id == kBroadcastNodeId)
@@ -1350,6 +2246,15 @@ bool LinuxRawLoraMeshAdapter::submitKeyVerificationNumber(
     std::uint64_t nonce,
     std::uint32_t number)
 {
+    if (active_protocol_ == ::chat::MeshProtocol::MeshCore)
+    {
+        updateMeshCoreVerification();
+        const auto peer = meshcore_peer_keys_.find(node_id);
+        if (peer == meshcore_peer_keys_.end()) return false;
+        meshcore_wire::Verification::Action action;
+        return meshcore_verification_.submit(node_id, peer->second, nonce, number, retry_clock_(), action) && publishMeshCoreVerification(action);
+    }
+    if (active_protocol_ != ::chat::MeshProtocol::Meshtastic) return false;
     return processKeyVerificationNumber(node_id, nonce, number);
 }
 
@@ -1362,9 +2267,83 @@ void LinuxRawLoraMeshAdapter::applyProtocolConfig(
     ::chat::MeshProtocol protocol,
     const ::chat::MeshConfig& config)
 {
+    meshcore_discovery_.reset();
+    radio_retry_.reset(); // Explicit settings changes may retry immediately.
+    const auto old_radio = derive_radio_config(active_protocol_, config_);
+    const auto new_radio = derive_radio_config(protocol, config);
+    const bool radio_changed = protocol != active_protocol_ || config.tx_enabled != tx_enabled_ ||
+                               old_radio.freq_mhz != new_radio.freq_mhz || old_radio.bw_khz != new_radio.bw_khz ||
+                               old_radio.sf != new_radio.sf || old_radio.cr != new_radio.cr ||
+                               old_radio.sync_word != new_radio.sync_word || old_radio.preamble_len != new_radio.preamble_len ||
+                               old_radio.crc_len != new_radio.crc_len || old_radio.tx_power_dbm != new_radio.tx_power_dbm;
+    const bool relay_changed = config.meshcore_client_repeat != config_.meshcore_client_repeat ||
+                               config.meshcore_forward_profile != config_.meshcore_forward_profile ||
+                               config.meshcore_flood_max != config_.meshcore_flood_max ||
+                               config.meshcore_multi_acks != config_.meshcore_multi_acks ||
+                               config.meshcore_rx_delay_base != config_.meshcore_rx_delay_base ||
+                               config.meshcore_airtime_factor != config_.meshcore_airtime_factor;
+    if (radio_changed || relay_changed) meshcore_repeater_.reset();
+    if (protocol != active_protocol_)
+    {
+        // Resolve old-protocol radio results before the caller changes its active protocol.
+        for (const auto& result : pending_results_)
+            publishSendResult(result.msg_id, active_protocol_,
+                              result.ok ? ::chat::MessageStatus::Sent : ::chat::MessageStatus::Failed,
+                              ::chat::delivery::SendFailureKind::Unknown);
+        pending_results_.clear();
+        incoming_text_.clear();
+        incoming_data_.clear();
+        raw_packets_.clear();
+        meshcore_seen_ = {};
+        meshcore_seen_cursor_ = 0;
+    }
+    if (radio_changed)
+    {
+        meshcore_direct_routes_ = {};
+        reticulum_reassembly_.reset();
+        cancelMeshCoreVerification();
+        meshcore_wire::DirectOutcome cancelled;
+        while (meshcore_direct_.cancel(cancelled))
+            publishMeshCoreDirectOutcome(cancelled, ::chat::MessageStatus::Failed, false);
+        meshcore_direct_.clearReplies();
+    }
     active_protocol_ = protocol;
     config_ = config;
     tx_enabled_ = config.tx_enabled;
+    if (protocol == ::chat::MeshProtocol::Reticulum && !::chat::reticulum::integratedLoRaAllowed(config_))
+    {
+        suspendRadio();
+        last_status_ = "Reticulum integrated LoRa is disabled by interface policy";
+        return;
+    }
+    if (protocol == ::chat::MeshProtocol::MeshCore && !meshcore_identity_.begin())
+    {
+        last_status_ = meshcore_identity_.lastError();
+        logStatusIfChanged("MeshCore identity unavailable", last_status_);
+        return;
+    }
+    if (protocol == ::chat::MeshProtocol::MeshCore && !meshcore_peers_loaded_)
+    {
+        ::platform::linux_runtime::mesh::LinuxSqlitePeerKeyStore store({"meshcore", "peer_keys", 64});
+        std::vector<::mesh::PeerPublicKey> keys;
+        if (store.loadAll(keys).ok)
+            for (const auto& key : keys)
+            {
+                if (::chat::meshcore::deriveNodeIdFromPubkey(key.public_key, sizeof(key.public_key)) != key.node_id.value)
+                    continue; // A corrupt cache must not bind a key to another logical recipient.
+                std::array<uint8_t, 32> public_key;
+                std::memcpy(public_key.data(), key.public_key, public_key.size());
+                meshcore_peer_keys_[key.node_id.value] = public_key;
+                meshcore_peer_epochs_[key.node_id.value] = key.updated_at_ms;
+            }
+        meshcore_peers_loaded_ = true;
+    }
+    if (mqttActive())
+    {
+        config_.meshcore_client_repeat = false; // Standalone broker clients never relay RF.
+        (void)ensureRadioReady();
+        return;
+    }
     if (!started_)
     {
         (void)ensureRadioReady();
@@ -1374,8 +2353,9 @@ void LinuxRawLoraMeshAdapter::applyProtocolConfig(
     {
         const auto radio_config =
             derive_radio_config(active_protocol_, config_);
-        if (radio_.configureLoRa(radio_config))
+        if (radio_.configureLoRa(radio_config) && radio_.startReceive())
         {
+            radio_retry_.reset();
             last_rx_monitor_log_s_ = 0;
             stats_logged_ = false;
             last_logged_stats_ = {};
@@ -1387,6 +2367,7 @@ void LinuxRawLoraMeshAdapter::applyProtocolConfig(
         }
         else
         {
+            last_status_ = std::string(radio_.name()) + " LoRa config failed: " + radio_.lastError();
             append_lora_system_log(
                 "LoRa radio config failed",
                 radio_.lastError(),
@@ -1396,6 +2377,10 @@ void LinuxRawLoraMeshAdapter::applyProtocolConfig(
                     .label = "driver",
                     .text = radio_.lastError(),
                 }});
+            started_ = false;
+            if (radio_acquired_) radio_.release();
+            radio_acquired_ = false;
+            radio_retry_.failed(retry_clock_());
         }
     }
 }
@@ -1409,12 +2394,13 @@ void LinuxRawLoraMeshAdapter::setUserInfo(const char* long_name,
 
 bool LinuxRawLoraMeshAdapter::isPkiReady() const
 {
-    return pki_ready_;
+    return active_protocol_ == ::chat::MeshProtocol::Meshtastic && pki_ready_;
 }
 
 bool LinuxRawLoraMeshAdapter::hasPkiKey(::chat::NodeId dest) const
 {
-    return dest != 0 && node_public_keys_.find(dest) != node_public_keys_.end();
+    return active_protocol_ == ::chat::MeshProtocol::Meshtastic &&
+           dest != 0 && node_public_keys_.find(dest) != node_public_keys_.end();
 }
 
 void LinuxRawLoraMeshAdapter::setNetworkLimits(bool duty_cycle_enabled,
@@ -1431,12 +2417,13 @@ void LinuxRawLoraMeshAdapter::setPrivacyConfig(std::uint8_t encrypt_mode)
 
 ::chat::NodeId LinuxRawLoraMeshAdapter::getNodeId() const
 {
-    return self_node_id_;
+    return active_protocol_ == ::chat::MeshProtocol::MeshCore ? meshcore_identity_.nodeId() : self_node_id_;
 }
 
 bool LinuxRawLoraMeshAdapter::isReady() const
 {
-    return started_ && radio_.isOnline();
+    return started_ && (mqttActive() ? mqtt_->ready() : radio_.isOnline()) &&
+           (active_protocol_ != ::chat::MeshProtocol::MeshCore || meshcore_identity_.ready());
 }
 
 bool LinuxRawLoraMeshAdapter::pollIncomingRawPacket(std::uint8_t* out_data,
@@ -1470,15 +2457,17 @@ void LinuxRawLoraMeshAdapter::setSelfNodeId(::chat::NodeId id)
 
 std::string LinuxRawLoraMeshAdapter::statusText() const
 {
+    if (mqttActive()) return mqtt_->ready() ? "MQTT standalone transport ready" : std::string("MQTT unavailable: ") + mqtt_->snapshot().error;
     if (started_ && radio_.isOnline())
     {
-        return "SX1262 raw LoRa transport ready.";
+        return std::string(radio_.name()) + " raw LoRa transport ready.";
     }
     return last_status_;
 }
 
 std::string LinuxRawLoraMeshAdapter::radioConfigText() const
 {
+    if (mqttActive()) return "MQTT standalone; physical LoRa is not acquired";
     const auto config =
         started_ && radio_.isOnline()
             ? radio_.appliedLoRaConfig()
@@ -1488,11 +2477,17 @@ std::string LinuxRawLoraMeshAdapter::radioConfigText() const
 
 std::string LinuxRawLoraMeshAdapter::radioStatsText() const
 {
+    if (mqttActive())
+    {
+        const auto state = mqtt_->snapshot();
+        return "MQTT TX=" + std::to_string(state.transmitted) + " RX=" + std::to_string(state.received) + " failures=" + std::to_string(state.failures);
+    }
     return describe_radio_stats(radio_.stats());
 }
 
 std::vector<std::string> LinuxRawLoraMeshAdapter::diagnosticLines() const
 {
+    if (mqttActive()) return {statusText(), radioConfigText(), radioStatsText()};
     std::vector<std::string> out;
     out.push_back(statusText());
     out.push_back("RF: " + radioConfigText());
@@ -1608,14 +2603,30 @@ void LinuxRawLoraMeshAdapter::logRxMonitorHeartbeat()
 
 bool LinuxRawLoraMeshAdapter::ensureRadioReady()
 {
+    if (mqttActive())
+    {
+        if (!pki_initialized_ && active_protocol_ == ::chat::MeshProtocol::Meshtastic)
+        {
+            (void)initPkiKeys();
+            loadPkiNodeKeys();
+            pki_initialized_ = true;
+        }
+        started_ = mqtt_->ready() && (active_protocol_ != ::chat::MeshProtocol::MeshCore || meshcore_identity_.ready());
+        return started_;
+    }
+    if (active_protocol_ == ::chat::MeshProtocol::Reticulum && !::chat::reticulum::integratedLoRaAllowed(config_)) return false;
+    if (active_protocol_ == ::chat::MeshProtocol::MeshCore && !meshcore_identity_.ready()) return false;
     if (started_ && radio_.isOnline())
     {
         return true;
     }
-    if (!hardwareCandidatePresent())
+    if (!radio_retry_.ready(retry_clock_())) return false;
+    started_ = false;
+    if (!radio_.hardwareCandidatePresent())
     {
         last_status_ = "No Linux LoRa SPI endpoint is present.";
         logStatusIfChanged("LoRa endpoint missing", last_status_);
+        radio_retry_.failed(retry_clock_());
         return false;
     }
     if (!pki_initialized_)
@@ -1624,26 +2635,37 @@ bool LinuxRawLoraMeshAdapter::ensureRadioReady()
         loadPkiNodeKeys();
         pki_initialized_ = true;
     }
+    if (radio_acquired_)
+    {
+        radio_.release();
+        radio_acquired_ = false;
+    }
     if (!radio_.acquire())
     {
-        last_status_ = std::string("SX1262 acquire failed: ") +
+        last_status_ = std::string(radio_.name()) + " acquire failed: " +
                        radio_.lastError();
         logStatusIfChanged("LoRa acquire failed", last_status_);
+        radio_retry_.failed(retry_clock_());
         return false;
     }
     const auto radio_config = derive_radio_config(active_protocol_, config_);
-    if (!radio_.configureLoRa(radio_config))
+    radio_acquired_ = true;
+    if (!radio_.configureLoRa(radio_config) || !radio_.startReceive())
     {
-        last_status_ = std::string("SX1262 LoRa config failed: ") +
+        last_status_ = std::string(radio_.name()) + " LoRa config failed: " +
                        radio_.lastError();
         logStatusIfChanged("LoRa radio config failed", last_status_);
+        radio_.release();
+        radio_acquired_ = false;
+        radio_retry_.failed(retry_clock_());
         return false;
     }
     started_ = true;
+    radio_retry_.reset();
     last_rx_monitor_log_s_ = 0;
     stats_logged_ = false;
     last_logged_stats_ = {};
-    last_status_ = "SX1262 raw LoRa transport ready.";
+    last_status_ = std::string(radio_.name()) + " raw LoRa transport ready.";
     append_lora_system_log("LoRa radio configured",
                            describe_active_radio_config(active_protocol_,
                                                         config_,
@@ -1653,6 +2675,7 @@ bool LinuxRawLoraMeshAdapter::ensureRadioReady()
 
 ::chat::MessageId LinuxRawLoraMeshAdapter::nextMessageId()
 {
+    if (message_id_source_) return message_id_source_(message_id_context_);
     if (next_msg_id_ == 0)
     {
         next_msg_id_ = random_packet_id_seed();
@@ -1796,6 +2819,16 @@ bool LinuxRawLoraMeshAdapter::sendMeshtasticPayload(
             }});
         return false;
     }
+    if (mqttActive())
+    {
+        ::chat::meshtastic::PacketHeaderWire header{};
+        header.from = self_node_id_;
+        header.to = dest;
+        header.id = msg_id;
+        header.channel = channel_hash;
+        header.flags = (config_.hop_limit & 7) | ((config_.hop_limit & 7) << 5) | (air_want_ack ? ::chat::meshtastic::PACKET_FLAGS_WANT_ACK_MASK : 0);
+        return mqtt_->publishMeshtasticPayload(header, channel, wire_payload, wire_payload_size, use_pki);
+    }
     std::uint8_t wire[255] = {};
     std::size_t wire_size = sizeof(wire);
     if (!build_meshtastic_wire_packet(wire_payload,
@@ -1846,7 +2879,7 @@ bool LinuxRawLoraMeshAdapter::sendMeshtasticPayload(
     });
     ::platform::linux_runtime::append_packet_log(std::move(entry));
 
-    const bool ok = radio_.transmit(wire, wire_size);
+    const bool ok = transmitMeshtasticFrame(wire, wire_size);
     if (!ok)
     {
         append_lora_system_log(
@@ -1937,6 +2970,16 @@ bool LinuxRawLoraMeshAdapter::sendMeshtasticNodeInfoTo(
     }
 
     const ::chat::MessageId msg_id = nextMessageId();
+    if (mqttActive())
+    {
+        ::chat::meshtastic::PacketHeaderWire header{};
+        header.from = self_node_id_;
+        header.to = dest;
+        header.id = msg_id;
+        header.channel = channel_hash;
+        header.flags = (config_.hop_limit & 7) | ((config_.hop_limit & 7) << 5) | ((want_response && dest != kBroadcastNodeId) ? ::chat::meshtastic::PACKET_FLAGS_WANT_ACK_MASK : 0);
+        return mqtt_->publishMeshtasticPayload(header, channel, data_payload, data_size, false);
+    }
     std::uint8_t wire[255] = {};
     std::size_t wire_size = sizeof(wire);
     const bool want_ack = want_response && dest != kBroadcastNodeId;
@@ -1976,7 +3019,7 @@ bool LinuxRawLoraMeshAdapter::sendMeshtasticNodeInfoTo(
     });
     ::platform::linux_runtime::append_packet_log(std::move(entry));
 
-    const bool ok = radio_.transmit(wire, wire_size);
+    const bool ok = transmitMeshtasticFrame(wire, wire_size);
     if (!ok)
     {
         append_lora_system_log(
@@ -1993,12 +3036,30 @@ bool LinuxRawLoraMeshAdapter::sendMeshtasticNodeInfoTo(
 
 bool LinuxRawLoraMeshAdapter::initPkiKeys()
 {
+#if defined(__linux__)
+    if (!pki_owner_.acquireShared(::platform::linux_runtime::radio_identity_owner_path(::platform::linux_runtime::sqlite_database_path())))
+    {
+        pki_ready_ = false;
+        append_lora_system_log("Meshtastic PKI unavailable", "The identity is exclusively owned.");
+        return false;
+    }
+#endif
     ::platform::linux_runtime::mesh::LinuxSqliteLocalIdentityStore store;
     ::mesh::LocalIdentity stored_identity{};
+    struct Clear
+    {
+        ::mesh::LocalIdentity& value;
+        ~Clear()
+        {
+            volatile uint8_t* p = value.private_key;
+            for (size_t i = 0; i < sizeof(value.private_key); ++i) p[i] = 0;
+        }
+    } clear_stored{stored_identity};
     auto loaded = store.load(stored_identity);
     if (loaded.ok &&
         !::chat::meshtastic::isZeroKey(stored_identity.private_key,
-                                       sizeof(stored_identity.private_key)))
+                                       sizeof(stored_identity.private_key)) &&
+        ::platform::linux_runtime::LinuxRadioIdentityStore::validatePair(2, stored_identity.public_key, stored_identity.private_key, sizeof(stored_identity.private_key)))
     {
         std::memcpy(pki_public_key_.data(),
                     stored_identity.public_key,
@@ -2010,6 +3071,15 @@ bool LinuxRawLoraMeshAdapter::initPkiKeys()
         append_lora_system_log("Meshtastic PKI ready",
                                "Loaded local X25519 identity key.");
         return true;
+    }
+
+    if (loaded.failure != ::mesh::StoreFailure::NotFound)
+    {
+        pki_ready_ = false;
+        pki_public_key_.fill(0);
+        pki_private_key_.fill(0);
+        append_lora_system_log("Meshtastic PKI unavailable", "Stored local identity is invalid or unavailable; no replacement was generated.");
+        return false;
     }
 
     pki_public_key_.fill(0);
@@ -2027,6 +3097,7 @@ bool LinuxRawLoraMeshAdapter::initPkiKeys()
     }
 
     ::mesh::LocalIdentity generated{};
+    Clear clear_generated{generated};
     std::memcpy(generated.public_key,
                 pki_public_key_.data(),
                 sizeof(generated.public_key));
@@ -2368,11 +3439,10 @@ bool LinuxRawLoraMeshAdapter::handleKeyVerificationInit(
     }
 
     kv_state_ = KeyVerificationState::ReceiverAwaitingHash1;
-    ::sys::EventBus::publish(
+    publish_meshtastic_key_event(
         new ::sys::KeyVerificationNumberInformEvent(kv_remote_node_,
                                                     kv_nonce_,
-                                                    kv_security_number_),
-        0);
+                                                    kv_security_number_));
     return true;
 }
 
@@ -2392,10 +3462,9 @@ bool LinuxRawLoraMeshAdapter::handleKeyVerificationReply(
     std::memcpy(kv_hash2_.data(), kv.hash2.bytes, kv_hash2_.size());
     kv_state_ = KeyVerificationState::SenderAwaitingNumber;
     kv_nonce_ms_ = ::sys::millis_now();
-    ::sys::EventBus::publish(
+    publish_meshtastic_key_event(
         new ::sys::KeyVerificationNumberRequestEvent(kv_remote_node_,
-                                                     kv_nonce_),
-        0);
+                                                     kv_nonce_));
     return true;
 }
 
@@ -2454,12 +3523,11 @@ bool LinuxRawLoraMeshAdapter::processKeyVerificationNumber(
 
     char code[12] = {};
     buildVerificationCode(code, sizeof(code));
-    ::sys::EventBus::publish(
+    publish_meshtastic_key_event(
         new ::sys::KeyVerificationFinalEvent(kv_remote_node_,
                                              kv_nonce_,
                                              true,
-                                             code),
-        0);
+                                             code));
     return true;
 }
 
@@ -2485,12 +3553,11 @@ bool LinuxRawLoraMeshAdapter::handleKeyVerificationFinal(
 
     char code[12] = {};
     buildVerificationCode(code, sizeof(code));
-    ::sys::EventBus::publish(
+    publish_meshtastic_key_event(
         new ::sys::KeyVerificationFinalEvent(kv_remote_node_,
                                              kv_nonce_,
                                              false,
-                                             code),
-        0);
+                                             code));
     return true;
 }
 
@@ -2551,7 +3618,7 @@ bool LinuxRawLoraMeshAdapter::sendKeyVerificationPacket(
         return false;
     }
 
-    const bool ok = radio_.transmit(wire, wire_size);
+    const bool ok = transmitMeshtasticFrame(wire, wire_size);
     if (ok)
     {
         append_lora_system_log(
@@ -2649,7 +3716,7 @@ bool LinuxRawLoraMeshAdapter::sendRoutingAck(::chat::NodeId dest,
         return false;
     }
 
-    const bool ok = radio_.transmit(wire, wire_size);
+    const bool ok = transmitMeshtasticFrame(wire, wire_size);
     if (ok)
     {
         append_lora_system_log(
@@ -2981,6 +4048,14 @@ bool LinuxRawLoraMeshAdapter::parseMeshtasticPacket(
     const ::chat::RxMeta rx_meta = make_meshtastic_rx_meta(header, packet);
     const bool encrypted =
         used_pki_transport || (psk != nullptr && psk_len > 0);
+    return consumeMeshtasticData(header, decoded, packet, channel, rx_meta, encrypted, psk, psk_len);
+}
+
+bool LinuxRawLoraMeshAdapter::consumeMeshtasticData(
+    const ::chat::meshtastic::PacketHeaderWire& header, const meshtastic_Data& decoded,
+    const ::platform::linux_runtime::RadioPacket& packet, ::chat::ChannelId channel,
+    const ::chat::RxMeta& rx_meta, bool encrypted, const uint8_t* psk, size_t psk_len)
+{
     const auto channel_index = static_cast<std::uint8_t>(channel);
     const bool via_mqtt_packet =
         (header.flags & ::chat::meshtastic::PACKET_FLAGS_VIA_MQTT_MASK) != 0;
@@ -3026,6 +4101,7 @@ bool LinuxRawLoraMeshAdapter::parseMeshtasticPacket(
             header.flags & ::chat::meshtastic::PACKET_FLAGS_HOP_LIMIT_MASK;
         text.encrypted = encrypted;
         text.rx_meta = rx_meta;
+        if (incoming_text_.size() >= 64) incoming_text_.pop_front();
         incoming_text_.push_back(text);
 
         append_lora_system_log(
@@ -3314,9 +4390,9 @@ bool LinuxRawLoraMeshAdapter::parseMeshtasticPacket(
     {
         meshtastic_KeyVerification kv = meshtastic_KeyVerification_init_default;
         bool handled = false;
-        if (::chat::meshtastic::decodeKeyVerificationMessage(plaintext,
-                                                             plaintext_len,
-                                                             &kv) &&
+        auto verification_stream = pb_istream_from_buffer(decoded.payload.bytes, decoded.payload.size);
+        if (decoded.payload.size <= sizeof(decoded.payload.bytes) &&
+            pb_decode(&verification_stream, meshtastic_KeyVerification_fields, &kv) &&
             header.channel == 0)
         {
             if (kv.hash1.size == 0 && kv.hash2.size == 0)
@@ -3364,6 +4440,7 @@ bool LinuxRawLoraMeshAdapter::parseMeshtasticPacket(
             header.flags & ::chat::meshtastic::PACKET_FLAGS_HOP_LIMIT_MASK;
         app.want_response = decoded_want_response;
         app.rx_meta = rx_meta;
+        if (incoming_data_.size() >= 64) incoming_data_.pop_front();
         incoming_data_.push_back(std::move(app));
     }
     append_lora_system_log(

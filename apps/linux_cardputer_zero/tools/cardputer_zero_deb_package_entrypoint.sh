@@ -5,8 +5,12 @@ source_dir="${TRAIL_MATE_CARDPUTER_ZERO_CONTAINER_SOURCE:-/work/source}"
 build_dir="${TRAIL_MATE_CARDPUTER_ZERO_CONTAINER_BUILD:-/work/build}"
 out_dir="${TRAIL_MATE_CARDPUTER_ZERO_CONTAINER_OUT:-/work/out}"
 jobs="${TRAIL_MATE_CARDPUTER_ZERO_PACKAGE_JOBS:-2}"
-package_version="${TRAIL_MATE_CARDPUTER_ZERO_PACKAGE_VERSION:-0.1.38-alpha}"
+package_version="${TRAIL_MATE_CARDPUTER_ZERO_PACKAGE_VERSION:-$(python3 "${source_dir}/scripts/project_version.py" --debian)}"
 package_build_type="${TRAIL_MATE_CARDPUTER_ZERO_PACKAGE_BUILD_TYPE:-Release}"
+producer_dir=""
+if [ -f "${source_dir}/.tmap-producer/producer-manifest.json" ]; then
+    producer_dir="${source_dir}/.tmap-producer"
+fi
 
 mkdir -p "${build_dir}" "${out_dir}"
 rm -f "${build_dir}"/trailmate-cardputer-zero_*.deb
@@ -24,7 +28,8 @@ cmake -S "${source_dir}/builds/linux_cmake" \
     -DTRAIL_MATE_BUILD_LINUX_UCONSOLE_GTK=OFF \
     -DTRAIL_MATE_CARDPUTER_ZERO_BUILD_DEVICE=ON \
     -DTRAIL_MATE_CARDPUTER_ZERO_ENABLE_DEB_PACKAGE=ON \
-    -DTRAIL_MATE_CARDPUTER_ZERO_PACKAGE_VERSION="${package_version}"
+    -DTRAIL_MATE_CARDPUTER_ZERO_PACKAGE_VERSION="${package_version}" \
+    -DTRAIL_MATE_TMAP_PRODUCER_DIR="${producer_dir}"
 
 cmake --build "${build_dir}" --target package -j "${jobs}"
 
@@ -76,7 +81,7 @@ fi
 
 depends="$(dpkg-deb -f "${deb}" Depends)"
 printf '%s\n' "${depends}" > /work/deb-depends.txt
-for dep in libc6 libstdc++6 libgcc-s1 libsqlite3-0 libcurl4 libssl3 libwayland-client0 libxkbcommon0 libnotify-bin gdal-bin unzip ca-certificates; do
+for dep in libc6 libstdc++6 libgcc-s1 libsqlite3-0 libcurl4 libssl3 libwayland-client0 libxkbcommon0 libnotify-bin gdal-bin unzip ca-certificates network-manager; do
     if ! tr ', ' '\n\n' < /work/deb-depends.txt | cut -d '(' -f 1 | grep -Fxq "${dep}"; then
         printf 'Missing required package dependency: %s\nDepends: %s\n' "${dep}" "${depends}" >&2
         exit 1
@@ -88,6 +93,8 @@ extract=/work/extract
 rm -rf "${extract}"
 mkdir -p "${extract}"
 dpkg-deb -x "${deb}" "${extract}"
+cmp "${source_dir}/third_party/bzip2/LICENSE" \
+    "${extract}/usr/share/doc/trailmate-cardputer-zero/copyright-bzip2"
 binary="${extract}/usr/lib/trailmate-cardputer-zero/trailmate-cardputer-zero"
 fbdev_binary="${extract}/usr/lib/trailmate-cardputer-zero/trailmate-cardputer-zero-fbdev"
 launcher="${extract}/usr/lib/trailmate-cardputer-zero/trailmate-cardputer-zero-applaunch"
@@ -96,6 +103,7 @@ desktop="${extract}/usr/share/APPLaunch/applications/trailmate.desktop"
 test -x "${binary}"
 test -x "${fbdev_binary}"
 test -x "${launcher}"
+sh -n "${launcher}"
 grep -q '^Exec=/usr/lib/trailmate-cardputer-zero/trailmate-cardputer-zero-applaunch$' "${desktop}"
 grep -q '^Icon=share/images/trailmate-cardputer-zero.png$' "${desktop}"
 grep -q '^X-Zero-AppId=io.github.vicliu624.trailmate$' "${desktop}"

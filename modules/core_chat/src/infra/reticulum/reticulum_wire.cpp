@@ -10,6 +10,7 @@
 #elif defined(ESP_PLATFORM)
 #include "mbedtls/md.h"
 #include "mbedtls/sha256.h"
+#include "mbedtls/version.h"
 #if !defined(TRAIL_MATE_RETICULUM_SOFTWARE_AES)
 #define TRAIL_MATE_RETICULUM_SOFTWARE_AES 1
 #endif
@@ -895,6 +896,56 @@ void fullHash(const uint8_t* data, size_t len, uint8_t out_hash[kFullHashSize])
 #endif
 }
 
+bool fullHashJoined(const uint8_t* first, size_t first_len, const uint8_t* second, size_t second_len,
+                    uint8_t out_hash[kFullHashSize])
+{
+    if (!out_hash) return false;
+    if ((!first && first_len) || (!second && second_len) || first_len > SIZE_MAX - second_len)
+    {
+        memset(out_hash, 0, kFullHashSize);
+        return false;
+    }
+    bool ok = false;
+#if defined(TRAIL_MATE_RETICULUM_PARSE_ONLY)
+#elif defined(TRAIL_MATE_RETICULUM_HASH_ONLY)
+    std::vector<uint8_t> joined;
+    if (first_len) joined.insert(joined.end(), first, first + first_len);
+    if (second_len) joined.insert(joined.end(), second, second + second_len);
+    fullHash(joined.data(), joined.size(), out_hash);
+    ok = true;
+#elif defined(ESP_PLATFORM)
+    mbedtls_sha256_context sha;
+    mbedtls_sha256_init(&sha);
+#if MBEDTLS_VERSION_MAJOR >= 3
+    ok = mbedtls_sha256_starts(&sha, 0) == 0 &&
+         (!first_len || mbedtls_sha256_update(&sha, first, first_len) == 0) &&
+         (!second_len || mbedtls_sha256_update(&sha, second, second_len) == 0) &&
+         mbedtls_sha256_finish(&sha, out_hash) == 0;
+#else
+    ok = mbedtls_sha256_starts_ret(&sha, 0) == 0 &&
+         (!first_len || mbedtls_sha256_update_ret(&sha, first, first_len) == 0) &&
+         (!second_len || mbedtls_sha256_update_ret(&sha, second, second_len) == 0) &&
+         mbedtls_sha256_finish_ret(&sha, out_hash) == 0;
+#endif
+    mbedtls_sha256_free(&sha);
+#elif defined(TRAIL_MATE_HAS_OPENSSL)
+    EVP_MD_CTX* sha = EVP_MD_CTX_new();
+    unsigned size = 0;
+    ok = sha && EVP_DigestInit_ex(sha, EVP_sha256(), nullptr) == 1 &&
+         (!first_len || EVP_DigestUpdate(sha, first, first_len) == 1) &&
+         (!second_len || EVP_DigestUpdate(sha, second, second_len) == 1) &&
+         EVP_DigestFinal_ex(sha, out_hash, &size) == 1 && size == kFullHashSize;
+    EVP_MD_CTX_free(sha);
+#else
+    SHA256 sha;
+    if (first_len) sha.update(first, first_len);
+    if (second_len) sha.update(second, second_len);
+    sha.finalize(out_hash, kFullHashSize);
+    ok = true;
+#endif
+    if (!ok) memset(out_hash, 0, kFullHashSize);
+    return ok;
+}
 void truncatedHash(const uint8_t* data, size_t len, uint8_t out_hash[kTruncatedHashSize])
 {
     uint8_t hash[kFullHashSize] = {};

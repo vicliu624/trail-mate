@@ -79,6 +79,9 @@ class MeshPeerDirectoryCore final : public IMeshPeerDirectory
     bool persistEncodedSnapshot(const uint8_t* data,
                                 std::size_t len,
                                 uint32_t revision);
+    // Storage owner calls this only after the matching encoded snapshot was
+    // accepted by its persistence port. A newer in-memory revision stays dirty.
+    bool acknowledgePersistedRevision(uint32_t revision);
 
     std::size_t count(MeshProtocol protocol) const;
     void clear();

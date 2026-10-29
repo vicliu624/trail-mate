@@ -1,6 +1,6 @@
 #pragma once
 
-#include <SHA256.h>
+#include "chat/infra/reticulum/interface_access_codec.h"
 #include <cstddef>
 #include <cstdint>
 
@@ -27,27 +27,7 @@ class IfacCodec
     void clear();
 
   private:
-    enum class State : uint8_t
-    {
-        Invalid,
-        Public,
-        Protected
-    };
-    void extract(const uint8_t* input, size_t size, const uint8_t* salt, size_t salt_size);
-    void expand(uint8_t counter);
-    void mask(uint8_t* frame, size_t size);
-    void clearScratch();
-    SHA256 hash_;
-    uint8_t key_[64]{};
-    uint8_t private_key_[64]{};
-    uint8_t public_key_[32]{};
-    uint8_t origin_[64]{};
-    uint8_t tag_[64]{};
-    uint8_t signature_[64]{};
-    uint8_t prk_[32]{};
-    uint8_t block_[32]{};
-    uint8_t tag_size_ = 0;
-    State state_ = State::Invalid;
+    InterfaceAccessCodec codec_;
 };
 static_assert(sizeof(IfacCodec) <= 640);
 } // namespace chat::reticulum

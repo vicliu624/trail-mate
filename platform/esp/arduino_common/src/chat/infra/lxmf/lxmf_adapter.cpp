@@ -2,8 +2,12 @@
  * @file lxmf_adapter.cpp
  * @brief Device-side LXMF adapter over the existing RNode raw carrier
  */
+#include "chat/infra/reticulum/link_handshake_wire.h"
+#include "chat/infra/lxmf/lxmf_incoming_envelope.h"
+#include "chat/infra/lxmf/lxmf_resource_wire.h"
 
 #include "platform/esp/arduino_common/chat/infra/lxmf/lxmf_adapter.h"
+#include "chat/infra/reticulum/path_request_wire.h"
 #include "geocaching/protocol/sign_record.h"
 #if (defined(ESP_PLATFORM) && !defined(ARDUINO)) || defined(TRAIL_MATE_USB_HOSTLINK_AUTOSTART)
 #include "hostlink/identity_backup_export.h"
@@ -110,7 +114,6 @@ constexpr size_t kLinkRequestBaseLen = 64;
 constexpr size_t kLinkSignallingLen = 3;
 constexpr size_t kResourceMapHashLen = 4;
 constexpr size_t kResourceDataPrefixLen = 4;
-constexpr size_t kResourceAdvertisementOverhead = 134;
 constexpr uint8_t kResourceFlagEncrypted = 1U << 0U;
 constexpr uint8_t kResourceFlagCompressed = 1U << 1U;
 constexpr uint8_t kResourceFlagSplit = 1U << 2U;
@@ -645,32 +648,7 @@ bool fullHashJoined(const uint8_t* first,
                     size_t second_len,
                     uint8_t out_hash[reticulum::kFullHashSize])
 {
-    if (!out_hash || (!first && first_len != 0) || (!second && second_len != 0))
-    {
-        return false;
-    }
-
-    mbedtls_sha256_context sha;
-    mbedtls_sha256_init(&sha);
-    bool ok = sha_compat::sha256_starts(&sha, 0) == 0;
-    if (ok && first_len != 0)
-    {
-        ok = sha_compat::sha256_update(&sha, first, first_len) == 0;
-    }
-    if (ok && second_len != 0)
-    {
-        ok = sha_compat::sha256_update(&sha, second, second_len) == 0;
-    }
-    if (ok)
-    {
-        ok = sha_compat::sha256_finish(&sha, out_hash) == 0;
-    }
-    mbedtls_sha256_free(&sha);
-    if (!ok)
-    {
-        std::memset(out_hash, 0, reticulum::kFullHashSize);
-    }
-    return ok;
+    return reticulum::fullHashJoined(first, first_len, second, second_len, out_hash);
 }
 
 bool unpackRnsLxmfEnvelope(const uint8_t expected_destination_hash[reticulum::kTruncatedHashSize],
@@ -678,43 +656,8 @@ bool unpackRnsLxmfEnvelope(const uint8_t expected_destination_hash[reticulum::kT
                            DecodedEnvelope* out_envelope,
                            bool* out_embedded_destination_hash)
 {
-    if (!expected_destination_hash || !payload || payload_len == 0 || !out_envelope)
-    {
-        return false;
-    }
-
-    const size_t full_envelope_min_len =
-        (reticulum::kTruncatedHashSize * 2U) + reticulum::kSignatureSize;
-    if (payload_len >= full_envelope_min_len &&
-        hashesEqual(payload, expected_destination_hash, reticulum::kTruncatedHashSize) &&
-        unpackMessageEnvelope(payload, payload_len, out_envelope))
-    {
-        if (out_embedded_destination_hash)
-        {
-            *out_embedded_destination_hash = true;
-        }
-        return true;
-    }
-
-    const size_t opportunistic_tail_min_len =
-        reticulum::kTruncatedHashSize + reticulum::kSignatureSize;
-    if (payload_len < opportunistic_tail_min_len)
-    {
-        return false;
-    }
-
-    runtime::RuntimeByteBuffer full_payload(reticulum::kTruncatedHashSize + payload_len);
-    memcpy(full_payload.data(), expected_destination_hash, reticulum::kTruncatedHashSize);
-    memcpy(full_payload.data() + reticulum::kTruncatedHashSize, payload, payload_len);
-    if (!unpackMessageEnvelope(full_payload.data(), full_payload.size(), out_envelope))
-    {
-        return false;
-    }
-    if (out_embedded_destination_hash)
-    {
-        *out_embedded_destination_hash = false;
-    }
-    return true;
+    return unpackMessageEnvelopeForDestination(expected_destination_hash, payload, payload_len,
+                                               out_envelope, out_embedded_destination_hash);
 }
 
 void copyHash(uint8_t* out, const uint8_t* in, size_t len)
@@ -819,13 +762,7 @@ bool packetContextUsesRawLinkPayload(uint8_t context)
 
 size_t resourceHashmapSegmentCapacity(uint16_t mdu)
 {
-    if (mdu <= kResourceAdvertisementOverhead)
-    {
-        return 1;
-    }
-
-    const size_t available = static_cast<size_t>(mdu) - kResourceAdvertisementOverhead;
-    return std::max<size_t>(1, available / kResourceMapHashLen);
+    return runtime::resourceHashmapCapacity(mdu);
 }
 
 void* bzip2PsramAlloc(void*, int items, int size)
@@ -940,17 +877,7 @@ bool decompressBzip2Payload(const uint8_t* compressed,
 
 void buildLinkSignallingBytes(uint16_t mtu, uint8_t out_bytes[kLinkSignallingLen])
 {
-    if (!out_bytes)
-    {
-        return;
-    }
-
-    const uint32_t signalling_value =
-        (static_cast<uint32_t>(mtu) & 0x1FFFFFU) |
-        ((static_cast<uint32_t>((kLinkModeAes256Cbc << 5) & 0xE0U)) << 16);
-    out_bytes[0] = static_cast<uint8_t>((signalling_value >> 16) & 0xFFU);
-    out_bytes[1] = static_cast<uint8_t>((signalling_value >> 8) & 0xFFU);
-    out_bytes[2] = static_cast<uint8_t>(signalling_value & 0xFFU);
+    reticulum::buildLinkSignalling(mtu, out_bytes);
 }
 
 uint16_t mtuFromLinkSignalling(const uint8_t* signalling_bytes, size_t len)
@@ -1041,34 +968,8 @@ bool computeLinkIdFromLinkRequest(const uint8_t* raw_packet, size_t raw_len,
                                   const reticulum::ParsedPacket& packet,
                                   uint8_t out_hash[reticulum::kTruncatedHashSize])
 {
-    if (!raw_packet || raw_len == 0 || !out_hash ||
-        packet.packet_type != reticulum::PacketType::LinkRequest ||
-        !packet.payload)
-    {
-        return false;
-    }
-
-    if (raw_len > kMaxPacketLen)
-    {
-        return false;
-    }
-
-    size_t working_len = raw_len;
-    runtime::RuntimeByteBuffer scratch(raw_len, 0);
-    memcpy(scratch.data(), raw_packet, raw_len);
-
-    if (packet.payload_len > 64)
-    {
-        const size_t trim = packet.payload_len - 64;
-        if (trim >= working_len)
-        {
-            return false;
-        }
-        working_len -= trim;
-    }
-
-    reticulum::computeTruncatedPacketHash(scratch.data(), working_len, out_hash);
-    return true;
+    (void)packet;
+    return reticulum::computeLinkRequestId(raw_packet, raw_len, out_hash);
 }
 
 } // namespace
@@ -6990,26 +6891,15 @@ bool LxmfAdapter::sendPathRequest(PeerInfo& peer)
         return false;
     }
 
-    uint8_t request_payload[reticulum::kTruncatedHashSize + kPathRequestTagSize] = {};
-    memcpy(request_payload, peer.destination_hash, reticulum::kTruncatedHashSize);
-    fillRandomBytes(request_payload + reticulum::kTruncatedHashSize, kPathRequestTagSize);
-
-    uint8_t control_hash[reticulum::kTruncatedHashSize] = {};
-    pathRequestDestinationHash(control_hash);
+    uint8_t request_tag[kPathRequestTagSize] = {};
+    fillRandomBytes(request_tag, sizeof(request_tag));
 
     std::memset(scratch_.path_request_packet,
                 0,
                 sizeof(scratch_.path_request_packet));
     size_t packet_len = sizeof(scratch_.path_request_packet);
-    if (!reticulum::buildHeader1Packet(reticulum::PacketType::Data,
-                                       reticulum::DestinationType::Plain,
-                                       reticulum::PacketContext::None,
-                                       false,
-                                       control_hash,
-                                       request_payload,
-                                       sizeof(request_payload),
-                                       scratch_.path_request_packet,
-                                       &packet_len))
+    if (!reticulum::buildPathRequest(peer.destination_hash, request_tag,
+                                     scratch_.path_request_packet, &packet_len))
     {
         return false;
     }
@@ -7043,26 +6933,15 @@ bool LxmfAdapter::sendPathRequestForDestination(
         return false;
     }
 
-    uint8_t request_payload[reticulum::kTruncatedHashSize + kPathRequestTagSize] = {};
-    memcpy(request_payload, destination_hash, reticulum::kTruncatedHashSize);
-    fillRandomBytes(request_payload + reticulum::kTruncatedHashSize, kPathRequestTagSize);
-
-    uint8_t control_hash[reticulum::kTruncatedHashSize] = {};
-    pathRequestDestinationHash(control_hash);
+    uint8_t request_tag[kPathRequestTagSize] = {};
+    fillRandomBytes(request_tag, sizeof(request_tag));
 
     std::memset(scratch_.path_request_packet,
                 0,
                 sizeof(scratch_.path_request_packet));
     size_t packet_len = sizeof(scratch_.path_request_packet);
-    if (!reticulum::buildHeader1Packet(reticulum::PacketType::Data,
-                                       reticulum::DestinationType::Plain,
-                                       reticulum::PacketContext::None,
-                                       false,
-                                       control_hash,
-                                       request_payload,
-                                       sizeof(request_payload),
-                                       scratch_.path_request_packet,
-                                       &packet_len))
+    if (!reticulum::buildPathRequest(destination_hash, request_tag,
+                                     scratch_.path_request_packet, &packet_len))
     {
         return false;
     }
@@ -8174,20 +8053,7 @@ bool LxmfAdapter::isLocalDestinationHash(const uint8_t hash[reticulum::kTruncate
 
 uint16_t LxmfAdapter::linkMduForMtu(uint16_t mtu)
 {
-    const size_t encrypted_payload_budget =
-        (mtu > reticulum::kPacketHeader1Size) ? (mtu - reticulum::kPacketHeader1Size) : 0;
-    if (encrypted_payload_budget <= reticulum::kTokenOverhead)
-    {
-        return 0;
-    }
-
-    const size_t token_budget = encrypted_payload_budget - reticulum::kTokenOverhead;
-    const size_t padded = (token_budget / 16U) * 16U;
-    if (padded == 0)
-    {
-        return 0;
-    }
-    return static_cast<uint16_t>(padded - 1U);
+    return reticulum::linkPayloadMdu(mtu);
 }
 
 bool LxmfAdapter::generateLinkSigningKey(uint8_t out_pub[LxmfIdentity::kSigPubKeySize],
@@ -9155,134 +9021,18 @@ bool LxmfAdapter::queueOutgoingResource(LinkSession& session,
                                         size_t request_id_len,
                                         uint32_t message_id)
 {
-    if (!data || len == 0 || session.mdu == 0 || (request_id_len != 0 && !request_id) ||
-        len > std::numeric_limits<uint32_t>::max() ||
-        len > (std::numeric_limits<size_t>::max() - kResourceDataPrefixLen) ||
-        len > (std::numeric_limits<size_t>::max() - sizeof(runtime::LinkResourceTransfer::random_hash)) ||
-        len > (std::numeric_limits<size_t>::max() - reticulum::kFullHashSize))
+    if (!data || !len || len > runtime::kMaxAdvertisedResourceBytes || !session.mdu ||
+        (request_id_len && !request_id)) return false;
+    auto* queued_resource = link_manager_.createOutgoingResource(session);
+    if (!queued_resource) return false;
+    const auto random = [](void*, uint8_t* bytes, size_t size)
     {
-        return false;
-    }
-
-    runtime::ResourcePayloadBuffer stream(kResourceDataPrefixLen + len, 0);
-    fillRandomBytes(stream.data(), kResourceDataPrefixLen);
-    memcpy(stream.data() + kResourceDataPrefixLen, data, len);
-
-    const size_t encrypted_capacity = reticulum::tokenSizeForPlaintext(stream.size());
-    runtime::ResourcePayloadBuffer encrypted_stream(encrypted_capacity, 0);
-    size_t encrypted_len = encrypted_stream.size();
-    uint8_t iv[reticulum::kTokenIvSize] = {};
-    fillRandomBytes(iv, sizeof(iv));
-    if (!reticulum::tokenEncrypt(session.derived_key,
-                                 iv,
-                                 stream.data(),
-                                 stream.size(),
-                                 encrypted_stream.data(),
-                                 &encrypted_len))
-    {
-        return false;
-    }
-    encrypted_stream.resize(encrypted_len);
-
-    const size_t part_count =
-        (encrypted_stream.size() + static_cast<size_t>(session.mdu) - 1U) / static_cast<size_t>(session.mdu);
-    if (part_count == 0)
-    {
-        return false;
-    }
-
-    const size_t segment_capacity = resourceHashmapSegmentCapacity(session.mdu);
-    const size_t collision_guard = (kResourceWindowSize * 2U) + segment_capacity;
-
-    LinkResourceTransfer resource{};
-    if (!link_manager_.initialiseOutgoingResource(resource,
-                                                  request_id,
-                                                  request_id_len,
-                                                  static_cast<uint32_t>(len),
-                                                  static_cast<uint32_t>(encrypted_stream.size()),
-                                                  static_cast<uint32_t>(part_count),
-                                                  flags | kResourceFlagEncrypted,
-                                                  millis(),
-                                                  kResourceWindowSize))
-    {
-        return false;
-    }
-    bool mapped = false;
-    for (size_t attempt = 0; attempt < 8 && !mapped; ++attempt)
-    {
-        fillRandomBytes(resource.random_hash, sizeof(resource.random_hash));
-
-        if (!fullHashJoined(data,
-                            len,
-                            resource.random_hash,
-                            sizeof(resource.random_hash),
-                            resource.resource_hash))
-        {
-            return false;
-        }
-        memcpy(resource.original_hash, resource.resource_hash, sizeof(resource.original_hash));
-
-        if (!fullHashJoined(data,
-                            len,
-                            resource.resource_hash,
-                            reticulum::kFullHashSize,
-                            resource.expected_proof))
-        {
-            return false;
-        }
-
-        resource.hashmap.clear();
-        runtime::RuntimeMapHashList recent_hashes;
-        recent_hashes.reserve(collision_guard);
-        bool collision = false;
-
-        for (size_t index = 0; index < part_count; ++index)
-        {
-            const size_t offset = index * static_cast<size_t>(session.mdu);
-            const size_t chunk_len =
-                std::min(static_cast<size_t>(session.mdu), encrypted_stream.size() - offset);
-
-            resource.parts[index].assign(encrypted_stream.begin() + offset,
-                                         encrypted_stream.begin() + offset + chunk_len);
-
-            uint8_t full_hash[reticulum::kFullHashSize] = {};
-            if (!fullHashJoined(resource.parts[index].data(),
-                                chunk_len,
-                                resource.random_hash,
-                                sizeof(resource.random_hash),
-                                full_hash))
-            {
-                return false;
-            }
-
-            std::array<uint8_t, kResourceMapHashLen> map_hash{};
-            memcpy(map_hash.data(), full_hash, map_hash.size());
-            if (std::find(recent_hashes.begin(), recent_hashes.end(), map_hash) != recent_hashes.end())
-            {
-                collision = true;
-                break;
-            }
-
-            resource.map_hashes[index] = map_hash;
-            resource.hashmap.insert(resource.hashmap.end(), map_hash.begin(), map_hash.end());
-            recent_hashes.push_back(map_hash);
-            if (recent_hashes.size() > collision_guard)
-            {
-                recent_hashes.erase(recent_hashes.begin());
-            }
-        }
-
-        mapped = !collision;
-    }
-
-    if (!mapped)
-    {
-        return false;
-    }
-
-    LinkResourceTransfer* queued_resource =
-        link_manager_.appendOutgoingResource(session, std::move(resource));
-    if (!queued_resource || !advertiseLinkResource(session, *queued_resource, 0))
+        fillRandomBytes(bytes, size);
+        return true;
+    };
+    if (!runtime::prepareOutgoingResource(data, len, session.derived_key, session.mdu,
+        flags, request_id, request_id_len, millis(), kResourceWindowSize, random, nullptr, *queued_resource) ||
+        !advertiseLinkResource(session, *queued_resource, 0))
     {
         (void)link_manager_.discardLastOutgoingResource(session);
         return false;

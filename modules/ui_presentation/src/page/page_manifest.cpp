@@ -1,6 +1,7 @@
 #include "ui_presentation/page/page_manifest.h"
 
 #include <cstring>
+#include <array>
 
 namespace ui::presentation
 {
@@ -78,6 +79,9 @@ constexpr PageManifestItem kUConsoleDesktopItems[] = {
 };
 
 constexpr PageManifestItem kCardputerCompactItems[] = {
+    {PageId::Calendar, "calendar", true, true},
+    {PageId::Geocaching, "geocaching", true, true},
+    {PageId::Calculator, "calculator", true, true},
     {PageId::Dashboard, "dashboard", true, true},
     {PageId::Chat, "chat", true, true},
     {PageId::Contacts, "contacts", true, true},
@@ -85,6 +89,7 @@ constexpr PageManifestItem kCardputerCompactItems[] = {
     {PageId::SkyPlot, "sky_plot", true, true},
     {PageId::Team, "team", true, true},
     {PageId::Tracker, "tracker", true, true},
+    {PageId::EnergySweep, "energy_sweep", true, true},
     {PageId::WalkieTalkie, "walkie_talkie", true, true},
     {PageId::Extensions, "extensions", true, true},
     {PageId::Settings, "settings", true, true},
@@ -95,7 +100,17 @@ constexpr PageManifestItem kNodeHeadlessItems[] = {
     {PageId::Diagnostics, "diagnostics", true, false},
 };
 
+template <std::size_t N>
+constexpr std::array<PageManifestItem, N + 1> withCalendar(const PageManifestItem (&base)[N])
+{
+    std::array<PageManifestItem, N + 1> result{};
+    result[0] = {PageId::Calendar, "calendar", true, true};
+    for (std::size_t index = 0; index < N; ++index) result[index + 1] = base[index];
+    return result;
+}
+constexpr auto kTDisplayCm0Items = withCalendar(kTDisplayP4TouchItems);
 constexpr PageManifest kManifests[] = {
+    {"t_display_cm0_touch_manifest", kTDisplayCm0Items.data(), kTDisplayCm0Items.size()},
     {"tab5_touch_manifest", kTab5TouchItems, sizeof(kTab5TouchItems) / sizeof(kTab5TouchItems[0])},
     {"t_display_p4_touch_manifest", kTDisplayP4TouchItems, sizeof(kTDisplayP4TouchItems) / sizeof(kTDisplayP4TouchItems[0])},
     {"pager_compact_manifest", kPagerCompactItems, sizeof(kPagerCompactItems) / sizeof(kPagerCompactItems[0])},

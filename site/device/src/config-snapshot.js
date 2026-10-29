@@ -1,8 +1,10 @@
 import {OPERATION} from './management-protocol.js';
 import {bytes,equal,integer} from '../../geocaching/src/protocol.js';
 import {TmsDocument} from './tms-document.js';
+import {configurationReadySession} from './config-ready-request.js';
 
-export async function readConfigSnapshot(session,{signal,onProgress=()=>{},digest=async data=>new Uint8Array(await crypto.subtle.digest('SHA-256',data))}={}){
+export async function readConfigSnapshot(session,{signal,onProgress=()=>{},readyPollMs,readyTimeoutMs,digest=async data=>new Uint8Array(await crypto.subtle.digest('SHA-256',data))}={}){
+ session=configurationReadySession(session,{signal,readyPollMs,readyTimeoutMs});
  let offset=0,total,hash,output;
  do{
    if(signal?.aborted)throw signal.reason??new DOMException('Read cancelled','AbortError');

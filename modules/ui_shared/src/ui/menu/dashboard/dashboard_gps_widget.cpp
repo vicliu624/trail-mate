@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <string>
 
 #include "platform/ui/gps_runtime.h"
 #include "sys/clock.h"
@@ -221,6 +222,11 @@ void refresh_gps_widget(void* context)
     const bool has_snapshot =
         platform::ui::gps::get_gnss_snapshot(sats, ::gps::kMaxGnssSats, &sat_count, &gnss);
     const auto status_snapshot = gps_ui.model.snapshot();
+    if (status_snapshot.header.valid && !status_snapshot.receiver_ready)
+    {
+        sat_count = 0;
+        gnss = {};
+    }
     const bool fix = status_snapshot.header.valid
                          ? status_snapshot.fix_valid
                          : (has_snapshot && gnss.fix != ::gps::GnssFix::NOFIX);
@@ -314,15 +320,17 @@ void refresh_gps_widget(void* context)
         lv_obj_set_style_border_color(gps_ui.radar_rings[i], i == 0 ? color_info() : color_line(), 0);
     }
 
-    char footer[72];
-    std::snprintf(footer,
-                  sizeof(footer),
-                  "%s",
-                  ::ui::i18n::format(
-                      fix ? "position stream active  |  %u in view" : "waiting for better sky view  |  %u in view",
-                      visible_sats)
-                      .c_str());
-    set_label_text_if_changed_raw(gps_ui.footer_label, footer);
+    const char* inactive = nullptr;
+    if (status_snapshot.header.valid)
+    {
+        if (!status_snapshot.receiver_enabled) inactive = "GPS is turned off";
+        else if (!status_snapshot.receiver_configured) inactive = "GNSS source not configured";
+        else if (!status_snapshot.receiver_powered) inactive = "GPS power is off";
+        else if (!status_snapshot.receiver_ready) inactive = "Waiting for GNSS receiver";
+    }
+    else if (!has_snapshot) inactive = "Waiting for GNSS receiver";
+    const auto footer = inactive ? std::string(::ui::i18n::tr(inactive)) : ::ui::i18n::format(fix ? "position stream active  |  %u in view" : "waiting for better sky view  |  %u in view", visible_sats);
+    set_label_text_if_changed_raw(gps_ui.footer_label, footer.c_str());
 }
 
 } // namespace ui::menu::dashboard

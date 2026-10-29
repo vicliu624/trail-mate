@@ -31,6 +31,7 @@ int main(int argc, char** argv)
     std::array<uint8_t, 565> frame{};
     while (std::getline(input, line))
     {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
         if (line.empty() || line[0] == '#') continue;
         std::istringstream fields(line);
         std::array<std::string, 5> field;

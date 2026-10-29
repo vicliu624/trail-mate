@@ -1,5 +1,6 @@
 #include "ui/screens/gps/gps_page_runtime.h"
 #include "ui/screens/geocaching/geocaching_page_shell.h"
+#include "ui/ux_build_config.h"
 
 using Host = gps::ui::shell::Host;
 using Projection = gps::ui::shell::Projection;
@@ -897,7 +898,9 @@ void toggle_map_info_visibility()
 
 bool help_uses_f1()
 {
-#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX) || defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)
+#if defined(TRAIL_MATE_PLATFORM_LINUX)
+    return false;
+#elif defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX) || defined(TRAIL_MATE_UI_P4_TOUCH)
     return true;
 #else
     return false;
@@ -921,6 +924,9 @@ lv_coord_t tracker_button_width()
 
 bool is_help_key(uint32_t key)
 {
+#if defined(TRAIL_MATE_PLATFORM_LINUX)
+    if (key == kLvglFunctionKeyF1) return true;
+#endif
     if (help_uses_f1())
     {
         return key == kLvglFunctionKeyF1;
@@ -977,7 +983,7 @@ std::string route_path_basename(const std::string& path)
 
 std::string route_asset_id_for_path(const std::string& path)
 {
-    if (track_sharing::isInstalledPackageRoute(path)) return path.substr(8, 66);
+    if (track_sharing::isInstalledPackageRouteAtRoot(path, platform::ui::route_storage::route_dir())) return path.substr(path.size() - 70, 66);
     const std::string name = route_path_basename(path);
     std::uint32_t hash = 2166136261U;
     for (unsigned char ch : name)
@@ -1625,7 +1631,7 @@ void ensure_map_route_image_cache_build()
         return;
     }
 
-    const bool package = track_sharing::isInstalledPackageRoute(s_track_file);
+    const bool package = track_sharing::isInstalledPackageRouteAtRoot(s_track_file, platform::ui::route_storage::route_dir());
     if (package && status.asset_id == s_route_asset_id && status.phase == platform::ui::route_storage::RouteImageDownloadPhase::Failed) return;
 
     std::vector<platform::ui::route_storage::RouteImageCacheItem> items;

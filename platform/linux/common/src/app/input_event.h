@@ -1,5 +1,6 @@
 #pragma once
 
+#include "app/text_input.h"
 #include <string>
 #include <utility>
 
@@ -25,6 +26,7 @@ enum class InputKey
     Up,
     Down,
     F1,
+    TextEdit,
 };
 
 struct InputEvent
@@ -32,6 +34,7 @@ struct InputEvent
     InputKey key{InputKey::Unknown};
     std::string label{};
     char text{'\0'};
+    app::TextEdit edit{};
 };
 
 [[nodiscard]] inline InputEvent makeCharacterInput(char ch, std::string label = {})

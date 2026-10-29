@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <exception>
 
+#include "platform/linux/application_lifecycle.h"
 #include "platform/wayland/wayland_presenter.h"
 #include "ui/shell_ui_runner.h"
 
@@ -23,15 +24,17 @@ std::chrono::milliseconds auto_exit_after()
 
 } // namespace
 
-int main()
+int main(int, char** argv)
 {
+    return ::platform::linux_runtime::run_application(argv, [&]() -> int
+                                                      {
     try
     {
         trailmate::cardputer_zero::platform::wayland::WaylandPresenter
             presenter;
         trailmate::cardputer_zero::linux_ui::runShellUi(
             presenter,
-            auto_exit_after());
+            auto_exit_after(), true);
         return 0;
     }
     catch (const std::exception& error)
@@ -40,5 +43,5 @@ int main()
                      "trailmate-cardputer-zero-wayland: %s\n",
                      error.what());
         return 1;
-    }
+    } });
 }

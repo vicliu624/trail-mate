@@ -1,12 +1,13 @@
 #include "ui/screens/walkie_talkie/walkie_talkie_page_runtime.h"
 
-#if defined(ARDUINO) || defined(ESP_PLATFORM) || defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+#if defined(ARDUINO) || defined(ESP_PLATFORM) || defined(TRAIL_MATE_PLATFORM_LINUX)
 
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/screen_runtime.h"
 #include "platform/ui/walkie_runtime.h"
 #include "ui/app_runtime.h"
 #include "ui/localization.h"
+#include "ui/page/page_profile.h"
 #include "ui/runtime/ui_feedback.h"
 #include "ui/ui_common.h"
 #include "ui/ui_status.h"
@@ -301,10 +302,35 @@ void update_vu(lv_obj_t* fill, uint8_t level)
     lv_obj_align(fill, LV_ALIGN_BOTTOM_MID, 0, 0);
 }
 
+void set_freq_text(float freq_mhz);
+void set_error_text(const char* message);
+
+void ptt_event_cb(lv_event_t* event)
+{
+    const auto code = lv_event_get_code(event);
+    if (code == LV_EVENT_PRESSED) platform::ui::walkie::set_ptt(true);
+    else if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST ||
+             code == LV_EVENT_DEFOCUSED || code == LV_EVENT_DELETE)
+        platform::ui::walkie::set_ptt(false);
+}
+
 void refresh_cb(lv_timer_t*)
 {
     platform::ui::walkie::Status st = platform::ui::walkie::get_status();
     ui_update_top_bar_battery(s_top_bar);
+    if (!st.active)
+    {
+        const char* error = platform::ui::walkie::last_error();
+        if (s_mode_label)
+        {
+            ::ui::i18n::set_label_text(s_mode_label, error && *error ? error : "Starting...");
+            lv_obj_set_style_text_color(s_mode_label, lv_color_hex(kWarn), LV_PART_MAIN);
+        }
+        update_vu(s_left_fill, 0);
+        update_vu(s_right_fill, 0);
+        return;
+    }
+    set_freq_text(st.freq_mhz);
     if (s_mode_label)
     {
         ::ui::i18n::set_label_text(s_mode_label, st.tx ? "TALK" : "LISTEN");
@@ -573,6 +599,20 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     {
         lv_group_add_obj(app_g, s_monitor_row);
         lv_group_set_editing(app_g, false);
+    }
+
+    if (::ui::page_profile::current().large_touch_hitbox)
+    {
+        lv_obj_t* ptt = lv_button_create(s_control_panel);
+        lv_obj_set_size(ptt, LV_PCT(100), 48);
+        lv_obj_set_style_bg_color(ptt, lv_color_hex(kAmber), 0);
+        lv_obj_set_style_bg_color(ptt, lv_color_hex(kAmberDark), LV_STATE_PRESSED);
+        lv_obj_set_style_text_color(ptt, lv_color_hex(kText), 0);
+        lv_obj_add_event_cb(ptt, ptt_event_cb, LV_EVENT_ALL, nullptr);
+        lv_obj_t* label = lv_label_create(ptt);
+        ::ui::i18n::set_label_text(label, "Hold to talk");
+        lv_obj_center(label);
+        if (app_g) lv_group_add_obj(app_g, ptt);
     }
 
     lv_obj_t* level_row = lv_obj_create(stack);

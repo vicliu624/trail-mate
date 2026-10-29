@@ -30,14 +30,19 @@ struct RuntimePaths
 ///      - TRAIL_MATE_SETTINGS_ROOT
 ///      - TRAIL_MATE_SD_ROOT
 ///      - TRAIL_MATE_CACHE_ROOT
-///   2. On Linux:   $HOME/.trailmate_cardputer_zero
-///   3. On Windows: %APPDATA%/TrailMateCardputerZero
-///   4. Fallback:   cwd/.trailmate_cardputer_zero
+///   2. Composition-provided roots, if configure_runtime_paths was called.
+///   3. Legacy Linux: $HOME/.trailmate_cardputer_zero
+///   4. Legacy Windows: %APPDATA%/TrailMateCardputerZero
+///   5. Legacy fallback: cwd/.trailmate_cardputer_zero
 ///
 /// sd_root defaults to <settings_root>/sdcard.
 /// cache_root defaults to <settings_root>/cache.
 /// state_root is the same as settings_root.
 RuntimePaths resolve_paths();
+// New compositions can select generic XDG locations without changing the
+// defaults or identities of older Linux applications. No directories are made.
+RuntimePaths xdg_application_paths();
+bool configure_runtime_paths(const RuntimePaths& paths);
 
 /// Convenience: settings file for a given namespace.
 /// Returns <settings_root>/settings/<sanitized_ns>.kv
@@ -49,6 +54,8 @@ std::filesystem::path sqlite_database_path();
 
 /// Convenience: child path under sd_root.
 std::filesystem::path sd_child(std::string_view relative);
+// Installed language/font/IME resources. Override with TRAIL_MATE_RESOURCE_PACK_ROOT.
+std::filesystem::path resource_pack_root();
 
 /// Ensure a directory tree exists. Returns true on success.
 bool ensure_directory(const std::filesystem::path& path);

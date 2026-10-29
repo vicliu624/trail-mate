@@ -1,4 +1,5 @@
 #include "walkie/walkie_service.h"
+#include "walkie/packet.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -188,26 +189,12 @@ int16_t compute_peak(const int16_t* samples, int count)
     return static_cast<int16_t>(peak);
 }
 
-void write_u32_le(uint8_t* out, uint32_t val)
-{
-    out[0] = static_cast<uint8_t>(val & 0xFF);
-    out[1] = static_cast<uint8_t>((val >> 8) & 0xFF);
-    out[2] = static_cast<uint8_t>((val >> 16) & 0xFF);
-    out[3] = static_cast<uint8_t>((val >> 24) & 0xFF);
-}
-
 uint32_t read_u32_le(const uint8_t* in)
 {
     return static_cast<uint32_t>(in[0]) |
            (static_cast<uint32_t>(in[1]) << 8) |
            (static_cast<uint32_t>(in[2]) << 16) |
            (static_cast<uint32_t>(in[3]) << 24);
-}
-
-void write_u16_le(uint8_t* out, uint16_t val)
-{
-    out[0] = static_cast<uint8_t>(val & 0xFF);
-    out[1] = static_cast<uint8_t>((val >> 8) & 0xFF);
 }
 
 uint16_t read_u16_le(const uint8_t* in)
@@ -448,16 +435,10 @@ void walkie_task(void*)
 
                 if (!tx_in_flight && tx_frame_count >= kCodecFramesPerPacket)
                 {
-                    packet_buf[0] = kHeaderMagic0;
-                    packet_buf[1] = kHeaderMagic1;
-                    packet_buf[2] = kHeaderVersion;
-                    packet_buf[3] = 0x01;
-                    write_u32_le(&packet_buf[4], self_id);
-                    write_u16_le(&packet_buf[8], session_id);
-                    write_u16_le(&packet_buf[10], seq++);
                     uint16_t frame0_index =
                         static_cast<uint16_t>(tx_frame_counter - tx_frame_count);
-                    write_u16_le(&packet_buf[12], frame0_index);
+                    ::walkie::core::write_header(packet_buf,
+                                                 {self_id, session_id, seq++, frame0_index});
                     for (size_t i = 0; i < kCodecFramesPerPacket; ++i)
                     {
                         const uint8_t* src = tx_frame_buf + (tx_frame_head * bytes_per_frame);

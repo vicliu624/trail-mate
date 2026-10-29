@@ -155,6 +155,11 @@ bool buildPeerDatagramPayload(PayloadProfile profile,
                               uint8_t* out_payload, size_t out_cap, size_t* out_len);
 bool decodeDirectAppPayload(const uint8_t* plain, size_t plain_len, DecodedDirectAppPayload* out);
 bool decodeGroupAppPayload(const uint8_t* plain, size_t plain_len, DecodedGroupAppPayload* out);
+// PATH/ACK has a fixed four-byte token; zero-valued token bytes are not padding.
+size_t trimPeerPlaintextPadding(uint8_t payload_type, const uint8_t* plain, size_t padded_size);
+// Retains the defined size of fixed NodeInfo controls, including name zeros.
+size_t trimGroupPlaintextPadding(const uint8_t* plain, size_t padded_size);
+bool isFixedNodeInfoPayload(uint32_t port, const uint8_t* payload, size_t size);
 bool hasControlPrefix(const uint8_t* payload, size_t len, uint8_t kind);
 bool buildNodeInfoQueryControlPayload(bool request_reply,
                                       uint8_t* out_payload, size_t out_cap, size_t* out_len);

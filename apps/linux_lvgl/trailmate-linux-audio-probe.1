@@ -1,0 +1,49 @@
+.TH TRAILMATE-LINUX-AUDIO-PROBE 1 "October 2026" "Trail Mate" "User Commands"
+.SH NAME
+trailmate\-linux\-audio\-probe \- inspect Linux audio devices and PCM transport
+.SH SYNOPSIS
+.B trailmate\-linux\-audio\-probe
+.RI [ options ]
+.SH DESCRIPTION
+Lists SDL audio devices or performs a bounded mono PCM capture, reporting sample
+counts, peak amplitude, dropped samples and capture shutdown state.
+Captured samples are used to calculate statistics and then discarded.
+An optional playback check queues 100 milliseconds of digital silence and waits
+for the output transport to drain.
+Acoustic microphone and speaker checks require separate observation.
+.SH OPTIONS
+.TP
+.B \-\-list\-devices
+List the current audio driver and available capture and playback devices.
+Without a capture duration, exit after listing devices.
+.TP
+.BI \-\-capture\-ms " N"
+Capture for 100 to 5000 milliseconds. A duration is required unless devices are
+only being listed.
+.TP
+.BI \-\-rate " N"
+Set the requested sample rate from 8000 to 48000 Hz. The default is 15000 Hz.
+.TP
+.BI \-\-input " NAME"
+Select a capture device by its SDL device name. By default, use the audio
+system's default capture device.
+.TP
+.B \-\-play\-silence
+After capture, check silent playback and output shutdown at the requested rate.
+.SH EXAMPLES
+.nf
+trailmate-linux-audio-probe --list-devices
+trailmate-linux-audio-probe --capture-ms 500 --rate 15000 --play-silence
+.fi
+.SH EXIT STATUS
+.TP
+.B 0
+The requested device listing or capture/playback transport checks succeeded.
+.TP
+.B 1
+An audio driver, capture, playback or shutdown check failed.
+.TP
+.B 2
+Invalid arguments or values outside the supported ranges.
+.SH SEE ALSO
+.BR trailmate-linux (1)

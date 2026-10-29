@@ -4,6 +4,7 @@
  */
 
 #include "platform/esp/arduino_common/chat/infra/lxmf/lxmf_propagation_stamp_runtime.h"
+#include "chat/infra/lxmf/lxmf_propagation_stamp.h"
 #include "platform/esp/common/mbedtls_sha256_compat.h"
 
 #include <cstring>
@@ -13,30 +14,6 @@
 
 namespace chat::lxmf::runtime
 {
-namespace
-{
-
-std::size_t packRoundNumber(uint16_t value, uint8_t out[3])
-{
-    if (value <= 0x7FU)
-    {
-        out[0] = static_cast<uint8_t>(value);
-        return 1;
-    }
-    if (value <= 0xFFU)
-    {
-        out[0] = 0xCC;
-        out[1] = static_cast<uint8_t>(value);
-        return 2;
-    }
-    out[0] = 0xCD;
-    out[1] = static_cast<uint8_t>((value >> 8) & 0xFFU);
-    out[2] = static_cast<uint8_t>(value & 0xFFU);
-    return 3;
-}
-
-} // namespace
-
 PropagationStampRuntime::PropagationStampRuntime()
 {
     mbedtls_sha256_init(&base_hash_);
@@ -165,34 +142,15 @@ void PropagationStampRuntime::failAndRelease()
 
 bool PropagationStampRuntime::expandOneRound()
 {
+    static_assert(kExpandRounds == kPropagationStampExpandRounds && kRoundBytes == kPropagationStampRoundBytes);
     if (!workblock_ || expanded_rounds_ >= kExpandRounds)
     {
         return false;
     }
 
-    uint8_t round_number[3] = {};
-    const std::size_t round_number_len =
-        packRoundNumber(expanded_rounds_, round_number);
-    uint8_t salt_material[reticulum::kFullHashSize + sizeof(round_number)] = {};
-    std::memcpy(salt_material, transient_id_, sizeof(transient_id_));
-    std::memcpy(salt_material + sizeof(transient_id_),
-                round_number,
-                round_number_len);
-    uint8_t salt[reticulum::kFullHashSize] = {};
-    reticulum::fullHash(salt_material,
-                        sizeof(transient_id_) + round_number_len,
-                        salt);
-
     uint8_t* output =
         workblock_ + static_cast<std::size_t>(expanded_rounds_) * kRoundBytes;
-    if (!reticulum::hkdfSha256(transient_id_,
-                               sizeof(transient_id_),
-                               salt,
-                               sizeof(salt),
-                               nullptr,
-                               0,
-                               output,
-                               kRoundBytes))
+    if (!expandPropagationStampRound(transient_id_, expanded_rounds_, output))
     {
         return false;
     }
@@ -256,24 +214,7 @@ bool PropagationStampRuntime::meetsTarget(
     const uint8_t hash[reticulum::kFullHashSize],
     uint8_t target_cost)
 {
-    if (!hash || target_cost == 0)
-    {
-        return hash != nullptr;
-    }
-    uint8_t remaining = target_cost;
-    for (std::size_t index = 0;
-         index < reticulum::kFullHashSize && remaining != 0;
-         ++index)
-    {
-        const uint8_t bits = remaining >= 8 ? 8 : remaining;
-        const uint8_t mask = static_cast<uint8_t>(0xFFU << (8U - bits));
-        if ((hash[index] & mask) != 0)
-        {
-            return false;
-        }
-        remaining = static_cast<uint8_t>(remaining - bits);
-    }
-    return remaining == 0;
+    return propagationStampMeetsTarget(hash, target_cost);
 }
 
 } // namespace chat::lxmf::runtime

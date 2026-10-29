@@ -1,7 +1,7 @@
 #include "platform/ui/reticulum_group_config_runtime.h"
 
 #include "platform/linux/runtime_paths.h"
-#include "platform/ui/device_runtime.h"
+#include "platform/linux/storage_monitor.h"
 
 #include <cstdio>
 #include <cstring>
@@ -136,7 +136,11 @@ Status load(chat::ReticulumGroupDestinationConfig* groups, std::size_t group_cou
 {
     Status out{};
     out.supported = true;
-    out.sd_present = ::platform::ui::device::card_ready();
+    // This is a file-I/O operation, including startup migration. Its readiness
+    // must not depend on whether the UI monitor has published its first sample.
+    out.sd_present = ::platform::linux_runtime::probe_storage_root(
+                         ::platform::linux_runtime::resolve_paths().sd_root)
+                         .available;
     if (!groups || group_count == 0)
     {
         set_status(out, "Group storage unavailable", kLogicalPath);
@@ -255,7 +259,9 @@ Status save(const chat::ReticulumGroupDestinationConfig* groups, std::size_t gro
 {
     Status out{};
     out.supported = true;
-    out.sd_present = ::platform::ui::device::card_ready();
+    out.sd_present = ::platform::linux_runtime::probe_storage_root(
+                         ::platform::linux_runtime::resolve_paths().sd_root)
+                         .available;
     if (!groups || group_count == 0)
     {
         set_status(out, "Group storage unavailable", kLogicalPath);

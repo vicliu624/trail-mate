@@ -3,6 +3,8 @@
 #include <cstring>
 
 #include "app/app_facade_access.h"
+#include "platform/linux/geocaching_source.h"
+#include "platform/linux/runtime_paths.h"
 #include "sys/event_bus.h"
 #include "ui/chat_ui_runtime.h"
 
@@ -83,11 +85,17 @@ MinimalLinuxAppFacade::MinimalLinuxAppFacade()
           .default_node_name = "Cardputer Zero",
           .default_short_name = "CZ",
           .demo_broadcast_text = "Broadcast: Cardputer Zero local mesh online.",
+          .ble_supported = false,
       })
 {
 }
 
-MinimalLinuxAppFacade::~MinimalLinuxAppFacade() = default;
+MinimalLinuxAppFacade::~MinimalLinuxAppFacade()
+{
+    if (geocaching_) shutdown();
+}
+MinimalLinuxAppFacade::MinimalLinuxAppFacade(::trailmate::linux_app::LinuxAppServicesOptions options)
+    : services_(options) {}
 
 bool MinimalLinuxAppFacade::initialize()
 {
@@ -98,6 +106,8 @@ bool MinimalLinuxAppFacade::initialize()
     }
     if (!::app::hasAppFacade())
     {
+        geocaching_ = std::make_unique<::platform::linux_runtime::LinuxGeocachingSource>(
+            ::platform::linux_runtime::sqlite_database_path(), ::platform::linux_runtime::resolve_paths().sd_root);
         ::app::bindAppFacade(*this);
     }
     return true;
@@ -105,6 +115,10 @@ bool MinimalLinuxAppFacade::initialize()
 
 void MinimalLinuxAppFacade::shutdown()
 {
+    if (geocaching_)
+    {
+        geocaching_.reset();
+    }
     if (::app::hasAppFacade())
     {
         ::app::unbindAppFacade();
@@ -112,6 +126,9 @@ void MinimalLinuxAppFacade::shutdown()
     services_.setUiEventDispatcher(nullptr, nullptr);
     services_.shutdown();
 }
+
+::ui::geocaching::Source* MinimalLinuxAppFacade::geocachingSource() { return geocaching_.get(); }
+::platform::linux_runtime::IVoiceSource* MinimalLinuxAppFacade::voiceSource() { return services_.voiceSource(); }
 
 bool MinimalLinuxAppFacade::is_initialized() const noexcept
 {
@@ -296,6 +313,10 @@ void MinimalLinuxAppFacade::setBleEnabled(bool enabled)
 void MinimalLinuxAppFacade::restartDevice()
 {
     services_.restartDevice();
+}
+void MinimalLinuxAppFacade::setPhonePairingPresenter(std::function<bool(const ::platform::linux_runtime::PhonePairingDisplay&)> presenter)
+{
+    services_.setPhonePairingPresenter(std::move(presenter));
 }
 
 ::chat::ui::IChatUiRuntime* MinimalLinuxAppFacade::getChatUiRuntime()

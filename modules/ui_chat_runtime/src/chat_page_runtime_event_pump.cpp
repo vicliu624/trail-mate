@@ -136,6 +136,7 @@ void ChatPageRuntimeEventPump::handleUnreadChanged()
 void ChatPageRuntimeEventPump::handleKeyVerificationNumberRequest(
     const sys::KeyVerificationNumberRequestEvent& event)
 {
+    if (event.has_protocol && event.protocol != chat::ui::support::active_mesh_protocol()) return;
     if (key_verification_source_ != nullptr)
     {
         key_verification_source_->onNumberRequest(event.node_id, event.nonce);
@@ -148,6 +149,7 @@ void ChatPageRuntimeEventPump::handleKeyVerificationNumberRequest(
 void ChatPageRuntimeEventPump::handleKeyVerificationNumberInform(
     const sys::KeyVerificationNumberInformEvent& event)
 {
+    if (event.has_protocol && event.protocol != chat::ui::support::active_mesh_protocol()) return;
     if (key_verification_source_ != nullptr)
     {
         key_verification_source_->onNumberInform(event.node_id,
@@ -162,12 +164,14 @@ void ChatPageRuntimeEventPump::handleKeyVerificationNumberInform(
 void ChatPageRuntimeEventPump::handleKeyVerificationFinal(
     const sys::KeyVerificationFinalEvent& event)
 {
+    if (event.has_protocol && event.protocol != chat::ui::support::active_mesh_protocol()) return;
     if (key_verification_source_ != nullptr)
     {
-        key_verification_source_->onFinal(event.node_id,
-                                          event.nonce,
-                                          event.is_sender,
-                                          event.verification_code);
+        if (event.runtime_failure) key_verification_source_->onRuntimeFailure(event.node_id);
+        else key_verification_source_->onFinal(event.node_id,
+                                               event.nonce,
+                                               event.is_sender,
+                                               event.verification_code);
     }
     showKeyVerificationForPeer(
         chat::ui::support::active_mesh_protocol(),

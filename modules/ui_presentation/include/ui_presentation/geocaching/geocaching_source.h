@@ -100,6 +100,10 @@ class Source
     {
         requestWindow(section, offset, count);
     }
+    // A source with independent local stores may omit an unavailable section
+    // from Map while keeping its browse error visible. Loading stays busy;
+    // availability changes must advance localMapRevision so Map retries it.
+    virtual void mapSnapshot(Section section, Snapshot& out) { snapshot(section, out); }
     // Read a single row from this generation without I/O. False means stale.
     virtual bool item(Section section, std::size_t index, std::uint64_t generation, Item& out) = 0;
     virtual void refresh(Section section) = 0;

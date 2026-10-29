@@ -51,9 +51,13 @@ void CardputerCompactUxPack::buildScreens(ScreenRegistry& out) const
     (void)out.add({ScreenId::SkyPlot, "Sky Plot", true});
     (void)out.add({ScreenId::Team, "Team", true});
     (void)out.add({ScreenId::Tracker, "Tracker", true});
+    (void)out.add({ScreenId::Calculator, "Calculator", true});
+    (void)out.add({ScreenId::Geocaching, "Geocaching", true});
+    (void)out.add({ScreenId::EnergySweep, "Protocol Probe", true});
     (void)out.add({ScreenId::WalkieTalkie, "Walkie", true});
     (void)out.add({ScreenId::Extensions, "Extensions", true});
     (void)out.add({ScreenId::Settings, "Settings", true});
+    (void)out.add({ScreenId::Calendar, "Agenda", true});
 }
 
 void CardputerCompactUxPack::buildInputBindings(InputBindingSet& out) const

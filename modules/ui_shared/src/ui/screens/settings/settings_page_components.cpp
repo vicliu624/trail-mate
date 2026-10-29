@@ -32,6 +32,7 @@
 #include "platform/ui/screen_brightness_steps.h"
 #include "platform/ui/screen_runtime.h"
 #include "platform/ui/settings_reset_runtime.h"
+#include "platform/ui/settings_reset_policy.h"
 #include "platform/ui/settings_store.h"
 #include "platform/ui/spi_diagnostics_runtime.h"
 #include "platform/ui/team_ui_store_runtime.h"
@@ -1414,32 +1415,22 @@ static bool perform_factory_reset()
         ::ui::feedback::show_notice(::ui::i18n::tr("Unable to reset Reticulum configuration"), 3500);
         return false;
     }
+#endif
+#if defined(ARDUINO_ARCH_ESP32) || defined(TRAIL_MATE_PLATFORM_LINUX)
     if (!::platform::ui::settings_reset::begin())
     {
         ::ui::feedback::show_notice(::ui::i18n::tr("Unable to reset configuration"), 3500);
         return false;
     }
 #endif
-    static const char* kNamespacesToClear[] = {
-        "chat",
-        "gps",
-        "settings",
-        "aprs",
-        "power",
-        "a7682e",
-        "chat_pki",
-        "mc_peers",
-        "lxmf_peers",
-    };
-
-    for (const char* ns : kNamespacesToClear)
+    for (const char* ns : ::platform::ui::settings_reset::kLegacyNamespaces)
     {
         prefs_clear_ns(ns);
     }
 
     team::ui::team_ui_snapshot_store().clear();
 
-#if defined(ARDUINO_ARCH_ESP32)
+#if defined(ARDUINO_ARCH_ESP32) || defined(TRAIL_MATE_PLATFORM_LINUX)
     ::platform::ui::settings_reset::finish();
 #endif
 
@@ -1451,7 +1442,7 @@ static bool perform_factory_reset()
 
 static void refresh_reticulum_tcp_fields()
 {
-#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM)
+#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM) || defined(TRAIL_MATE_PLATFORM_LINUX)
     const auto& network = ::platform::ui::reticulum_network_config::active();
     size_t ordinal = 0;
     g_settings.rt_wifi_gateway_host[0] = '\0';
@@ -1470,7 +1461,7 @@ static void refresh_reticulum_tcp_fields()
 
 static bool save_reticulum_tcp_fields()
 {
-#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM)
+#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM) || defined(TRAIL_MATE_PLATFORM_LINUX)
     char* end = nullptr;
     const long port = std::strtol(g_settings.rt_wifi_gateway_port, &end, 10);
     if (!end || *end || port < 1 || port > 65535 ||
@@ -1483,7 +1474,8 @@ static bool save_reticulum_tcp_fields()
     }
     auto& app_ctx = app::appFacade();
     app_ctx.requestSaveConfig(app::AppConfigChangeSet::mesh());
-    app_ctx.applyMeshConfig();
+    // The platform network owner applies its new snapshot. Reapplying the
+    // entire mesh here would also reset an otherwise unchanged live bearer.
     refresh_reticulum_tcp_fields();
     return true;
 #else
@@ -2664,7 +2656,7 @@ static void on_text_save_clicked(lv_event_t* e)
         }
         if (id == settings::ui::SettingId::RtWifiHost)
         {
-#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM)
+#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM) || defined(TRAIL_MATE_PLATFORM_LINUX)
             save_reticulum_tcp_fields();
             refresh_visible_item_values();
 #else
@@ -2684,7 +2676,7 @@ static void on_text_save_clicked(lv_event_t* e)
         }
         if (id == settings::ui::SettingId::RtWifiPort)
         {
-#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM)
+#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM) || defined(TRAIL_MATE_PLATFORM_LINUX)
             save_reticulum_tcp_fields();
             refresh_visible_item_values();
 #else
@@ -5308,7 +5300,7 @@ static const settings::ui::SettingItem kReticulumItems[] = {
     {"Display Name", settings::ui::SettingType::Info, nullptr, 0, nullptr, nullptr, g_settings.rt_display_name, sizeof(g_settings.rt_display_name), false, "rt_display_name"},
     {"Identity Hash", settings::ui::SettingType::Info, nullptr, 0, nullptr, nullptr, g_settings.rt_identity_hash, sizeof(g_settings.rt_identity_hash), false, "rt_identity_hash"},
     {"LXMF Address", settings::ui::SettingType::Info, nullptr, 0, nullptr, nullptr, g_settings.rt_lxmf_address, sizeof(g_settings.rt_lxmf_address), false, "rt_lxmf_address"},
-#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM)
+#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM) || defined(TRAIL_MATE_PLATFORM_LINUX)
     {"TCP Entry", settings::ui::SettingType::Enum, kReticulumTcpSlotOptions, 3, &g_settings.rt_tcp_slot, nullptr, nullptr, 0, false, "rt_tcp_slot"},
     {"Restore Reticulum TCP defaults", settings::ui::SettingType::Action, nullptr, 0, nullptr, nullptr, nullptr, 0, false, "rt_tcp_defaults"},
 #endif
@@ -6383,12 +6375,11 @@ static bool activate_item_widget(settings::ui::ItemWidget& widget)
             break;
         case settings::ui::SettingId::RtTcpDefaults:
         {
-#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM)
+#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM) || defined(TRAIL_MATE_PLATFORM_LINUX)
             if (::platform::ui::reticulum_network_config::restoreDefaultTcpEndpoints())
             {
                 auto& app_ctx = app::appFacade();
                 app_ctx.requestSaveConfig(app::AppConfigChangeSet::mesh());
-                app_ctx.applyMeshConfig();
                 g_settings.rt_tcp_slot = 0;
                 refresh_reticulum_tcp_fields();
                 refresh_visible_item_values();

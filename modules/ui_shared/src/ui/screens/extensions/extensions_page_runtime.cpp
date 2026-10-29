@@ -1,4 +1,6 @@
 #include "ui/screens/extensions/extensions_page_runtime.h"
+#include "platform/ui/tmap_creation_runtime.h"
+#include "ui/screens/extensions/tmap_creator_page.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -8,6 +10,7 @@
 #include <vector>
 
 #include "platform/ui/device_runtime.h"
+#include "platform/ui/network_runtime.h"
 #include "platform/ui/pack_repository_runtime.h"
 #include "platform/ui/wifi_runtime.h"
 #include "ui/app_runtime.h"
@@ -52,6 +55,7 @@ enum class MainView : uint8_t
 {
     List = 0,
     Detail,
+    Creator,
 };
 
 enum class PackageFilter : uint8_t
@@ -70,6 +74,7 @@ struct RuntimeState
     ::ui::components::bottom_bar::Menu menu{};
     lv_obj_t* installed_filter_btn = nullptr;
     lv_obj_t* uninstalled_filter_btn = nullptr;
+    lv_obj_t* creator_btn = nullptr;
     lv_obj_t* main_panel = nullptr;
     lv_obj_t* header_card = nullptr;
     lv_obj_t* title_label = nullptr;
@@ -87,6 +92,7 @@ struct RuntimeState
     PackageFilter filter = PackageFilter::Installed;
     bool remote_catalog_loaded = false;
     bool install_was_busy = false;
+    std::uint32_t catalog_revision = 0;
     std::string catalog_error;
     std::string selected_package_id;
     std::vector<packs::PackageRecord> packages;
@@ -125,6 +131,21 @@ void on_key(lv_event_t* event)
         return;
     }
     const uint32_t key = lv_event_get_key(event);
+    if ((key == 't' || key == 'T') && s_runtime.creator_btn &&
+        ::platform::ui::tmap_creation::supported() && s_runtime.view != MainView::Creator)
+    {
+        lv_event_stop_processing(event);
+        lv_event_stop_bubbling(event);
+        lv_obj_send_event(s_runtime.creator_btn, LV_EVENT_CLICKED, nullptr);
+        return;
+    }
+    if (key == 'm' || key == 'M')
+    {
+        lv_event_stop_processing(event);
+        lv_event_stop_bubbling(event);
+        s_runtime.menu.toggle();
+        return;
+    }
     if (!is_back_key(key))
     {
         return;
@@ -313,13 +334,13 @@ std::string package_counts_text(const packs::PackageRecord& package)
 
 void update_top_bar_status()
 {
-    const platform::ui::wifi::Status wifi = platform::ui::wifi::status();
-    if (!wifi.supported)
+    const auto network = platform::ui::network::status();
+    if (!network.supported)
     {
-        ::ui::widgets::top_bar_set_right_text(s_runtime.top_bar, ::ui::i18n::tr("No Wi-Fi"));
+        ::ui::widgets::top_bar_set_right_text(s_runtime.top_bar, ::ui::i18n::tr("No network"));
         return;
     }
-    if (!wifi.connected)
+    if (!network.connected)
     {
         ::ui::widgets::top_bar_set_right_text(s_runtime.top_bar, ::ui::i18n::tr("Offline"));
         return;
@@ -531,6 +552,7 @@ void sync_focus_group(lv_obj_t* preferred_focus = nullptr)
     {
         add_focusable(s_runtime.installed_filter_btn);
         add_focusable(s_runtime.uninstalled_filter_btn);
+        add_focusable(s_runtime.creator_btn);
         lv_group_focus_obj(s_runtime.filter == PackageFilter::Installed ? s_runtime.installed_filter_btn : s_runtime.uninstalled_filter_btn);
         set_default_group(app_g);
         return;
@@ -541,6 +563,7 @@ void sync_focus_group(lv_obj_t* preferred_focus = nullptr)
         add_focusable(s_runtime.top_bar.back_btn);
     }
     add_focusable(s_runtime.menu.button());
+    add_focusable(s_runtime.creator_btn);
     if (s_runtime.detail_back_btn != nullptr)
     {
         add_focusable(s_runtime.detail_back_btn);
@@ -789,7 +812,20 @@ void sync_install_ui(bool notify_completion)
 
 void install_timer_cb(lv_timer_t* /*timer*/)
 {
+    if (s_runtime.view == MainView::Creator || s_runtime.menu.is_open() ||
+        (app_g && lv_group_get_default() != app_g)) return;
+    auto* selected = app_g ? lv_group_get_focused(app_g) : nullptr;
+    const bool keep_selection = selected && (selected == s_runtime.top_bar.back_btn ||
+        selected == s_runtime.menu.button() || selected == s_runtime.creator_btn);
     sync_install_ui(true);
+    const auto catalog = packs::catalog_status();
+    if (catalog.revision != s_runtime.catalog_revision && !packs::install_status().busy)
+    {
+        s_runtime.catalog_revision = catalog.revision;
+        refresh_catalog_and_render();
+    }
+    if (keep_selection && app_g && lv_obj_is_valid(selected) && lv_group_get_focused(app_g) != selected)
+        sync_focus_group(selected);
 }
 
 void update_filter_button_states()
@@ -818,6 +854,7 @@ void on_filter_clicked(lv_event_t* event)
 {
     const uintptr_t raw = reinterpret_cast<uintptr_t>(lv_event_get_user_data(event));
     s_runtime.filter = raw == 1U ? PackageFilter::Uninstalled : PackageFilter::Installed;
+    if (s_runtime.filter == PackageFilter::Uninstalled) packs::request_catalog_refresh();
     update_filter_button_states();
     s_runtime.menu.close();
     show_list_view();
@@ -900,6 +937,7 @@ void on_uninstall_clicked(lv_event_t* event)
         return;
     }
 
+    ::ui::i18n::reload_language();
     ::ui::feedback::show_notice(::ui::i18n::tr("Package uninstalled"), 2000);
     s_runtime.selected_package_id = package.id;
     s_runtime.view = MainView::Detail;
@@ -976,6 +1014,7 @@ void on_connect_wifi_clicked(lv_event_t* event)
     const platform::ui::wifi::Status wifi = platform::ui::wifi::status();
     if (wifi.connected)
     {
+        packs::request_catalog_refresh();
         ::ui::feedback::show_notice(::ui::i18n::tr("Wi-Fi connected"), 2000);
         refresh_catalog_and_render();
         return;
@@ -1008,6 +1047,17 @@ void show_uninstalled_offline_body()
 {
     clear_body();
     set_header_title("Uninstalled");
+
+    if (platform::ui::network::status().connected)
+    {
+        const char* text = s_runtime.catalog_error.empty() ? "Package catalog unavailable" : s_runtime.catalog_error.c_str();
+        set_status_text(text);
+        show_message_body(text);
+        set_header_title("Uninstalled");
+        sync_focus_group(s_runtime.uninstalled_filter_btn);
+        update_top_bar_status();
+        return;
+    }
 
     const platform::ui::wifi::Status wifi = platform::ui::wifi::status();
     platform::ui::wifi::Config saved_wifi{};
@@ -1420,6 +1470,18 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     s_runtime.menu.init(s_runtime.root, menu_button, s_runtime.filter_panel,
                         [](void*, bool)
                         { sync_focus_group(); });
+    if (::platform::ui::tmap_creation::supported())
+    {
+        s_runtime.creator_btn = ::ui::components::bottom_bar::add_button(bar, "T Make TMAP");
+        lv_obj_add_event_cb(
+            s_runtime.creator_btn, [](lv_event_t*)
+            {
+                s_runtime.menu.close();
+                s_runtime.view = MainView::Creator;
+                ::extensions::ui::tmap_creator::open(s_runtime.root, [](void*) { show_list_view(); sync_focus_group(s_runtime.creator_btn); }, nullptr);
+            }, LV_EVENT_CLICKED, nullptr);
+    }
+    packs::request_catalog_refresh();
     refresh_catalog_and_render();
     sync_install_ui(false);
     s_runtime.install_timer = lv_timer_create(install_timer_cb, 250, nullptr);
@@ -1437,6 +1499,7 @@ void enter(const shell::Host* host, lv_obj_t* parent)
 void exit(lv_obj_t* parent)
 {
     (void)parent;
+    ::extensions::ui::tmap_creator::shutdown();
     s_runtime.menu.reset();
     if (s_runtime.install_timer != nullptr)
     {

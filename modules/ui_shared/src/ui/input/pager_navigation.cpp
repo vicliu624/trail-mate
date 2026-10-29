@@ -1,5 +1,6 @@
 #include "ui/input/pager_navigation.h"
-#if defined(ARDUINO_T_LORA_PAGER)
+#include "platform/ui/tmap_creation_runtime.h"
+#if defined(ARDUINO_T_LORA_PAGER) || defined(__linux__)
 #include "platform/memory/psram_ptr.h"
 #include "platform/ui/psram_ui_lease.h"
 #include "ui/app_runtime.h"
@@ -90,9 +91,15 @@ bool simple_navigation(const char* id)
 void show_help(PageHelp& page, lv_group_t* group)
 {
     help::Row rows[16] = {
+#if defined(__linux__)
+        {"Tab", nullptr, "Select next control"},
+        {"Enter", nullptr, "Activate / enter editing"},
+        {"Esc", nullptr, "Back / close"},
+#else
         {"Wheel", nullptr, "Select control"},
         {"Press", "Enter", "Activate / enter editing"},
         {"Hold wheel", nullptr, "Leave editing / select controls"},
+#endif
         {"Back", nullptr, "Back (delete text inside editor)"},
         {"H", nullptr, "Help outside text editors"},
     };
@@ -100,7 +107,11 @@ void show_help(PageHelp& page, lv_group_t* group)
     const auto* app = ui_get_active_app();
     const char* id = app ? app->stable_id() : "";
     if (simple_navigation(id)) rows[count++] = {"W/S", nullptr, "Previous / next control"};
-    if (id && std::strcmp(id, "music") == 0)
+    const char* title = page.title ? lv_label_get_text(page.title) : "";
+    const bool creator = std::strncmp(title, ui::i18n::tr("Make TMAP"), std::strlen(ui::i18n::tr("Make TMAP"))) == 0;
+    if (creator)
+        rows[count++] = {"Enter", nullptr, "Activate Next / Back / Create"};
+    else if (id && std::strcmp(id, "music") == 0)
     {
         rows[count++] = {"Space", nullptr, "Play / pause"};
         rows[count++] = {"A/D", nullptr, "Previous / next track in player"};
@@ -119,6 +130,8 @@ void show_help(PageHelp& page, lv_group_t* group)
     else if (id && (std::strcmp(id, "contacts") == 0 || std::strcmp(id, "settings") == 0 ||
                     std::strcmp(id, "tracker") == 0 || std::strcmp(id, "extensions") == 0 || std::strcmp(id, "network") == 0))
         rows[count++] = {"M", nullptr, "Open / close page menu"};
+    if (!creator && id && std::strcmp(id, "extensions") == 0 && platform::ui::tmap_creation::supported())
+        rows[count++] = {"T", nullptr, "Make TMAP"};
     rows[count++] = {"H", "Enter", "Close help; restore focus"};
     platform::ui::PsramUiLease memory;
     help::Config config;

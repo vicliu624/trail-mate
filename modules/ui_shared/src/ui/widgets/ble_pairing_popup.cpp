@@ -1,5 +1,6 @@
 #include "ui/widgets/ble_pairing_popup.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -50,6 +51,15 @@ void BlePairingPopup::ensureCreated()
     }
 
     overlay_ = lv_obj_create(top);
+    lv_obj_add_event_cb(
+        overlay_, [](lv_event_t* event)
+        {
+        if (lv_event_get_target(event) != overlay_) return;
+        overlay_ = panel_ = title_label_ = mode_label_ = hint_label_ = pin_label_ = device_label_ = footer_label_ = nullptr;
+        visible_ = false;
+        shown_passkey_ = 0;
+        shown_fixed_pin_ = false; },
+        LV_EVENT_DELETE, nullptr);
     lv_obj_remove_style_all(overlay_);
     lv_obj_set_size(overlay_, LV_PCT(100), LV_PCT(100));
     lv_obj_set_style_bg_color(overlay_, lv_color_hex(kColorWarmBg), 0);
@@ -106,7 +116,10 @@ void BlePairingPopup::ensureCreated()
 
     pin_label_ = lv_label_create(panel_);
     lv_obj_set_style_text_color(pin_label_, lv_color_hex(kColorAmberDark), 0);
-    lv_obj_set_style_text_font(pin_label_, &lv_font_montserrat_36, 0);
+    lv_obj_set_style_text_font(pin_label_, &lv_font_montserrat_20, 0);
+#if LV_FONT_MONTSERRAT_24
+    lv_obj_set_style_text_font(pin_label_, &lv_font_montserrat_24, 0);
+#endif
     lv_obj_set_style_text_align(pin_label_, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_width(pin_label_, LV_PCT(100));
 
@@ -153,15 +166,29 @@ void BlePairingPopup::applyLayout()
         panel_w = 220;
     }
 
-    lv_coord_t panel_h = 198;
-    if (screen_h < 220)
+    const bool compact = screen_h < 400;
+    lv_label_set_long_mode(device_label_, compact ? LV_LABEL_LONG_DOT : LV_LABEL_LONG_WRAP);
+    const lv_coord_t panel_h = std::min<lv_coord_t>(screen_h - 20, compact ? 180 : 380);
+    lv_obj_set_style_pad_top(panel_, compact ? 8 : 16, 0);
+    lv_obj_set_style_pad_bottom(panel_, compact ? 8 : 14, 0);
+    lv_obj_set_style_pad_row(panel_, compact ? 4 : 8, 0);
+    if (compact)
     {
-        panel_h = screen_h - 20;
+        lv_obj_add_flag(hint_label_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(footer_label_, LV_OBJ_FLAG_HIDDEN);
     }
-    if (panel_h < 150)
+    else
     {
-        panel_h = 150;
+        lv_obj_clear_flag(hint_label_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(footer_label_, LV_OBJ_FLAG_HIDDEN);
     }
+#if LV_FONT_MONTSERRAT_36
+    const lv_font_t* small_pin_font = &lv_font_montserrat_20;
+#if LV_FONT_MONTSERRAT_24
+    small_pin_font = &lv_font_montserrat_24;
+#endif
+    lv_obj_set_style_text_font(pin_label_, compact ? small_pin_font : &lv_font_montserrat_36, 0);
+#endif
 
     lv_obj_set_size(panel_, panel_w, panel_h);
     lv_obj_center(panel_);
@@ -200,7 +227,11 @@ void BlePairingPopup::show(uint32_t passkey, bool is_fixed_pin, const char* devi
 
 void BlePairingPopup::update(uint32_t passkey, bool is_fixed_pin, const char* device_name)
 {
-    if (passkey == 0)
+    setState(passkey != 0, passkey, is_fixed_pin, device_name);
+}
+void BlePairingPopup::setState(bool active, uint32_t passkey, bool is_fixed_pin, const char* device_name)
+{
+    if (!active)
     {
         hide();
         return;

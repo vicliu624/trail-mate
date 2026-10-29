@@ -1,0 +1,20 @@
+[Unit]
+Description=Register the fitted T-Display-CM0 hardware RTC
+DefaultDependencies=no
+Wants=systemd-modules-load.service
+After=systemd-modules-load.service local-fs.target
+Before=sysinit.target time-set.target
+ConditionPathExists=/sys/firmware/devicetree/base
+
+[Service]
+Type=oneshot
+ExecStart=@CMAKE_INSTALL_FULL_LIBEXECDIR@/trailmate/register-i2c-peripheral --adapter-of-node /soc/i2c@7e804000 --device rx8130 --address 0x32 --module rtc_ds1307
+RemainAfterExit=yes
+TimeoutStartSec=15
+NoNewPrivileges=yes
+ProtectHome=yes
+ProtectSystem=full
+PrivateTmp=yes
+
+[Install]
+WantedBy=sysinit.target

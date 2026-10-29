@@ -1,5 +1,6 @@
 #pragma once
 
+#include "platform/audio/call_echo_guard.h"
 #include <cstddef>
 #include <cstdint>
 
@@ -20,10 +21,7 @@ class CallAcousticEchoGuard
     uint16_t lastRenderMeanAbs() const;
 
   private:
-    uint16_t render_active_mean_abs_ = 0;
-    uint32_t release_hold_samples_ = 0;
-    uint32_t remaining_hold_samples_ = 0;
-    uint16_t last_render_mean_abs_ = 0;
+    ::platform::audio::CallEchoGuard guard_;
 };
 
 } // namespace platform::esp::common::reticulum_call_audio

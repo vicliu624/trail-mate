@@ -1,6 +1,6 @@
 #include "ui/screens/energy_sweep/energy_sweep_page_runtime.h"
 
-#if defined(ARDUINO) || defined(ESP_PLATFORM) || defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+#if defined(ARDUINO) || defined(ESP_PLATFORM) || defined(TRAIL_MATE_PLATFORM_LINUX)
 
 #include "app/app_config.h"
 #include "app/app_facade_access.h"
@@ -17,6 +17,7 @@
 #include "meshtastic/mesh.pb.h"
 #include "meshtastic/portnums.pb.h"
 #include "pb_decode.h"
+#include "platform/ui/lora_receive_session.h"
 #include "platform/ui/lora_runtime.h"
 #include "platform/ui/screen_runtime.h"
 #include "sys/clock.h"
@@ -136,6 +137,7 @@ struct PacketEvidence
 
 struct ProbeVerification
 {
+    bool awaiting_transmit = false;
     VerificationKind kind = VerificationKind::None;
     int candidate_index = -1;
     uint32_t ticket = 0;
@@ -155,6 +157,7 @@ struct RadioContext
 {
     bool supported_protocol = false;
     bool acquired = false;
+    uint32_t receive_generation = 0;
     chat::MeshProtocol protocol = chat::MeshProtocol::Meshtastic;
     AirProfile base_profile{};
     int candidate_count = 0;
@@ -177,6 +180,7 @@ struct ProbeObservation
 struct ProbeState
 {
     bool scanning = false;
+    bool configuring = false;
     bool radio_error = false;
     bool applied = false;
     bool confirmation_open = false;
@@ -676,35 +680,29 @@ void setup_radio_context()
     }
 }
 
-bool acquire_radio_runtime()
-{
-    if (!platform::ui::lora::acquire() || !platform::ui::lora::is_online())
-    {
-        return false;
-    }
-    s_radio.acquired = true;
-    return true;
-}
-
 void release_radio_runtime()
 {
     if (!s_radio.acquired)
     {
         return;
     }
-    platform::ui::lora::release();
+    platform::ui::lora::release_receive_session(s_radio.receive_generation);
     s_radio.acquired = false;
+    s_radio.receive_generation = 0;
 }
 
 bool configure_current_candidate()
 {
     const AirProfile& profile = current_candidate().profile;
-    if (!platform::ui::lora::configure_receive(profile.frequency_mhz,
-                                               receive_config_for(profile)))
+    const auto generation = platform::ui::lora::request_receive_session(profile.frequency_mhz,
+                                                                        receive_config_for(profile));
+    if (!generation)
     {
         return false;
     }
-    s_state.candidate_started_ms = sys::millis_now();
+    s_radio.receive_generation = generation;
+    s_radio.acquired = true;
+    s_state.configuring = true;
     return true;
 }
 
@@ -1013,12 +1011,13 @@ bool begin_meshcore_discover_verification()
                                                s_state.transmit_scratch.data(),
                                                s_state.transmit_scratch.size(),
                                                &frame_size) ||
-        !platform::ui::lora::transmit_packet(s_state.transmit_scratch.data(), frame_size))
+        !platform::ui::lora::transmit_receive_session(s_radio.receive_generation, s_state.transmit_scratch.data(), frame_size))
     {
         return false;
     }
 
     s_state.verification.kind = VerificationKind::MeshCoreDiscover;
+    s_state.verification.awaiting_transmit = platform::ui::lora::receive_session_snapshot().transmit_pending;
     s_state.verification.candidate_index = s_state.candidate_index;
     s_state.verification.ticket = request.tag;
     s_state.verification.started_ms = sys::millis_now();
@@ -1077,12 +1076,13 @@ bool begin_meshtastic_ack_verification(const ProbeObservation& observation)
                                            key_len,
                                            s_state.transmit_scratch.data(),
                                            &wire_size) ||
-        !platform::ui::lora::transmit_packet(s_state.transmit_scratch.data(), wire_size))
+        !platform::ui::lora::transmit_receive_session(s_radio.receive_generation, s_state.transmit_scratch.data(), wire_size))
     {
         return false;
     }
 
     s_state.verification.kind = VerificationKind::MeshtasticAck;
+    s_state.verification.awaiting_transmit = platform::ui::lora::receive_session_snapshot().transmit_pending;
     s_state.verification.candidate_index = s_state.candidate_index;
     s_state.verification.ticket = ticket;
     s_state.verification.target_node = observation.last_mt_source;
@@ -1132,8 +1132,7 @@ void start_probe()
     s_state.applied = false;
     s_state.radio_error = false;
     if (!s_radio.supported_protocol || active_candidate_count() == 0 ||
-        !platform::ui::lora::is_supported() ||
-        !acquire_radio_runtime())
+        !platform::ui::lora::is_supported())
     {
         s_state.radio_error = true;
         return;
@@ -1160,10 +1159,36 @@ void process_scan_step()
         return;
     }
 
+    const auto receive = platform::ui::lora::receive_session_snapshot();
+    if (receive.generation != s_radio.receive_generation ||
+        receive.state == platform::ui::lora::ReceiveSessionState::Failed ||
+        receive.state == platform::ui::lora::ReceiveSessionState::Idle)
+    {
+        s_state.radio_error = true;
+        stop_probe();
+        return;
+    }
+    if (receive.state != platform::ui::lora::ReceiveSessionState::Ready) return;
+    if (s_state.configuring)
+    {
+        s_state.configuring = false;
+        s_state.candidate_started_ms = sys::millis_now();
+    }
+    if (s_state.verification.awaiting_transmit)
+    {
+        if (receive.transmit_pending) return;
+        s_state.verification.awaiting_transmit = false;
+        s_state.verification.started_ms = sys::millis_now();
+        s_state.verification.deadline_ms = s_state.verification.started_ms +
+                                           (s_state.verification.kind == VerificationKind::MeshCoreDiscover
+                                                ? meshcore_discover_response_window_ms(current_candidate().profile)
+                                                : kMeshtasticAckWindowMs);
+    }
+
     for (int packet_index = 0; packet_index < 4; ++packet_index)
     {
         platform::ui::lora::ReceivedPacket packet{};
-        if (!platform::ui::lora::poll_received_packet(s_state.receive_scratch.data(),
+        if (!platform::ui::lora::poll_receive_session(s_radio.receive_generation, s_state.receive_scratch.data(),
                                                       s_state.receive_scratch.size(),
                                                       &packet))
         {

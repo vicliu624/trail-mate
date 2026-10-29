@@ -2,6 +2,7 @@
 #include "ui/menu/menu_layout.h"
 #include "ui/menu/menu_profile.h"
 #include "ui/menu/menu_runtime.h"
+#include "ui/ux_build_config.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -30,7 +31,7 @@ AppScreen* s_interruption_app = nullptr;
 AppScreen* s_interrupted_app = nullptr;
 bool s_interrupted_was_menu = false;
 
-#if defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)
+#if defined(TRAIL_MATE_UI_P4_TOUCH)
 struct AppEdgeSwipeState
 {
     bool pressed = false;
@@ -379,7 +380,7 @@ void set_default_group(lv_group_t* group)
         if (lv_indev_get_type(cur_drv) == LV_INDEV_TYPE_POINTER)
         {
             lv_indev_set_group(cur_drv, group);
-#if defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)
+#if defined(TRAIL_MATE_UI_P4_TOUCH)
             install_app_edge_swipe(cur_drv);
 #endif
         }
@@ -415,6 +416,33 @@ AppScreen* ui_get_active_app()
 void ui_clear_active_app()
 {
     s_active_app = nullptr;
+}
+void ui_detach_app(AppScreen* app)
+{
+    if (!app) return;
+    if (s_pending_exit == app)
+    {
+        s_pending_exit = nullptr;
+        if (s_exit_timer) lv_timer_delete(s_exit_timer);
+        s_exit_timer = nullptr;
+    }
+    if (s_rebuild_timer && lv_timer_get_user_data(s_rebuild_timer) == app)
+    {
+        lv_timer_delete(s_rebuild_timer);
+        s_rebuild_timer = nullptr;
+    }
+    if (s_interrupted_app == app) { s_interrupted_app = nullptr; s_interrupted_was_menu = true; }
+    if (s_interruption_app == app)
+    {
+        s_interruption_app = s_interrupted_app = nullptr;
+        s_interrupted_was_menu = false;
+        ui_set_overlay_active(false);
+    }
+    if (s_active_app == app)
+    {
+        s_active_app = nullptr;
+        ui::menu_runtime::setScene(ui::menu_runtime::Scene::Menu);
+    }
 }
 
 void ui_switch_to_app(AppScreen* app, lv_obj_t* parent)
@@ -463,6 +491,16 @@ void ui_switch_to_app(AppScreen* app, lv_obj_t* parent)
     s_active_app = app;
 }
 
+bool ui_open_app(AppScreen* app)
+{
+    if (!app || !main_screen || s_interruption_app ||
+        !lv_obj_check_type(main_screen, &lv_tileview_class) || lv_obj_get_child_count(main_screen) < 2) return false;
+    auto* parent = lv_obj_get_child(main_screen, 1);
+    ui::menu_layout::setMenuVisible(false);
+    lv_tileview_set_tile_by_index(main_screen, 0, 1, LV_ANIM_OFF);
+    ui_switch_to_app(app, parent);
+    return s_active_app == app;
+}
 void ui_exit_active_app(lv_obj_t* parent)
 {
     if (s_interruption_app != nullptr)

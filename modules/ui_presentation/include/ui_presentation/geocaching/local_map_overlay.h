@@ -42,7 +42,7 @@ class LocalMapOverlay
         {
             source.requestMapWindow(section_, offset_, 4);
             Snapshot snapshot;
-            source.snapshot(section_, snapshot);
+            source.mapSnapshot(section_, snapshot);
             if (snapshot.busy || !snapshot.ready) return;
             const auto end = std::min(snapshot.count, offset_ + 4);
             for (; offset_ < end; ++offset_)

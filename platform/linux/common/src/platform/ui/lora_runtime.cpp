@@ -12,8 +12,8 @@
 #include <string>
 
 #include "platform/linux/capability_status.h"
+#include "platform/linux/packet_radio.h"
 #include "platform/linux/runtime_mode.h"
-#include "platform/linux/sx126x_radio.h"
 
 namespace platform::ui::lora
 {
@@ -46,8 +46,6 @@ Clock::time_point s_started_at = Clock::now();
 float s_freq_mhz = 0.0f;
 ReceiveConfig s_config{};
 bool s_real_driver = false;
-bool s_restore_config_valid = false;
-::platform::linux_runtime::Sx126xLoRaConfig s_restore_config{};
 std::string s_capability_message{};
 ::platform::linux_runtime::Sx126xPacket s_packet_scratch{};
 
@@ -138,23 +136,23 @@ float current_rssi_locked()
 
 bool is_supported()
 {
-    return ::platform::linux_runtime::Sx126xRadio::hardwareCandidatePresent() ||
+    return ::platform::linux_runtime::mesh_packet_radio().hardwareCandidatePresent() ||
            simulated_lora_enabled();
 }
 
 CapabilityStatus capability_status()
 {
     std::lock_guard<std::mutex> lock(s_mutex);
-    auto& radio = ::platform::linux_runtime::Sx126xRadio::instance();
+    auto& radio = ::platform::linux_runtime::mesh_packet_radio();
     if (radio.isOnline())
     {
-        return {CapabilityState::Available,
-                "SX1262 is bound through Linux spidev/gpiochip."};
+        s_capability_message = std::string(radio.name()) + " is bound through Linux spidev/gpiochip.";
+        return {CapabilityState::Available, s_capability_message.c_str()};
     }
-    if (::platform::linux_runtime::Sx126xRadio::hardwareCandidatePresent())
+    if (radio.hardwareCandidatePresent())
     {
         const char* last_error = radio.lastError();
-        s_capability_message = "SX1262 endpoint present; driver not online";
+        s_capability_message = std::string(radio.name()) + " endpoint present; driver not online";
         if (last_error != nullptr && last_error[0] != '\0')
         {
             s_capability_message += ": ";
@@ -178,13 +176,9 @@ CapabilityStatus capability_status()
 bool acquire()
 {
     std::lock_guard<std::mutex> lock(s_mutex);
-    auto& radio = ::platform::linux_runtime::Sx126xRadio::instance();
+    if (s_acquired) return true;
+    auto& radio = ::platform::linux_runtime::foreground_packet_radio();
     s_real_driver = radio.acquire();
-    s_restore_config_valid = s_real_driver;
-    if (s_restore_config_valid)
-    {
-        s_restore_config = radio.appliedLoRaConfig();
-    }
     s_acquired = s_real_driver || simulated_lora_enabled();
     s_started_at = Clock::now();
     return s_acquired;
@@ -199,13 +193,12 @@ bool is_online()
 bool configure_receive(float freq_mhz, const ReceiveConfig& config)
 {
     std::lock_guard<std::mutex> lock(s_mutex);
+    // A rejected retune must not admit packets or RSSI from the old profile.
+    s_configured = false;
     if (!s_acquired || !std::isfinite(freq_mhz) || freq_mhz <= 0.0f)
     {
         return false;
     }
-    s_freq_mhz = freq_mhz;
-    s_config = config;
-    s_configured = true;
     if (s_real_driver)
     {
         auto lora_config =
@@ -219,10 +212,14 @@ bool configure_receive(float freq_mhz, const ReceiveConfig& config)
         lora_config.preamble_len = config.preamble_len;
         lora_config.sync_word = config.sync_word;
         lora_config.crc_len = config.crc_len;
-        return ::platform::linux_runtime::Sx126xRadio::instance()
-            .configureLoRa(lora_config);
+        if (!::platform::linux_runtime::foreground_packet_radio().configureLoRa(lora_config))
+            return false;
     }
-    return simulated_lora_enabled();
+    else if (!simulated_lora_enabled()) return false;
+    s_freq_mhz = freq_mhz;
+    s_config = config;
+    s_configured = true;
+    return true;
 }
 
 bool transmit_packet(const uint8_t* data, std::size_t size)
@@ -233,7 +230,7 @@ bool transmit_packet(const uint8_t* data, std::size_t size)
         return false;
     }
 
-    auto& radio = ::platform::linux_runtime::Sx126xRadio::instance();
+    auto& radio = ::platform::linux_runtime::foreground_packet_radio();
     const bool sent = radio.transmit(data, size);
     (void)radio.startReceive();
     return sent;
@@ -242,9 +239,10 @@ bool transmit_packet(const uint8_t* data, std::size_t size)
 float read_instant_rssi()
 {
     std::lock_guard<std::mutex> lock(s_mutex);
+    if (!s_acquired || !s_configured) return std::numeric_limits<float>::quiet_NaN();
     if (s_real_driver)
     {
-        return ::platform::linux_runtime::Sx126xRadio::instance().readRssi();
+        return ::platform::linux_runtime::foreground_packet_radio().readRssi();
     }
     return current_rssi_locked();
 }
@@ -258,7 +256,7 @@ bool poll_received_packet(uint8_t* buffer, std::size_t capacity, ReceivedPacket*
         return false;
     }
 
-    if (!::platform::linux_runtime::Sx126xRadio::instance().pollReceive(&s_packet_scratch) ||
+    if (!::platform::linux_runtime::foreground_packet_radio().pollReceive(&s_packet_scratch) ||
         s_packet_scratch.size == 0 || s_packet_scratch.size > capacity)
     {
         return false;
@@ -278,15 +276,9 @@ void release()
     s_configured = false;
     if (s_real_driver)
     {
-        if (s_restore_config_valid)
-        {
-            (void)::platform::linux_runtime::Sx126xRadio::instance()
-                .configureLoRa(s_restore_config);
-        }
-        ::platform::linux_runtime::Sx126xRadio::instance().release();
+        ::platform::linux_runtime::foreground_packet_radio().release();
     }
     s_real_driver = false;
-    s_restore_config_valid = false;
     s_freq_mhz = 0.0f;
 }
 

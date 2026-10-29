@@ -1,0 +1,36 @@
+include_guard(GLOBAL)
+set(TRAIL_MATE_TMAP_PRODUCER_DIR "" CACHE PATH "Published self-contained Center TmapTool directory for the target architecture")
+function(trailmate_install_tmap_producer package_name)
+    if(NOT TRAIL_MATE_TMAP_PRODUCER_DIR)
+        return()
+    endif()
+    foreach(required TmapTool producer-manifest.json Center-LICENSE)
+        if(NOT EXISTS "${TRAIL_MATE_TMAP_PRODUCER_DIR}/${required}")
+            message(FATAL_ERROR "TMAP producer is incomplete: ${required}")
+        endif()
+    endforeach()
+    file(READ "${TRAIL_MATE_TMAP_PRODUCER_DIR}/producer-manifest.json" producer_manifest)
+    string(JSON producer_runtime GET "${producer_manifest}" runtime)
+    string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" processor)
+    if(processor MATCHES "^(aarch64|arm64)")
+        set(expected_runtime linux-arm64)
+    elseif(processor MATCHES "^arm")
+        set(expected_runtime linux-arm)
+    elseif(processor MATCHES "^(x86_64|amd64)")
+        set(expected_runtime linux-x64)
+    else()
+        message(FATAL_ERROR "No TMAP producer runtime is configured for ${CMAKE_SYSTEM_PROCESSOR}")
+    endif()
+    if(NOT producer_runtime STREQUAL expected_runtime)
+        message(FATAL_ERROR "TMAP producer architecture ${producer_runtime} does not match ${expected_runtime}")
+    endif()
+    install(DIRECTORY "${TRAIL_MATE_TMAP_PRODUCER_DIR}/"
+        DESTINATION lib/trailmate/tmap-producer
+        FILE_PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
+        DIRECTORY_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+        COMPONENT Runtime PATTERN "*.pdb" EXCLUDE)
+    install(PROGRAMS "${TRAIL_MATE_TMAP_PRODUCER_DIR}/TmapTool"
+        DESTINATION lib/trailmate/tmap-producer COMPONENT Runtime)
+    install(FILES "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/tmap-producer.lintian-overrides"
+        DESTINATION share/lintian/overrides RENAME "${package_name}" COMPONENT Runtime)
+endfunction()

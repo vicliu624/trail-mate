@@ -1,7 +1,7 @@
 #include "ui/components/shortcut_help_modal.h"
 
 #include "ui/app_runtime.h"
-#if defined(ARDUINO_T_LORA_PAGER)
+#if defined(ARDUINO_T_LORA_PAGER) || defined(TRAIL_MATE_PLATFORM_LINUX)
 #include "platform/ui/psram_ui_lease.h"
 #include "ui/components/dialog_frame.h"
 #endif
@@ -252,7 +252,7 @@ void focus(State& state)
 
 bool open(State& state, lv_obj_t* parent, const Config& config)
 {
-#if defined(ARDUINO_T_LORA_PAGER)
+#if defined(ARDUINO_T_LORA_PAGER) || defined(TRAIL_MATE_PLATFORM_LINUX)
     platform::ui::PsramUiLease memory;
 #endif
     if (is_open(state))
@@ -285,7 +285,7 @@ bool open(State& state, lv_obj_t* parent, const Config& config)
         set_default_group(state.group);
     }
 
-#if defined(ARDUINO_T_LORA_PAGER)
+#if defined(ARDUINO_T_LORA_PAGER) || defined(TRAIL_MATE_PLATFORM_LINUX)
     // Use the same titled, closable frame as Preview and other app dialogs.
     const auto frame = dialog_frame::create(host, {config.title ? config.title : "Help", panel_w, panel_h,
                                                    [](lv_event_t* event)
@@ -401,7 +401,7 @@ bool open(State& state, lv_obj_t* parent, const Config& config)
     if (state.group)
     {
         lv_group_add_obj(state.group, state.panel);
-#if defined(ARDUINO_T_LORA_PAGER)
+#if defined(ARDUINO_T_LORA_PAGER) || defined(TRAIL_MATE_PLATFORM_LINUX)
         lv_group_add_obj(state.group, frame.close);
         dialog_frame::bind_close_shortcuts(frame, state.group);
 #endif

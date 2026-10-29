@@ -31,6 +31,8 @@
                             ]
               },
     "dependencies":  [
+                         { "name": "core_sstv" },
+                         { "name": "core_walkie" },
                          { "name": "core_geocaching" },
                          {
                              "name":  "esp_common"

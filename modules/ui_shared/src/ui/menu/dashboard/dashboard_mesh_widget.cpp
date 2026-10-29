@@ -184,7 +184,7 @@ void refresh_mesh_widget(void* context)
     char power_buf[16];
     if (battery.level >= 0)
     {
-        if (battery.charging)
+        if (battery.charging || battery.external_power)
         {
             std::snprintf(power_buf, sizeof(power_buf), "USB");
         }
@@ -195,7 +195,7 @@ void refresh_mesh_widget(void* context)
     }
     else
     {
-        std::snprintf(power_buf, sizeof(power_buf), "--");
+        std::snprintf(power_buf, sizeof(power_buf), "%s", battery.external_power ? "USB" : "--");
     }
 
     set_status_chip(mesh.chrome, has_team ? "LINKED" : "SOLO", has_team ? color_soft_green() : color_soft_amber(),
@@ -216,7 +216,7 @@ void refresh_mesh_widget(void* context)
     lv_obj_set_style_text_color(mesh.stat_values[1], unread > 0 ? color_warn() : color_text(), 0);
 
     set_label_text_if_changed_raw(mesh.stat_values[2], power_buf);
-    lv_obj_set_style_text_color(mesh.stat_values[2], battery.charging ? color_info() : color_text(), 0);
+    lv_obj_set_style_text_color(mesh.stat_values[2], (battery.charging || battery.external_power) ? color_info() : color_text(), 0);
 
     set_label_text_if_changed_raw(mesh.footer_label,
                                   status.header.valid ? status.status_line.c_str() : "-");

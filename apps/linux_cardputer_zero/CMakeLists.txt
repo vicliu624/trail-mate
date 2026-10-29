@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
-
 project(TrailMateLinuxCardputerZero LANGUAGES C CXX)
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/TrailMateTmapProducer.cmake")
+trailmate_install_tmap_producer(trailmate-cardputer-zero)
 
 include(CTest)
 
@@ -11,7 +12,8 @@ set(TRAIL_MATE_REPO_ROOT
 include("${TRAIL_MATE_REPO_ROOT}/cmake/TrailMateUxPacks.cmake")
 trailmate_add_ui_lvgl_ux_packs(trailmate_ui_lvgl_ux_packs)
 
-set(TRAIL_MATE_CARDPUTER_ZERO_PACKAGE_VERSION "0.1.38-alpha"
+include("${TRAIL_MATE_REPO_ROOT}/cmake/TrailMateProjectVersion.cmake")
+set(TRAIL_MATE_CARDPUTER_ZERO_PACKAGE_VERSION "${TRAIL_MATE_DEBIAN_PROJECT_VERSION}"
     CACHE STRING "Debian package version for trailmate-cardputer-zero")
 option(TRAIL_MATE_CARDPUTER_ZERO_BUILD_SCREENSHOT_CAPTURE
        "Build the Cardputer Zero shared-LVGL screenshot capture tool."
@@ -141,6 +143,20 @@ if(TRAIL_MATE_CARDPUTER_ZERO_BUILD_DEVICE AND CMAKE_SYSTEM_NAME STREQUAL "Linux"
     endif()
 
     file(MAKE_DIRECTORY "${TRAIL_MATE_CARDPUTER_ZERO_WAYLAND_GENERATED_DIR}")
+    set(TRAIL_MATE_CARDPUTER_ZERO_TEXT_INPUT_XML
+        "${TRAIL_MATE_CARDPUTER_ZERO_WAYLAND_PROTOCOLS_DIR}/unstable/text-input/text-input-unstable-v3.xml")
+    set(TRAIL_MATE_CARDPUTER_ZERO_TEXT_INPUT_HEADER
+        "${TRAIL_MATE_CARDPUTER_ZERO_WAYLAND_GENERATED_DIR}/text-input-unstable-v3-client-protocol.h")
+    set(TRAIL_MATE_CARDPUTER_ZERO_TEXT_INPUT_SOURCE
+        "${TRAIL_MATE_CARDPUTER_ZERO_WAYLAND_GENERATED_DIR}/text-input-unstable-v3-protocol.c")
+    add_custom_command(OUTPUT "${TRAIL_MATE_CARDPUTER_ZERO_TEXT_INPUT_HEADER}"
+        COMMAND "${WAYLAND_SCANNER_EXECUTABLE}" client-header
+            "${TRAIL_MATE_CARDPUTER_ZERO_TEXT_INPUT_XML}" "${TRAIL_MATE_CARDPUTER_ZERO_TEXT_INPUT_HEADER}"
+        DEPENDS "${TRAIL_MATE_CARDPUTER_ZERO_TEXT_INPUT_XML}" VERBATIM)
+    add_custom_command(OUTPUT "${TRAIL_MATE_CARDPUTER_ZERO_TEXT_INPUT_SOURCE}"
+        COMMAND "${WAYLAND_SCANNER_EXECUTABLE}" private-code
+            "${TRAIL_MATE_CARDPUTER_ZERO_TEXT_INPUT_XML}" "${TRAIL_MATE_CARDPUTER_ZERO_TEXT_INPUT_SOURCE}"
+        DEPENDS "${TRAIL_MATE_CARDPUTER_ZERO_TEXT_INPUT_XML}" VERBATIM)
     add_custom_command(
         OUTPUT "${TRAIL_MATE_CARDPUTER_ZERO_XDG_SHELL_HEADER}"
         COMMAND "${WAYLAND_SCANNER_EXECUTABLE}" client-header
@@ -171,6 +187,8 @@ if(TRAIL_MATE_CARDPUTER_ZERO_BUILD_DEVICE AND CMAKE_SYSTEM_NAME STREQUAL "Linux"
         VERBATIM)
 
     add_library(trailmate_cardputer_zero_wayland_protocol STATIC
+        "${TRAIL_MATE_CARDPUTER_ZERO_TEXT_INPUT_SOURCE}"
+        "${TRAIL_MATE_CARDPUTER_ZERO_TEXT_INPUT_HEADER}"
         "${TRAIL_MATE_CARDPUTER_ZERO_XDG_SHELL_SOURCE}"
         "${TRAIL_MATE_CARDPUTER_ZERO_XDG_SHELL_HEADER}"
         "${TRAIL_MATE_CARDPUTER_ZERO_XDG_DECORATION_SOURCE}"
@@ -179,6 +197,26 @@ if(TRAIL_MATE_CARDPUTER_ZERO_BUILD_DEVICE AND CMAKE_SYSTEM_NAME STREQUAL "Linux"
         PUBLIC "${TRAIL_MATE_CARDPUTER_ZERO_WAYLAND_GENERATED_DIR}")
     target_link_libraries(trailmate_cardputer_zero_wayland_protocol
         PUBLIC PkgConfig::WAYLAND_CLIENT)
+    if(BUILD_TESTING)
+        pkg_check_modules(WAYLAND_SERVER REQUIRED IMPORTED_TARGET wayland-server)
+        set(TRAIL_MATE_TEXT_INPUT_SERVER_HEADER "${TRAIL_MATE_CARDPUTER_ZERO_WAYLAND_GENERATED_DIR}/text-input-unstable-v3-server-protocol.h")
+        add_custom_command(OUTPUT "${TRAIL_MATE_TEXT_INPUT_SERVER_HEADER}"
+            COMMAND "${WAYLAND_SCANNER_EXECUTABLE}" server-header
+                "${TRAIL_MATE_CARDPUTER_ZERO_TEXT_INPUT_XML}" "${TRAIL_MATE_TEXT_INPUT_SERVER_HEADER}"
+            DEPENDS "${TRAIL_MATE_CARDPUTER_ZERO_TEXT_INPUT_XML}" VERBATIM)
+        add_executable(trailmate_linux_wayland_text_input_test tests/linux_wayland_text_input_test.cpp
+            "${TRAIL_MATE_TEXT_INPUT_SERVER_HEADER}")
+        target_include_directories(trailmate_linux_wayland_text_input_test PRIVATE "${CMAKE_CURRENT_LIST_DIR}/src"
+            "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}")
+        target_link_libraries(trailmate_linux_wayland_text_input_test PRIVATE
+            trailmate_cardputer_zero_wayland_protocol PkgConfig::WAYLAND_SERVER)
+        target_compile_options(trailmate_linux_wayland_text_input_test PRIVATE -UNDEBUG)
+        if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang" AND NOT CMAKE_CROSSCOMPILING)
+            target_compile_options(trailmate_linux_wayland_text_input_test PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+            target_link_options(trailmate_linux_wayland_text_input_test PRIVATE -fsanitize=address,undefined)
+        endif()
+        add_test(NAME trailmate_linux_wayland_text_input COMMAND trailmate_linux_wayland_text_input_test)
+    endif()
 
     add_executable(trailmate_cardputer_zero_wayland
         src/cardputer_zero_wayland_main.cpp
@@ -217,7 +255,10 @@ if(TRAIL_MATE_CARDPUTER_ZERO_BUILD_DEVICE AND CMAKE_SYSTEM_NAME STREQUAL "Linux"
             OWNER_READ OWNER_WRITE OWNER_EXECUTE
             GROUP_READ GROUP_EXECUTE
             WORLD_READ WORLD_EXECUTE)
-    install(PROGRAMS packaging/trailmate-cardputer-zero-applaunch
+    configure_file(packaging/trailmate-cardputer-zero-applaunch
+        "${CMAKE_CURRENT_BINARY_DIR}/trailmate-cardputer-zero-applaunch"
+        @ONLY NEWLINE_STYLE UNIX)
+    install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/trailmate-cardputer-zero-applaunch"
         DESTINATION "${TRAIL_MATE_CARDPUTER_ZERO_PRIVATE_LIBDIR}"
         PERMISSIONS
             OWNER_READ OWNER_WRITE OWNER_EXECUTE
@@ -225,6 +266,14 @@ if(TRAIL_MATE_CARDPUTER_ZERO_BUILD_DEVICE AND CMAKE_SYSTEM_NAME STREQUAL "Linux"
             WORLD_READ WORLD_EXECUTE)
     install(FILES README.md
         DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/doc/trailmate-cardputer-zero"
+        PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ)
+    install(FILES "${TRAIL_MATE_REPO_ROOT}/third_party/bzip2/LICENSE"
+        DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/doc/trailmate-cardputer-zero"
+        RENAME copyright-bzip2
+        PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ)
+    install(FILES "${TRAIL_MATE_REPO_ROOT}/third_party/rweather_crypto/LICENSE"
+        DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/doc/trailmate-cardputer-zero"
+        RENAME copyright-rweather-Crypto
         PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ)
     install(FILES packaging/trailmate-cardputer-zero.desktop
         DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/APPLaunch/applications"
@@ -249,8 +298,11 @@ if(TRAIL_MATE_CARDPUTER_ZERO_BUILD_DEVICE AND CMAKE_SYSTEM_NAME STREQUAL "Linux"
         set(CPACK_DEBIAN_PACKAGE_SECTION "utils")
         set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
         set(CPACK_DEBIAN_PACKAGE_DEPENDS
-            "libc6, libstdc++6, libgcc-s1, libsqlite3-0, libcurl4, libssl3, libwayland-client0, libxkbcommon0, libnotify-bin, gdal-bin, unzip, ca-certificates")
+            "libc6, libstdc++6, libgcc-s1, libsqlite3-0, libcurl4, libssl3, libarchive13, libjpeg62-turbo, libpng16-16, libwayland-client0, libxkbcommon0, libnotify-bin, gdal-bin, unzip, ca-certificates, network-manager")
         set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS OFF)
+        if(TRAIL_MATE_TMAP_PRODUCER_DIR)
+            string(APPEND CPACK_DEBIAN_PACKAGE_DEPENDS ", libicu72")
+        endif()
         set(CPACK_DEBIAN_PACKAGE_DESCRIPTION
             "Trail Mate Cardputer Zero Wayland shell for the portable Linux device.")
         include(CPack)
@@ -269,6 +321,70 @@ if(TRAIL_MATE_CARDPUTER_ZERO_BUILD_SCREENSHOT_CAPTURE)
 endif()
 
 if(BUILD_TESTING)
+    add_executable(trailmate_cardputer_zero_wifi_profiles_test
+        "${TRAIL_MATE_REPO_ROOT}/apps/linux_lvgl/tests/linux_wifi_profiles_test.cpp")
+    target_link_libraries(trailmate_cardputer_zero_wifi_profiles_test PRIVATE trailmate_cardputer_zero_linux_common)
+    target_compile_options(trailmate_cardputer_zero_wifi_profiles_test PRIVATE -UNDEBUG)
+    add_test(NAME trailmate_cardputer_zero_wifi_profiles COMMAND trailmate_cardputer_zero_wifi_profiles_test)
+    set_tests_properties(trailmate_cardputer_zero_wifi_profiles PROPERTIES TIMEOUT 60)
+    add_executable(trailmate_cardputer_zero_settings_strict_read_test
+        "${TRAIL_MATE_REPO_ROOT}/apps/linux_lvgl/tests/linux_settings_strict_read_test.cpp")
+    target_link_libraries(trailmate_cardputer_zero_settings_strict_read_test PRIVATE trailmate_cardputer_zero_linux_common)
+    target_compile_options(trailmate_cardputer_zero_settings_strict_read_test PRIVATE -UNDEBUG)
+    add_test(NAME trailmate_cardputer_zero_settings_strict_read COMMAND trailmate_cardputer_zero_settings_strict_read_test)
+    add_executable(trailmate_cardputer_zero_settings_reset_test
+        "${TRAIL_MATE_REPO_ROOT}/apps/linux_lvgl/tests/linux_settings_reset_test.cpp")
+    target_link_libraries(trailmate_cardputer_zero_settings_reset_test PRIVATE trailmate_cardputer_zero_linux_common)
+    target_compile_options(trailmate_cardputer_zero_settings_reset_test PRIVATE -UNDEBUG)
+    add_test(NAME trailmate_cardputer_zero_settings_reset COMMAND trailmate_cardputer_zero_settings_reset_test)
+    set_tests_properties(trailmate_cardputer_zero_settings_reset PROPERTIES TIMEOUT 60)
+    add_executable(trailmate_cardputer_zero_reticulum_settings_test
+        "${TRAIL_MATE_REPO_ROOT}/apps/linux_lvgl/tests/linux_reticulum_network_settings_test.cpp")
+    target_link_libraries(trailmate_cardputer_zero_reticulum_settings_test PRIVATE trailmate_cardputer_zero_ui_shell)
+    target_compile_options(trailmate_cardputer_zero_reticulum_settings_test PRIVATE -UNDEBUG)
+    add_test(NAME trailmate_cardputer_zero_reticulum_settings COMMAND trailmate_cardputer_zero_reticulum_settings_test)
+    if(TARGET trailmate_cardputer_zero_linux_common AND TARGET OpenSSL::Crypto)
+        add_executable(trailmate_cardputer_zero_reticulum_network_test
+            "${TRAIL_MATE_REPO_ROOT}/apps/linux_lvgl/tests/linux_reticulum_network_routes_test.cpp")
+        target_link_libraries(trailmate_cardputer_zero_reticulum_network_test PRIVATE trailmate_cardputer_zero_linux_common)
+        target_compile_options(trailmate_cardputer_zero_reticulum_network_test PRIVATE -UNDEBUG)
+        add_test(NAME trailmate_cardputer_zero_reticulum_network COMMAND trailmate_cardputer_zero_reticulum_network_test)
+        set_tests_properties(trailmate_cardputer_zero_reticulum_network PROPERTIES TIMEOUT 30)
+    endif()
+    add_executable(trailmate_linux_lvgl_text_input_test tests/linux_lvgl_text_input_test.cpp)
+    target_link_libraries(trailmate_linux_lvgl_text_input_test PRIVATE trailmate_cardputer_zero_ui_shell)
+    target_compile_options(trailmate_linux_lvgl_text_input_test PRIVATE -UNDEBUG)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang" AND NOT CMAKE_CROSSCOMPILING)
+        target_compile_options(trailmate_linux_lvgl_text_input_test PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+        target_link_options(trailmate_linux_lvgl_text_input_test PRIVATE -fsanitize=address,undefined)
+    endif()
+    add_test(NAME trailmate_linux_lvgl_text_input COMMAND trailmate_linux_lvgl_text_input_test)
+    add_executable(trailmate_linux_geocaching_page_test tests/linux_geocaching_page_test.cpp)
+    add_executable(trailmate_linux_agenda_page_test tests/linux_agenda_page_test.cpp)
+    target_link_libraries(trailmate_linux_agenda_page_test PRIVATE trailmate_cardputer_zero_ui_shell)
+    target_compile_options(trailmate_linux_agenda_page_test PRIVATE -UNDEBUG)
+    add_test(NAME trailmate_linux_agenda_page COMMAND trailmate_linux_agenda_page_test "${TRAIL_MATE_REPO_ROOT}/.tmp/agenda-card")
+    target_link_libraries(trailmate_linux_geocaching_page_test PRIVATE trailmate_cardputer_zero_ui_shell)
+    add_test(NAME trailmate_linux_geocaching_page COMMAND trailmate_linux_geocaching_page_test)
+    add_executable(trailmate_linux_cardputer_zero_calculator_test
+        tests/linux_cardputer_zero_calculator_test.cpp)
+    target_link_libraries(trailmate_linux_cardputer_zero_calculator_test PRIVATE trailmate_cardputer_zero_ui_shell)
+    add_test(NAME trailmate_linux_cardputer_zero_calculator COMMAND trailmate_linux_cardputer_zero_calculator_test)
+    add_executable(trailmate_linux_cardputer_zero_calculator_engine_test
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/tests/test_calculator_engine.cpp")
+    target_link_libraries(trailmate_linux_cardputer_zero_calculator_engine_test PRIVATE trailmate_cardputer_zero_ui_shell)
+    add_test(NAME trailmate_linux_cardputer_zero_calculator_engine COMMAND trailmate_linux_cardputer_zero_calculator_engine_test)
+    if(TARGET trailmate_cardputer_zero_wayland)
+        add_test(NAME trailmate_linux_cardputer_zero_launcher_syntax
+                 COMMAND /bin/sh -n "${CMAKE_CURRENT_BINARY_DIR}/trailmate-cardputer-zero-applaunch")
+    endif()
+    add_executable(trailmate_linux_cardputer_zero_ux_pack_smoke
+        "${TRAIL_MATE_REPO_ROOT}/modules/ui_lvgl_ux_packs/tests/test_cardputer_compact_ux_pack.cpp")
+    target_link_libraries(trailmate_linux_cardputer_zero_ux_pack_smoke
+        PRIVATE trailmate_ui_lvgl_ux_packs)
+    add_test(NAME trailmate_linux_cardputer_zero_ux_pack_smoke
+             COMMAND trailmate_linux_cardputer_zero_ux_pack_smoke)
+
     add_executable(trailmate_linux_cardputer_zero_app_shell_smoke
         tests/linux_cardputer_zero_app_shell_smoke.cpp)
     target_link_libraries(trailmate_linux_cardputer_zero_app_shell_smoke

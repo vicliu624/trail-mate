@@ -8,7 +8,8 @@ int main()
     std::size_t count = 0;
     const auto* bindings = product_composition::allTargetUxBindings(&count);
     assert(bindings != nullptr);
-    assert(count == 12);
+    assert(count == 13);
+    assert(product_composition::findTargetUxBinding("t_display_cm0") != nullptr);
 
     const auto* tab5 = product_composition::findTargetUxBinding("tab5");
     assert(tab5 != nullptr);

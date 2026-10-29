@@ -1,0 +1,221 @@
+--- a/panel_rm69a10.c
++++ b/panel_rm69a10.c
+@@ -3,6 +3,8 @@
+ #include <linux/of.h>
+ #include <linux/of_gpio.h>
+ #include <linux/delay.h>
++#include <linux/backlight.h>
++#include <linux/mutex.h>
+ #include <drm/drm_panel.h>
+ #include <drm/drm_mipi_dsi.h>
+ #include <drm/drm_connector.h>
+@@ -15,6 +17,50 @@
+     struct mipi_dsi_device *dsi;
+     struct gpio_desc *reset_gpio;
+     struct gpio_desc *enable_gpio;
++    struct backlight_device *backlight;
++    struct mutex brightness_lock;
++    bool prepared;
++    bool enabled;
++    u8 applied_brightness;
++};
++
++static int amoled_panel_update_brightness(struct backlight_device *backlight)
++{
++    struct amoled_panel *p = bl_get_data(backlight);
++    u8 command[] = { 0x51, backlight_get_brightness(backlight) };
++    ssize_t ret = 0;
++
++    mutex_lock(&p->brightness_lock);
++    if (p->prepared && p->enabled) {
++        ret = mipi_dsi_dcs_write_buffer(p->dsi, command, sizeof(command));
++        /* VC4 reports successful completion as zero, rather than tx_len. */
++        if (ret == (ssize_t)sizeof(command) ||
++            (ret == 0 && p->dsi->host && p->dsi->host->dev &&
++             (of_device_is_compatible(p->dsi->host->dev->of_node, "brcm,bcm2835-dsi0") ||
++              of_device_is_compatible(p->dsi->host->dev->of_node, "brcm,bcm2835-dsi1"))))
++            p->applied_brightness = command[1];
++        else if (ret >= 0)
++            ret = -EIO;
++    }
++    mutex_unlock(&p->brightness_lock);
++    return ret < 0 ? ret : 0;
++}
++
++static int amoled_panel_get_brightness(struct backlight_device *backlight)
++{
++    struct amoled_panel *p = bl_get_data(backlight);
++    int brightness;
++
++    mutex_lock(&p->brightness_lock);
++    brightness = p->prepared && p->enabled ? p->applied_brightness : 0;
++    mutex_unlock(&p->brightness_lock);
++    return brightness;
++}
++
++static const struct backlight_ops amoled_panel_backlight_ops = {
++    .options = BL_CORE_SUSPENDRESUME,
++    .update_status = amoled_panel_update_brightness,
++    .get_brightness = amoled_panel_get_brightness,
+ };
+ 
+ static const struct drm_display_mode rm69a10_default_mode = {
+@@ -60,6 +106,11 @@
+     struct device *dev = &p->dsi->dev;
+ 
+     dev_info(dev, "panel prepare start\n");
++    mutex_lock(&p->brightness_lock);
++    p->prepared = false;
++    p->enabled = false;
++    p->applied_brightness = 0;
++    mutex_unlock(&p->brightness_lock);
+ 
+     gpiod_set_value_cansleep(p->enable_gpio, 1);
+     msleep(50);
+@@ -92,7 +143,8 @@
+ 
+     mipi_dsi_dcs_write_seq(p->dsi, 0x12, 0x00);
+     mipi_dsi_dcs_write_seq(p->dsi, 0x35, 0x00);
+-    mipi_dsi_dcs_write_seq(p->dsi, 0x51, 0xFE);
++    /* Stay dark until the registered backlight restores its requested level. */
++    mipi_dsi_dcs_write_seq(p->dsi, 0x51, 0x00);
+ 
+ #if RM69A10_ENABLE_BIST
+     mipi_dsi_dcs_write_seq(p->dsi, 0x11);
+@@ -109,16 +161,14 @@
+     mipi_dsi_dcs_write_seq(p->dsi, 0x3A, 0x77);
+ #endif
+ 
+-    mipi_dsi_dcs_write_seq(p->dsi, 0x11);
+-    msleep(120);
+-
+-    mipi_dsi_dcs_write_seq(p->dsi, 0x29);
+-    
+      #if 0
+     msleep(60);
+     mipi_dsi_dcs_write_seq(p->dsi, 0x51, 0xBB);
+     #endif
+     dev_info(dev, "panel prepare done\n");
++    mutex_lock(&p->brightness_lock);
++    p->prepared = true;
++    mutex_unlock(&p->brightness_lock);
+     return 0;
+ }
+ 
+@@ -126,21 +176,48 @@
+ {
+     struct amoled_panel *p = container_of(panel, struct amoled_panel, panel);
+     struct device *dev = &p->dsi->dev;
++    int ret = 0;
+ 
+     dev_info(dev, "panel enable\n");
+-    return 0;
++    mutex_lock(&p->brightness_lock);
++    if (!p->prepared) {
++        ret = -EPERM;
++        goto out;
++    }
++    if (p->enabled)
++        goto out;
++    ret = mipi_dsi_dcs_exit_sleep_mode(p->dsi);
++    if (ret < 0)
++        goto out;
++    msleep(120);
++    ret = mipi_dsi_dcs_set_display_on(p->dsi);
++    if (ret >= 0)
++        p->enabled = true;
++out:
++    mutex_unlock(&p->brightness_lock);
++    /* DRM enables the associated backlight after this callback succeeds. */
++    return ret;
+ }
+ 
+ static int amoled_panel_disable(struct drm_panel *panel)
+ {
+     struct amoled_panel *p = container_of(panel, struct amoled_panel, panel);
++    int ret = 0, sleep_ret;
+ 
+     dev_info(&p->dsi->dev, "panel disable\n");
+-    mipi_dsi_dcs_write_seq(p->dsi, 0x28);
+-    msleep(20);
+-    mipi_dsi_dcs_write_seq(p->dsi, 0x10);
+-    msleep(80);
+-    return 0;
++    mutex_lock(&p->brightness_lock);
++    if (p->enabled) {
++        p->enabled = false;
++        p->applied_brightness = 0;
++        ret = mipi_dsi_dcs_set_display_off(p->dsi);
++        msleep(20);
++        sleep_ret = mipi_dsi_dcs_enter_sleep_mode(p->dsi);
++        if (ret >= 0)
++            ret = sleep_ret;
++        msleep(80);
++    }
++    mutex_unlock(&p->brightness_lock);
++    return ret;
+ }
+ 
+ static int amoled_panel_unprepare(struct drm_panel *panel)
+@@ -148,6 +225,11 @@
+     struct amoled_panel *p = container_of(panel, struct amoled_panel, panel);
+ 
+     dev_info(&p->dsi->dev, "panel unprepare\n");
++    mutex_lock(&p->brightness_lock);
++    p->prepared = false;
++    p->enabled = false;
++    p->applied_brightness = 0;
++    mutex_unlock(&p->brightness_lock);
+     return 0;
+ }
+ 
+@@ -163,6 +245,12 @@
+ {
+     struct device *dev = &dsi->dev;
+     struct amoled_panel *p;
++    struct backlight_properties properties = {
++        .type = BACKLIGHT_RAW,
++        .max_brightness = 255,
++        .brightness = 0xFE,
++        .power = BACKLIGHT_POWER_OFF,
++    };
+     int ret;
+ 
+     dev_info(dev, "panel probe start\n");
+@@ -170,6 +258,7 @@
+     p = devm_kzalloc(dev, sizeof(*p), GFP_KERNEL);
+     if (!p)
+         return -ENOMEM;
++    mutex_init(&p->brightness_lock);
+ 
+     p->reset_gpio = devm_gpiod_get(dev, "reset", GPIOD_OUT_HIGH);
+     if (IS_ERR(p->reset_gpio))
+@@ -194,9 +283,17 @@
+                       MIPI_DSI_MODE_VIDEO_BURST |
+                       MIPI_DSI_MODE_LPM;
+ 
++    p->backlight = devm_backlight_device_register(dev, dev_name(dev), dev, p,
++                                                 &amoled_panel_backlight_ops,
++                                                 &properties);
++    if (IS_ERR(p->backlight))
++        return dev_err_probe(dev, PTR_ERR(p->backlight),
++                             "failed to register panel backlight\n");
++
+     p->panel.prepare_prev_first = true;
+     drm_panel_init(&p->panel, dev, &amoled_panel_funcs,
+                    DRM_MODE_CONNECTOR_DSI);
++    p->panel.backlight = p->backlight;
+     drm_panel_add(&p->panel);
+ 
+     ret = mipi_dsi_attach(dsi);
+@@ -215,6 +312,10 @@
+     struct amoled_panel *p = mipi_dsi_get_drvdata(dsi);
+ 
+     dev_info(&dsi->dev, "panel remove\n");
++    mutex_lock(&p->brightness_lock);
++    p->prepared = false;
++    p->enabled = false;
++    mutex_unlock(&p->brightness_lock);
+     mipi_dsi_detach(dsi);
+     drm_panel_remove(&p->panel);
+ }

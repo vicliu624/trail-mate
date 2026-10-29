@@ -1,4 +1,5 @@
 #include "ui/menu/menu_profile.h"
+#include "ui/ux_build_config.h"
 
 #if !defined(LV_FONT_MONTSERRAT_12) || !LV_FONT_MONTSERRAT_12
 #define lv_font_montserrat_12 lv_font_montserrat_14
@@ -17,7 +18,7 @@ namespace ui::menu_profile
 namespace
 {
 
-#if !defined(TRAIL_MATE_ESP_BOARD_TAB5) && !defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4) && !defined(ARDUINO_T_LORA_PAGER) && !defined(ARDUINO_T_DECK) && !defined(ARDUINO_T_DECK_PRO)
+#if !defined(TRAIL_MATE_ESP_BOARD_TAB5) && !defined(TRAIL_MATE_UI_P4_TOUCH) && !defined(ARDUINO_T_LORA_PAGER) && !defined(ARDUINO_T_DECK) && !defined(ARDUINO_T_DECK_PRO)
 lv_coord_t display_width()
 {
     lv_coord_t width = lv_display_get_physical_horizontal_resolution(nullptr);
@@ -234,7 +235,7 @@ const MenuLayoutProfile& current()
     {
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
         return make_tab5_profile();
-#elif defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)
+#elif defined(TRAIL_MATE_UI_P4_TOUCH)
         return make_t_display_p4_profile();
 #elif defined(ARDUINO_T_LORA_PAGER)
         return make_pager_profile();

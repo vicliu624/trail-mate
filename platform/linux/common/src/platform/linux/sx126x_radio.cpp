@@ -1,4 +1,5 @@
 #include "platform/linux/sx126x_radio.h"
+#include "sx126x_calibration.h"
 
 #include <algorithm>
 #include <array>
@@ -307,12 +308,12 @@ int get_gpio_value(int fd)
 {
     if (fd < 0)
     {
-        return 0;
+        return -1;
     }
     gpiohandle_data data{};
     if (ioctl(fd, GPIOHANDLE_GET_LINE_VALUES_IOCTL, &data) != 0)
     {
-        return 0;
+        return -1;
     }
     return data.values[0] ? 1 : 0;
 }
@@ -451,6 +452,48 @@ bool Sx126xRadio::startReceive()
            setRxLocked(kRxTimeoutInf);
 }
 
+bool Sx126xRadio::configureFsk(const FskSettings& config)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!online_ || !valid_sx126x_fsk_settings(config))
+    {
+        setErrorLocked("Invalid FSK settings or radio offline");
+        return false;
+    }
+    const uint8_t standby = kStandbyRc;
+    if (!writeCommandLocked(kCmdSetStandby, &standby, 1, true) || !setPacketTypeLocked(0x00) ||
+        !setRfFrequencyLocked(config.freq_mhz) || !setTxPowerLocked(config.tx_power_dbm)) return false;
+    struct Bandwidth
+    {
+        float value;
+        uint8_t code;
+    };
+    static constexpr Bandwidth widths[] = {{4.8f, 0x1F}, {5.8f, 0x17}, {7.3f, 0x0F}, {9.7f, 0x1E}, {11.7f, 0x16}, {14.6f, 0x0E}, {19.5f, 0x1D}, {23.4f, 0x15}, {29.3f, 0x0D}, {39.0f, 0x1C}, {46.9f, 0x14}, {58.6f, 0x0C}, {78.2f, 0x1B}, {93.8f, 0x13}, {117.3f, 0x0B}, {156.2f, 0x1A}, {187.2f, 0x12}, {234.3f, 0x0A}, {312.0f, 0x19}, {373.6f, 0x11}, {467.0f, 0x09}};
+    uint8_t bandwidth = widths[20].code;
+    for (const auto& value : widths)
+        if (config.rx_bandwidth_khz <= value.value)
+        {
+            bandwidth = value.code;
+            break;
+        }
+    const uint32_t bitrate = static_cast<uint32_t>(1024000.0f / config.bitrate_kbps + 0.5f);
+    const uint32_t deviation = static_cast<uint32_t>(config.deviation_khz * 1000 / kFrequencyStepHz + 0.5f);
+    const uint8_t modulation[] = {uint8_t(bitrate >> 16), uint8_t(bitrate >> 8), uint8_t(bitrate), 0,
+                                  bandwidth, uint8_t(deviation >> 16), uint8_t(deviation >> 8), uint8_t(deviation)};
+    const uint8_t packet[] = {uint8_t(config.preamble_bits >> 8), uint8_t(config.preamble_bits),
+                              0x05, uint8_t(config.sync_word_size * 8), 0, 1, 255, 0x06, 0};
+    const uint8_t initial[] = {0x1D, 0x0F}, polynomial[] = {0x10, 0x21};
+    const bool success = writeCommandLocked(kCmdSetModulationParams, modulation, sizeof(modulation), true) &&
+                         writeCommandLocked(kCmdSetPacketParams, packet, sizeof(packet), true) &&
+                         writeRegisterLocked(0x06C0, config.sync_word.data(), config.sync_word_size) &&
+                         writeRegisterLocked(0x06BC, initial, sizeof(initial)) &&
+                         writeRegisterLocked(0x06BE, polynomial, sizeof(polynomial)) &&
+                         setDioIrqParamsLocked(kIrqRxDone | kIrqTimeout | kIrqCrcErr, kIrqRxDone) &&
+                         clearIrqLocked(kIrqAll) && setBufferBaseLocked(0, 0) && setRxLocked(kRxTimeoutInf);
+    if (success) fsk_config_ = config;
+    return success;
+}
+
 bool Sx126xRadio::transmit(const std::uint8_t* data, std::size_t size)
 {
     if (data == nullptr || size == 0 || size > 220)
@@ -473,7 +516,13 @@ bool Sx126xRadio::transmit(const std::uint8_t* data, std::size_t size)
         lora_config_.crc_len ? kLoRaCrcOn : kLoRaCrcOff,
         kLoRaIqStandard,
     };
-    ok = ok && writeCommandLocked(kCmdSetPacketParams, packet, sizeof(packet), true);
+    if (packet_type_ == 0x00)
+    {
+        const uint8_t fsk[] = {uint8_t(fsk_config_.preamble_bits >> 8), uint8_t(fsk_config_.preamble_bits),
+                               0x05, 16, 0, 1, uint8_t(size), 0x06, 0};
+        ok = ok && writeCommandLocked(kCmdSetPacketParams, fsk, sizeof(fsk), true);
+    }
+    else ok = ok && writeCommandLocked(kCmdSetPacketParams, packet, sizeof(packet), true);
 
     if (ok)
     {
@@ -591,6 +640,12 @@ bool Sx126xRadio::pollReceive(Sx126xPacket* out)
         static_cast<std::uint32_t>(lora_config_.bw_khz * 1000.0f + 0.5f);
     out->sf = lora_config_.sf;
     out->cr = lora_config_.cr;
+    if (packet_type_ == 0x00)
+    {
+        out->freq_hz = static_cast<uint32_t>(fsk_config_.freq_mhz * 1000000.0f + 0.5f);
+        out->bw_hz = 0;
+        out->sf = out->cr = 0;
+    }
 
     (void)clearIrqLocked(kIrqAll);
     (void)setRxLocked(kRxTimeoutInf);
@@ -810,6 +865,10 @@ void Sx126xRadio::closeLocked()
     initialized_ = false;
     online_ = false;
     users_ = 0;
+    packet_type_ = 0xFF;
+    freq_mhz_ = 0;
+    image_calibration_ = {};
+    transport_failed_ = false;
 }
 
 void Sx126xRadio::updateLastIrqLocked(std::uint32_t irq)
@@ -817,25 +876,37 @@ void Sx126xRadio::updateLastIrqLocked(std::uint32_t irq)
     last_irq_flags_ = irq;
 }
 
-void Sx126xRadio::waitReadyLocked() const
+bool Sx126xRadio::waitReadyLocked()
 {
+    if (transport_failed_) return false;
 #if defined(__linux__)
     if (busy_fd_ >= 0)
     {
         const auto start = std::chrono::steady_clock::now();
-        while (get_gpio_value(busy_fd_) != 0)
+        while (true)
         {
-            if (std::chrono::steady_clock::now() - start >
-                std::chrono::milliseconds(80))
+            const int busy = get_gpio_value(busy_fd_);
+            if (busy == 0) return true;
+            if (busy < 0)
             {
+                setErrorLocked("SX126x BUSY GPIO read failed");
+                break;
+            }
+            if (std::chrono::steady_clock::now() - start >
+                std::chrono::seconds(1))
+            {
+                setErrorLocked("SX126x BUSY timed out");
                 break;
             }
             sleep_ms(1);
         }
-        return;
+        transport_failed_ = true;
+        online_ = false;
+        return false;
     }
 #endif
     std::this_thread::sleep_for(std::chrono::microseconds(250));
+    return true;
 }
 
 bool Sx126xRadio::transferLocked(const std::uint8_t* tx,
@@ -862,6 +933,8 @@ bool Sx126xRadio::transferLocked(const std::uint8_t* tx,
     transfer.cs_change = 0;
     if (ioctl(spi_fd_, SPI_IOC_MESSAGE(1), &transfer) < 1)
     {
+        transport_failed_ = true;
+        online_ = false;
         setErrorStringLocked("SPI transfer failed: bytes=" +
                              std::to_string(size) + " " +
                              describe_radio_config(config_) +
@@ -877,7 +950,7 @@ bool Sx126xRadio::writeCommandLocked(std::uint8_t cmd,
                                      std::size_t size,
                                      bool wait)
 {
-    waitReadyLocked();
+    if (!waitReadyLocked()) return false;
     std::array<std::uint8_t, 260> tx{};
     const std::size_t total = 1 + size;
     if (total > tx.size())
@@ -891,10 +964,7 @@ bool Sx126xRadio::writeCommandLocked(std::uint8_t cmd,
         std::memcpy(tx.data() + 1, data, size);
     }
     const bool ok = transferLocked(tx.data(), nullptr, total);
-    if (wait)
-    {
-        waitReadyLocked();
-    }
+    if (wait && !waitReadyLocked()) return false;
     return ok;
 }
 
@@ -905,7 +975,7 @@ bool Sx126xRadio::readCommandLocked(std::uint8_t cmd,
                                     std::size_t size,
                                     bool wait)
 {
-    waitReadyLocked();
+    if (!waitReadyLocked()) return false;
     std::array<std::uint8_t, 260> tx{};
     std::array<std::uint8_t, 260> rx{};
     const std::size_t total = 1 + prefix_size + 1 + size;
@@ -924,10 +994,7 @@ bool Sx126xRadio::readCommandLocked(std::uint8_t cmd,
     {
         std::memcpy(data, rx.data() + 1 + prefix_size + 1, size);
     }
-    if (wait)
-    {
-        waitReadyLocked();
-    }
+    if (wait && !waitReadyLocked()) return false;
     return ok;
 }
 
@@ -952,10 +1019,9 @@ bool Sx126xRadio::writeRegisterLocked(std::uint16_t addr,
     {
         std::memcpy(tx.data() + 1 + sizeof(prefix), data, size);
     }
-    waitReadyLocked();
+    if (!waitReadyLocked()) return false;
     const bool ok = transferLocked(tx.data(), nullptr, total);
-    waitReadyLocked();
-    return ok;
+    return waitReadyLocked() && ok;
 }
 
 bool Sx126xRadio::readRegisterLocked(std::uint16_t addr,
@@ -1006,7 +1072,7 @@ bool Sx126xRadio::prepareRadioHardwareLocked()
         sleep_ms(30);
     }
 
-    waitReadyLocked();
+    if (!waitReadyLocked()) return false;
 
     if (config_.dio3_tcxo_1v8)
     {
@@ -1034,7 +1100,7 @@ bool Sx126xRadio::prepareRadioHardwareLocked()
     const std::uint8_t standby = kStandbyRc;
     if (!writeCommandLocked(kCmdSetStandby, &standby, 1, true))
     {
-        setErrorStringLocked("SX1262 standby command failed after AIO2 power/reset: " +
+        setErrorStringLocked("SX1262 standby command failed after power/reset: " +
                              describe_radio_config(config_));
         return false;
     }
@@ -1050,7 +1116,7 @@ bool Sx126xRadio::readStatusLocked(std::uint8_t* out_status)
         setErrorLocked("invalid SX1262 status read");
         return false;
     }
-    waitReadyLocked();
+    if (!waitReadyLocked()) return false;
     const std::uint8_t tx[2] = {kCmdGetStatus, 0x00};
     std::uint8_t rx[2] = {};
     if (!transferLocked(tx, rx, sizeof(tx)))
@@ -1058,8 +1124,7 @@ bool Sx126xRadio::readStatusLocked(std::uint8_t* out_status)
         return false;
     }
     *out_status = rx[1];
-    waitReadyLocked();
-    return true;
+    return waitReadyLocked();
 }
 
 bool Sx126xRadio::probeLocked()
@@ -1133,20 +1198,16 @@ bool Sx126xRadio::setPacketTypeLocked(std::uint8_t packet_type)
 
 bool Sx126xRadio::setRfFrequencyLocked(float freq_mhz)
 {
-    if (std::fabs(freq_mhz_ - freq_mhz) >= 20.0f)
+    if (!std::isfinite(freq_mhz) || freq_mhz < 150 || freq_mhz > 960)
     {
-        std::uint8_t cal[2] = {0xE1, 0xE9};
-        if (freq_mhz < 779.0f)
-        {
-            cal[0] = 0xC1;
-            cal[1] = 0xC5;
-        }
-        else if (freq_mhz < 902.0f)
-        {
-            cal[0] = 0xD7;
-            cal[1] = 0xDB;
-        }
-        (void)writeCommandLocked(kCmdCalibrateImage, cal, sizeof(cal), true);
+        setErrorLocked("SX126x frequency is outside 150-960 MHz");
+        return false;
+    }
+    const auto calibration = detail::sx126x_image_calibration(freq_mhz);
+    if (image_calibration_ != calibration)
+    {
+        if (!writeCommandLocked(kCmdCalibrateImage, calibration.data(), calibration.size(), true)) return false;
+        image_calibration_ = calibration;
     }
 
     const std::uint32_t raw = rf_frequency_raw(freq_mhz);
@@ -1344,11 +1405,11 @@ bool Sx126xRadio::readPacketStatusLocked(float* out_rssi_dbm,
     }
     if (out_rssi_dbm != nullptr)
     {
-        *out_rssi_dbm = static_cast<float>(status[0]) / -2.0f;
+        *out_rssi_dbm = static_cast<float>(status[packet_type_ == 0x00 ? 2 : 0]) / -2.0f;
     }
     if (out_snr_db != nullptr)
     {
-        *out_snr_db = static_cast<float>(static_cast<std::int8_t>(status[1])) / 4.0f;
+        *out_snr_db = packet_type_ == 0x00 ? 0.0f : static_cast<float>(static_cast<std::int8_t>(status[1])) / 4.0f;
     }
     return true;
 }

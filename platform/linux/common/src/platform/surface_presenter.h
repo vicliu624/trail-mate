@@ -31,6 +31,7 @@ class SurfacePresenter
         return {};
     }
     virtual void present(const core::Canvas& canvas) = 0;
+    virtual void setTextInputState(const app::TextInputState&) {}
 };
 
 } // namespace trailmate::cardputer_zero::platform

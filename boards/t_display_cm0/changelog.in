@@ -1,0 +1,13 @@
+trailmate-cm0 (@TRAIL_MATE_LINUX_PACKAGE_VERSION@) unstable; urgency=medium
+
+  * Add the T-Display-CM0 Linux desktop composition with the shared P4 touch UX.
+  * Add configurable fullscreen presentation and Alt+F4 shutdown.
+  * Install the existing Trail Mate logo and device desktop launcher.
+  * Connect shared phone sessions through a Linux BlueZ worker and bounded
+    application-thread dispatch, with configuration and disconnect regressions.
+  * Flush pending configuration during clean shutdown and declare GIO/BlueZ
+    runtime dependencies. Pairing policy and MeshCore phone backend work remain.
+  * Add orderly application re-execution after service teardown, preserve launch
+    arguments, prioritize window exit, and report system clock write failures.
+
+ -- Trail Mate Maintainers <vicliu624@users.noreply.github.com>  Wed, 21 Oct 2026 12:00:00 +0800

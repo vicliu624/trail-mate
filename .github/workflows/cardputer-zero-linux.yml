@@ -36,7 +36,7 @@ jobs:
       - name: Install Cardputer Zero build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build dpkg-dev libsqlite3-dev libcurl4-openssl-dev libssl-dev libmbedtls-dev libwayland-bin libwayland-dev libxkbcommon-dev wayland-protocols
+          sudo apt-get install -y ninja-build dpkg-dev libsqlite3-dev libcurl4-openssl-dev libssl-dev libmbedtls-dev libjpeg-dev libpng-dev libarchive-dev libwayland-bin libwayland-dev libxkbcommon-dev wayland-protocols
 
       - name: Configure Cardputer Zero Linux shell
         working-directory: builds/linux_cmake

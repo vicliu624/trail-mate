@@ -55,17 +55,23 @@ bool timezone_setting_configured()
 
 int system_timezone_offset_min_at(::time_t utc_seconds)
 {
+#if defined(__linux__)
+    std::tm local_tm{};
+    ::tzset();
+    return ::localtime_r(&utc_seconds, &local_tm) ? static_cast<int>(local_tm.tm_gmtoff / 60) : 0;
+#else
     std::tm local_tm{};
     std::tm utc_tm{};
 
     const std::tm* local = std::localtime(&utc_seconds);
-    const std::tm* utc = std::gmtime(&utc_seconds);
-    if (local == nullptr || utc == nullptr)
+    if (local == nullptr)
     {
         return 0;
     }
 
     local_tm = *local;
+    const std::tm* utc = std::gmtime(&utc_seconds);
+    if (utc == nullptr) return 0;
     utc_tm = *utc;
     const std::time_t local_as_local = std::mktime(&local_tm);
     const std::time_t utc_as_local = std::mktime(&utc_tm);
@@ -77,6 +83,7 @@ int system_timezone_offset_min_at(::time_t utc_seconds)
 
     return static_cast<int>(
         std::difftime(local_as_local, utc_as_local) / 60.0);
+#endif
 }
 
 } // namespace
@@ -138,19 +145,23 @@ TimezoneProfilePersistenceResult set_timezone_profile_id_and_persist(int profile
 
 ::time_t apply_timezone_offset(::time_t utc_seconds)
 {
+    int offset_min = 0;
     if (!timezone_setting_configured())
     {
-        return utc_seconds +
-               static_cast<::time_t>(
-                   system_timezone_offset_min_at(utc_seconds)) *
-                   60;
+        offset_min = system_timezone_offset_min_at(utc_seconds);
     }
-
-    const int fixed_offset_min = env_timezone_offset_or_default(
-        ::platform::ui::settings_store::get_int(kSettingsNs, kTimezoneOffsetKey, 0));
-    return utc_seconds +
-           static_cast<time_t>(timezone_offset_for_profile_id_at(timezone_profile_id(), fixed_offset_min, utc_seconds)) *
-               60;
+    else
+    {
+        const int fixed_offset_min = env_timezone_offset_or_default(
+            ::platform::ui::settings_store::get_int(kSettingsNs, kTimezoneOffsetKey, 0));
+        offset_min = timezone_offset_for_profile_id_at(timezone_profile_id(), fixed_offset_min, utc_seconds);
+    }
+    const int64_t delta = static_cast<int64_t>(offset_min) * 60;
+    const int64_t utc = static_cast<int64_t>(utc_seconds);
+    if ((delta > 0 && utc > static_cast<int64_t>(std::numeric_limits<::time_t>::max()) - delta) ||
+        (delta < 0 && utc < static_cast<int64_t>(std::numeric_limits<::time_t>::min()) - delta))
+        return static_cast<::time_t>(-1);
+    return static_cast<::time_t>(utc + delta);
 }
 
 ::time_t apply_timezone_offset_for_utc(::time_t utc_seconds)
@@ -195,8 +206,14 @@ bool localtime_now(struct tm* out_tm)
 
 bool set_utc_time(::time_t utc_seconds)
 {
+#if defined(__linux__)
+    if (utc_seconds < 0) return false;
+    const ::timespec value{utc_seconds, 0};
+    return ::clock_settime(CLOCK_REALTIME, &value) == 0;
+#else
     (void)utc_seconds;
     return false;
+#endif
 }
 
 } // namespace platform::ui::time

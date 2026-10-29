@@ -863,6 +863,10 @@ const char* stableIdForScreenId(ui::menu::MenuScreenId screen_id)
 {
     switch (screen_id)
     {
+    case ui::menu::MenuScreenId::Calculator:
+        return "calculator";
+    case ui::menu::MenuScreenId::Geocaching:
+        return "geocaching";
     case ui::menu::MenuScreenId::Chat:
         return "chat";
     case ui::menu::MenuScreenId::Contacts:

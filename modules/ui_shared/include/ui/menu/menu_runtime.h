@@ -32,6 +32,8 @@ struct Hooks
 
     bool (*format_time)(char* out, size_t out_len) = nullptr;
     void (*show_main_menu)() = nullptr;
+    // Compositions with cached asynchronous status may request faster refresh.
+    uint32_t status_refresh_interval_ms = 60000;
 };
 
 void init(lv_obj_t* screen_root, lv_obj_t* main_screen, lv_obj_t* menu_panel, const Hooks& hooks);

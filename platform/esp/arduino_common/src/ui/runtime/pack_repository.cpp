@@ -3286,6 +3286,9 @@ bool load_installed_packages(std::vector<InstalledPackageRecord>& out_installed,
     return true;
 }
 
+CatalogStatus catalog_status() { return {}; }
+void request_catalog_refresh() {}
+
 bool fetch_catalog(std::vector<PackageRecord>& out_packages, std::string& out_error)
 {
     out_packages.clear();

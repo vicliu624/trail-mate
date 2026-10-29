@@ -44,7 +44,7 @@ struct RegionResult
     Status status = Status::Idle;
     bool approximate = true;
 };
-#if defined(ARDUINO_ARCH_ESP32)
+#if defined(ARDUINO_ARCH_ESP32) || defined(__linux__)
 bool submit(const char* query, double origin_lat, double origin_lon);
 bool poll(Snapshot& snapshot, Result* results, size_t capacity);
 void cancel();

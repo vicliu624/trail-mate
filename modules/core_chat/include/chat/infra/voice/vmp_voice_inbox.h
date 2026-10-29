@@ -241,6 +241,15 @@ class VoiceMessageInbox final
     void clear();
 
     [[nodiscard]] std::size_t size() const { return size_; }
+    /** Durable adapters retain IDs allocated to entries that were later erased. */
+    [[nodiscard]] uint64_t nextLocalId() const { return next_local_id_; }
+    /** Apply only after validating/restoring the complete durable snapshot. */
+    bool restoreNextLocalId(uint64_t next)
+    {
+        if (next == 0U || next < next_local_id_) return false;
+        next_local_id_ = next;
+        return true;
+    }
 
   private:
     struct Slot

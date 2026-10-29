@@ -68,6 +68,7 @@ constexpr uint32_t kRequiredBase = 3;
 constexpr uint32_t SeenRadioEnabled = 1UL << 18U;
 struct ScalarState
 {
+    bool valid() const { return (seen & kRequiredBase) == kRequiredBase; }
     uint32_t seen = kRequiredBase;
     uint64_t network_seen = 0;
     uint32_t cellular_seen = 0;

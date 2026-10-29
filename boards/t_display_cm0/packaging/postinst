@@ -1,0 +1,5 @@
+#!/bin/sh
+set -e
+if [ "$1" = configure ] && command -v systemctl >/dev/null 2>&1; then
+    systemctl daemon-reload >/dev/null 2>&1 || true
+fi

@@ -21,6 +21,12 @@ int main(int argc, char** argv)
     assert(tms_file.is_open());
     const std::string tms_source((std::istreambuf_iterator<char>(tms_file)),
                                  std::istreambuf_iterator<char>());
+    std::ifstream network_records_file(
+        std::string(argv[1]) + "/modules/core_sys/include/app/reticulum_network_records.h",
+        std::ios::binary);
+    assert(network_records_file.is_open());
+    const std::string network_records((std::istreambuf_iterator<char>(network_records_file)),
+                                      std::istreambuf_iterator<char>());
 
     // A single PSRAM-resident runtime snapshot is populated from TMS before
     // the LXMF adapter starts. JSON is permitted only as a one-time migration
@@ -40,8 +46,9 @@ int main(int argc, char** argv)
     // The pre-release TMSET6 document already used this public Reticulum
     // namespace. Keep it stable in TMSET7 so migration is value-preserving;
     // `rt_net` was an unshipped internal spelling and must never reappear.
-    assert(tms_source.find("rt.net.version") != std::string::npos);
-    assert(tms_source.find("rt.net.interface.%u.id") != std::string::npos);
+    assert(tms_source.find("ReticulumNetworkRecords") != std::string::npos);
+    assert(network_records.find("rt.net.version") != std::string::npos);
+    assert(network_records.find("rt.net.interface.%u.id") != std::string::npos);
     assert(tms_source.find("rt_net.") == std::string::npos);
     return 0;
 }

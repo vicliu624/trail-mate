@@ -1,34 +1,81 @@
 #pragma once
+#include "mesh/domain/peer_identity.h"
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
+#include "chat/delivery/chat_delivery_types.h"
 #include "chat/domain/chat_model.h"
 #include "chat/infra/meshtastic/mt_packet_wire.h"
+#include "chat/infra/rnode/rnode_packet_wire.h"
+#include "chat/infra/voice/vmp_control_ingress.h"
+#include "chat/linux_meshcore_direct_routes.h"
+#include "chat/linux_meshcore_direct_state.h"
+#include "chat/linux_meshcore_discovery.h"
+#include "chat/linux_meshcore_repeater.h"
+#include "chat/linux_meshcore_verification.h"
 #include "chat/ports/i_mesh_adapter.h"
 #include "meshtastic/mesh.pb.h"
-#include "platform/linux/sx126x_radio.h"
+#include "platform/linux/identity_owner_lease.h"
+#include "platform/linux/mesh/linux_meshcore_identity.h"
+#include "platform/linux/packet_radio.h"
+#include "platform/linux/retry_backoff.h"
 
 namespace trailmate::linux_app
 {
+class LinuxMeshMqttBridge;
 
 class LinuxRawLoraMeshAdapter final : public ::chat::IMeshAdapter
 {
   public:
     explicit LinuxRawLoraMeshAdapter(::chat::NodeId self_node_id = 0);
+    LinuxRawLoraMeshAdapter(::platform::linux_runtime::IPacketRadio& radio, ::chat::NodeId self_node_id);
+    using Clock = uint32_t (*)();
+    LinuxRawLoraMeshAdapter(::platform::linux_runtime::IPacketRadio& radio, ::chat::NodeId self_node_id, Clock retry_clock);
+    ~LinuxRawLoraMeshAdapter() override;
 
     [[nodiscard]] static bool hardwareCandidatePresent();
 
     bool begin();
     void tick();
     bool takePendingSendResult(::chat::MessageId& out_msg_id, bool& out_ok);
+    using SendResultSink = void (*)(void*, ::chat::MessageId, ::chat::MeshProtocol,
+                                    ::chat::MessageStatus, ::chat::delivery::SendFailureKind);
+    void setSendResultSink(SendResultSink sink, void* context);
+    using MessageIdSource = uint32_t (*)(void*);
+    void setMessageIdSource(MessageIdSource source, void* context);
+    // Adapter-owner thread only. The sink must outlive its registration and
+    // copy into bounded storage without doing radio or UI work in enqueue.
+    void setVoiceControlSink(::chat::voice::vmp::IControlEnvelopeSink* sink);
+    struct ReticulumPacket
+    {
+        std::array<uint8_t, ::chat::rnode::kRNodeMaxPayloadSize> data{};
+        size_t size = 0;
+        float rssi_dbm = 0, snr_db = 0;
+    };
+    using ReticulumPacketSink = void (*)(void*, const ReticulumPacket&);
+    void setReticulumPacketSink(ReticulumPacketSink, void*);
+    bool sendReticulumControl(const uint8_t*, size_t);
+    std::vector<::chat::NodeId> encryptedPeerIds() const;
+    std::vector<::mesh::PeerPublicKey> peerPublicKeys() const;
+    void cancelPendingSends();
+    void suspendRadio();
+    void setMqttBridge(LinuxMeshMqttBridge*);
+    void setMqttVoiceSink(std::function<bool(const uint8_t*, size_t)> sink) { mqtt_voice_sink_ = std::move(sink); }
+    void resetTransportContext();
+    bool mqttActive() const;
+    bool sendMeshCoreNodeInfo(::chat::NodeId, bool query, ::chat::ChannelId);
+    bool consumeMeshCoreNodeInfo(const ::chat::MeshIncomingData&);
 
     ::chat::MeshCapabilities getCapabilities() const override;
+    ::chat::MeshProtocol backendProtocol() const override { return active_protocol_; }
     bool sendText(::chat::ChannelId channel,
                   const std::string& text,
                   ::chat::MessageId* out_msg_id,
@@ -39,6 +86,8 @@ class LinuxRawLoraMeshAdapter final : public ::chat::IMeshAdapter
                         ::chat::MessageId* out_msg_id,
                         ::chat::NodeId peer = 0) override;
     bool pollIncomingText(::chat::MeshIncomingText* out) override;
+    ::chat::MeshSendResult sendTextDetailed(::chat::ChannelId channel, const std::string& text,
+                                            ::chat::MessageId forced_msg_id = 0, ::chat::NodeId peer = 0) override;
     bool sendAppData(::chat::ChannelId channel,
                      std::uint32_t portnum,
                      const std::uint8_t* payload,
@@ -79,6 +128,17 @@ class LinuxRawLoraMeshAdapter final : public ::chat::IMeshAdapter
     [[nodiscard]] std::vector<std::string> diagnosticLines() const;
 
   private:
+    struct MqttScratch;
+    LinuxMeshMqttBridge* mqtt_ = nullptr;
+    std::function<bool(const uint8_t*, size_t)> mqtt_voice_sink_;
+    std::unique_ptr<MqttScratch> mqtt_scratch_;
+    void consumeMqtt();
+    bool consumeMeshtasticMqtt(const meshtastic_MeshPacket&, ::chat::ChannelId, bool pki);
+    bool consumeMeshtasticData(const ::chat::meshtastic::PacketHeaderWire&, const meshtastic_Data&,
+                               const ::platform::linux_runtime::RadioPacket&, ::chat::ChannelId,
+                               const ::chat::RxMeta&, bool encrypted, const uint8_t*, size_t);
+    bool transmitMeshtasticFrame(const uint8_t*, size_t);
+    void networkMetadata(::chat::RxMeta&) const;
     enum class PacketKind : std::uint8_t
     {
         Text = 1,
@@ -102,6 +162,11 @@ class LinuxRawLoraMeshAdapter final : public ::chat::IMeshAdapter
     };
 
     bool ensureRadioReady();
+    bool meshCoreVerificationNumber(::chat::NodeId peer, uint64_t nonce, uint32_t& number) const;
+    bool publishMeshCoreVerification(const meshcore_wire::Verification::Action&);
+    void updateMeshCoreVerification();
+    void cancelMeshCoreVerification();
+    void receiveMeshCoreVerification(::chat::NodeId peer, const uint8_t*, size_t);
     ::chat::MessageId nextMessageId();
     void logStatusIfChanged(const char* title, const std::string& status);
     void logRadioStatsChanges();
@@ -170,8 +235,56 @@ class LinuxRawLoraMeshAdapter final : public ::chat::IMeshAdapter
     bool parseFrame(const ::platform::linux_runtime::Sx126xPacket& packet);
     bool parseMeshtasticPacket(
         const ::platform::linux_runtime::Sx126xPacket& packet);
+    bool sendMeshCoreGroup(::chat::ChannelId channel, ::chat::NodeId dest,
+                           std::uint32_t portnum, const std::uint8_t* payload,
+                           std::size_t len, bool text);
+    bool parseMeshCoreGroup(const ::platform::linux_runtime::RadioPacket& packet);
+    bool rememberMeshCoreSignature(uint32_t signature);
+    bool sendMeshCoreAdvert(bool broadcast);
+    bool parseMeshCoreAdvert(const ::platform::linux_runtime::RadioPacket& packet);
+    ::chat::MeshActionResult startMeshCoreDiscovery();
+    void parseMeshCoreControl(const ::platform::linux_runtime::RadioPacket& packet);
+    meshcore_wire::Discovery meshcore_discovery_;
+    meshcore_wire::Repeater meshcore_repeater_;
+    bool transmitMeshCoreFrame(const uint8_t* bytes, size_t size);
+    meshcore_wire::DirectState meshcore_direct_;
+    meshcore_wire::DirectRoutes meshcore_direct_routes_;
+    ::chat::MeshOperationFailure meshcore_send_failure_ = ::chat::MeshOperationFailure::Unknown;
+    bool sendMeshCoreDirect(::chat::NodeId peer, ::chat::MessageId message, uint32_t port,
+                            const uint8_t* bytes, std::size_t size, bool want_ack, bool text);
+    bool parseMeshCoreDirect(const ::platform::linux_runtime::RadioPacket& packet);
+    void publishMeshCoreDirectOutcome(const meshcore_wire::DirectOutcome& outcome,
+                                      ::chat::MessageStatus status, bool timeout);
+    ::platform::linux_runtime::LinuxMeshCoreIdentity meshcore_identity_;
+    ReticulumPacketSink reticulum_sink_ = nullptr;
+    void* reticulum_context_ = nullptr;
+    ::chat::rnode::ReassemblyState reticulum_reassembly_{};
+    ::chat::rnode::EncodedAirPacketSet reticulum_tx_{};
+    ReticulumPacket reticulum_rx_{};
+    uint8_t reticulum_sequence_ = 0;
+    std::map<::chat::NodeId, std::array<uint8_t, 32>> meshcore_peer_keys_;
+    std::map<::chat::NodeId, uint32_t> meshcore_peer_epochs_;
+    bool meshcore_peers_loaded_ = false;
+    struct SeenMeshCorePacket
+    {
+        uint32_t signature = 0;
+        uint32_t timestamp = 0;
+        bool valid = false;
+    };
+    std::array<SeenMeshCorePacket, 64> meshcore_seen_{};
+    std::size_t meshcore_seen_cursor_ = 0;
 
-    ::platform::linux_runtime::Sx126xRadio& radio_;
+    ::platform::linux_runtime::IPacketRadio& radio_;
+    ::chat::voice::vmp::ControlIngress voice_control_ingress_;
+    bool radio_acquired_ = false;
+    SendResultSink send_result_sink_ = nullptr;
+    void* send_result_context_ = nullptr;
+    MessageIdSource message_id_source_ = nullptr;
+    void* message_id_context_ = nullptr;
+    void publishSendResult(::chat::MessageId id, ::chat::MeshProtocol protocol,
+                           ::chat::MessageStatus status, ::chat::delivery::SendFailureKind failure);
+    ::platform::linux_runtime::RetryBackoff radio_retry_;
+    Clock retry_clock_;
     ::chat::NodeId self_node_id_ = 0;
     ::chat::MeshConfig config_{};
     ::chat::MeshProtocol active_protocol_ = ::chat::MeshProtocol::Meshtastic;
@@ -180,12 +293,14 @@ class LinuxRawLoraMeshAdapter final : public ::chat::IMeshAdapter
     bool duty_cycle_enabled_ = true;
     std::uint8_t channel_util_percent_ = 0;
     bool pki_ready_ = false;
+    ::platform::linux_runtime::IdentityOwnerLease pki_owner_;
     std::array<std::uint8_t, 32> pki_public_key_{};
     std::array<std::uint8_t, 32> pki_private_key_{};
     std::map<::chat::NodeId, std::array<std::uint8_t, 32>> node_public_keys_{};
     std::map<::chat::NodeId, std::uint32_t> node_key_last_seen_{};
     std::map<::chat::NodeId, std::uint32_t> nodeinfo_last_reply_ms_{};
     KeyVerificationState kv_state_ = KeyVerificationState::Idle;
+    meshcore_wire::Verification meshcore_verification_;
     std::uint64_t kv_nonce_ = 0;
     std::uint32_t kv_nonce_ms_ = 0;
     std::uint32_t kv_security_number_ = 0;

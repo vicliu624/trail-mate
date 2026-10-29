@@ -6,6 +6,7 @@
 #include "ui/widgets/map/map_tiles.h"
 
 #include "lvgl.h"
+#include "src/misc/cache/instance/lv_image_cache.h"
 
 #include "ui_map_runtime/map_tiles/filesystem_map_tile_source.h"
 #include "ui_map_runtime/map_tiles/map_tile_geometry.h"
@@ -28,8 +29,10 @@
 #include "platform/linux/map_contour_tile_generator.h"
 #include "platform/linux/map_diagnostics.h"
 #include "platform/linux/map_tile_cache.h"
+#include "platform/linux/packaged_map.h"
 #include "platform/linux/runtime_paths.h"
 #include "platform/ui/settings_store.h"
+#include "ui_map_runtime/map_tiles/native_pixel_buffer.h"
 
 namespace
 {
@@ -49,6 +52,13 @@ bool g_missing_tile_notice_pending = false;
 bool g_missing_tile_notice_emitted = false;
 bool g_contour_token_missing_logged = false;
 uint8_t g_missing_tile_notice_source = 0;
+std::weak_ptr<::platform::linux_runtime::PackagedMapSession> g_packaged_session;
+std::shared_ptr<::platform::linux_runtime::PackagedMapSession> packaged_metadata_session()
+{
+    if (auto active = g_packaged_session.lock()) return active;
+    static auto probe = std::make_shared<::platform::linux_runtime::PackagedMapSession>(::platform::linux_runtime::resolve_paths().sd_root);
+    return probe;
+}
 
 struct BaseTileFetchJob
 {
@@ -807,6 +817,11 @@ void delete_tile_object(MapTile& tile)
     tile.contour_checked = false;
     tile.has_png_file = false;
     tile.base_missing = false;
+    tile.packaged_base.reset();
+    tile.packaged_major.reset();
+    tile.packaged_minor.reset();
+    tile.poi.reset();
+    tile.packaged_pending = false;
 }
 
 MapTile* find_tile(TileContext& ctx, int32_t x, int32_t y, int z, uint8_t map_source)
@@ -906,6 +921,111 @@ void style_tile_card(lv_obj_t* obj, uint8_t map_source, bool has_base)
     lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, 0);
 }
 
+struct PackagedImage
+{
+    lv_image_dsc_t descriptor{};
+    std::shared_ptr<const ::platform::linux_runtime::PackagedMapTile> payload;
+};
+void add_packaged_image(lv_obj_t* parent, const std::shared_ptr<const ::platform::linux_runtime::PackagedMapTile>& payload)
+{
+    if (!payload || !payload->pixels || payload->result.status != ui::map_tiles::MapTileReadStatus::Ready) return;
+    const bool rgba = payload->result.format == ui::map_tiles::MapTileFormat::Rgba8888;
+    if (!rgba && payload->result.format != ui::map_tiles::MapTileFormat::Rgb565) return;
+    auto view = std::make_unique<PackagedImage>();
+    view->payload = payload;
+    view->descriptor.header.magic = LV_IMAGE_HEADER_MAGIC;
+    view->descriptor.header.w = view->descriptor.header.h = TILE_SIZE;
+    view->descriptor.header.cf = rgba ? LV_COLOR_FORMAT_ARGB8888 : LV_COLOR_FORMAT_RGB565;
+    view->descriptor.header.stride = TILE_SIZE * (rgba ? 4 : 2);
+    view->descriptor.data_size = payload->result.size;
+    if (rgba) ui::map_tiles::NativePixelBuffer::convertRgbaToBgra(payload->data(), payload->result.size);
+    view->descriptor.data = payload->data();
+    auto* image = lv_image_create(parent);
+    auto* owned = view.release();
+    lv_obj_add_event_cb(
+        image, [](lv_event_t* event)
+        {
+                           auto* data = static_cast<PackagedImage*>(lv_event_get_user_data(event));
+                           lv_image_cache_drop(&data->descriptor);
+                           delete data; },
+        LV_EVENT_DELETE, owned);
+    lv_image_set_src(image, &owned->descriptor);
+    lv_obj_set_size(image, TILE_SIZE, TILE_SIZE);
+    lv_obj_align(image, LV_ALIGN_TOP_LEFT, 0, 0);
+}
+bool create_packaged_tile_card(TileContext& ctx, MapTile& tile, int screen_x, int screen_y)
+{
+    namespace native = ::platform::linux_runtime;
+    namespace mt = ::ui::map_tiles;
+    const auto metadata = ctx.packaged->snapshot();
+    if (metadata.mode == native::PackagedMapMode::Legacy) return false;
+    if (metadata.mode == native::PackagedMapMode::Pending) return true;
+    auto base = metadata.mode == native::PackagedMapMode::Tmap ? ctx.packaged->request(base_tile_ref(tile.z, tile.x, tile.y, tile.map_source)) : nullptr;
+    std::shared_ptr<const native::PackagedMapTile> major, minor, poi;
+    bool pending = metadata.mode == native::PackagedMapMode::Tmap && !base;
+    if (metadata.mode == native::PackagedMapMode::Tmap)
+    {
+        auto ref = base_tile_ref(tile.z, tile.x, tile.y, tile.map_source);
+        if (g_requested_contour_enabled && tile.z > 7)
+        {
+            for (const auto& profile : native::contour_profiles_for_zoom(tile.z, true))
+            {
+                if (!contour_layer_for_profile(profile, ref.layer)) continue;
+                auto result = ctx.packaged->request(ref);
+                pending = pending || !result;
+                if (profile.kind == native::MapContourKind::Major) major = std::move(result);
+                else minor = std::move(result);
+            }
+        }
+        ref.layer = mt::MapTileLayer::Poi;
+        poi = ctx.packaged->request(ref);
+        pending = pending || !poi;
+    }
+    tile.packaged_pending = pending;
+    if (tile.poi != poi)
+    {
+        tile.poi = std::move(poi);
+        ++ctx.poi_revision;
+    }
+    tile.contour_checked = g_requested_contour_enabled;
+    tile.contour_loaded = !pending;
+    if (tile.img_obj && lv_obj_is_valid(tile.img_obj) && base == tile.packaged_base && major == tile.packaged_major && minor == tile.packaged_minor) return true;
+    if (!tile.img_obj || !lv_obj_is_valid(tile.img_obj))
+    {
+        tile.img_obj = lv_obj_create(ctx.map_container);
+        lv_obj_set_size(tile.img_obj, TILE_SIZE, TILE_SIZE);
+        lv_obj_move_background(tile.img_obj);
+    }
+    while (lv_obj_get_child_cnt(tile.img_obj)) lv_obj_del(lv_obj_get_child(tile.img_obj, 0));
+    tile.packaged_base = std::move(base);
+    tile.packaged_major = std::move(major);
+    tile.packaged_minor = std::move(minor);
+    tile.has_png_file = tile.packaged_base && tile.packaged_base->result.status == mt::MapTileReadStatus::Ready;
+    tile.base_missing = tile.packaged_base && tile.packaged_base->result.status == mt::MapTileReadStatus::Missing;
+    lv_obj_set_pos(tile.img_obj, screen_x, screen_y);
+    style_tile_card(tile.img_obj, tile.map_source, tile.has_png_file);
+    if (tile.has_png_file)
+    {
+        lv_obj_set_style_pad_all(tile.img_obj, 0, 0);
+        lv_obj_set_style_border_width(tile.img_obj, 0, 0);
+        add_packaged_image(tile.img_obj, tile.packaged_base);
+        add_packaged_image(tile.img_obj, tile.packaged_minor);
+        add_packaged_image(tile.img_obj, tile.packaged_major);
+    }
+    else
+    {
+        auto* label = lv_label_create(tile.img_obj);
+        char identity[48];
+        mt::formatMapTileCoordinateLabel(tile.z, tile.x, tile.y, identity, sizeof(identity));
+        const char* status = !tile.packaged_base && metadata.mode == native::PackagedMapMode::Tmap ? "Loading" : tile.base_missing ? "Missing"
+                                                                                                                                   : "Map data error";
+        lv_label_set_text_fmt(label, "%s %s\n%s", status, map_source_label(tile.map_source), identity);
+        lv_obj_center(label);
+        if (tile.base_missing) mark_missing_tile(tile.map_source);
+    }
+    return true;
+}
+
 void create_or_refresh_tile_card(TileContext& ctx, MapTile& tile)
 {
     if (!ctx.map_container || !ctx.anchor)
@@ -919,6 +1039,7 @@ void create_or_refresh_tile_card(TileContext& ctx, MapTile& tile)
     {
         return;
     }
+    if (ctx.packaged && create_packaged_tile_card(ctx, tile, screen_x, screen_y)) return;
 
     const auto base_actual_path =
         build_base_tile_actual_path(tile.z, static_cast<int>(tile.x), static_cast<int>(tile.y), tile.map_source);
@@ -1071,18 +1192,35 @@ bool build_contour_tile_path(int z, int x, int y, char* out_path, size_t out_siz
 
 bool base_tile_available(int z, int x, int y, uint8_t map_source)
 {
+    auto packaged = packaged_metadata_session();
+    const auto mode = packaged->snapshot().mode;
+    if (mode != ::platform::linux_runtime::PackagedMapMode::Legacy)
+    {
+        const auto result = packaged->request(base_tile_ref(z, x, y, map_source));
+        return result && result->result.status == ui::map_tiles::MapTileReadStatus::Ready;
+    }
     const auto result = tile_source().lookup(base_tile_ref(z, x, y, map_source));
     return result.status == ui::map_tiles::MapTileStatus::Available;
 }
 
 bool map_source_directory_available(uint8_t map_source)
 {
+    const auto metadata = packaged_metadata_session()->snapshot();
+    if (metadata.mode == ::platform::linux_runtime::PackagedMapMode::Pending) return true;
+    if (metadata.mode == ::platform::linux_runtime::PackagedMapMode::Tmap) return metadata.coverage[sanitize_map_source(map_source)] != 0;
+    if (metadata.mode == ::platform::linux_runtime::PackagedMapMode::Error) return false;
     return tile_source().layerDirectoryAvailable(
         ui::map_tiles::mapTileLayerFromBaseSource(sanitize_map_source(map_source)));
 }
 
 bool contour_directory_available()
 {
+    const auto metadata = packaged_metadata_session()->snapshot();
+    if (metadata.mode == ::platform::linux_runtime::PackagedMapMode::Pending) return true;
+    if (metadata.mode == ::platform::linux_runtime::PackagedMapMode::Tmap)
+        return std::any_of(metadata.coverage.begin() + 3, metadata.coverage.end(), [](uint32_t mask)
+                           { return mask != 0; });
+    if (metadata.mode == ::platform::linux_runtime::PackagedMapMode::Error) return false;
     return tile_source().anyContourDirectoryAvailable() || !earthdata_token().empty();
 }
 
@@ -1253,6 +1391,7 @@ void update_map_anchor(TileContext& ctx, double lat, double lng, int zoom, int p
 
 void calculate_required_tiles(TileContext& ctx, double lat, double lng, int zoom, int pan_x, int pan_y, bool has_fix)
 {
+    ++ctx.poi_revision;
     if (!ctx.tiles)
     {
         return;
@@ -1355,6 +1494,14 @@ void tile_loader_step(TileContext& ctx)
     }
 
     poll_tile_fetch_jobs(ctx);
+    const auto packaged = ctx.packaged ? ctx.packaged->snapshot() : ::platform::linux_runtime::PackagedMapSnapshot{};
+    const bool legacy = packaged.mode == ::platform::linux_runtime::PackagedMapMode::Legacy;
+    if (ctx.packaged && ctx.packaged_session != packaged.session)
+    {
+        for (auto& tile : *ctx.tiles) delete_tile_object(tile);
+        ctx.packaged_session = packaged.session;
+        ++ctx.poi_revision;
+    }
 
     MapTile* next_tile = nullptr;
     for (auto& tile : *ctx.tiles)
@@ -1363,7 +1510,7 @@ void tile_loader_step(TileContext& ctx)
         {
             continue;
         }
-        if (!tile.img_obj || !lv_obj_is_valid(tile.img_obj))
+        if (!tile.img_obj || !lv_obj_is_valid(tile.img_obj) || tile.packaged_pending)
         {
             if (!next_tile || tile.priority < next_tile->priority)
             {
@@ -1382,7 +1529,7 @@ void tile_loader_step(TileContext& ctx)
             continue;
         }
 
-        if (tile.base_missing)
+        if (legacy && tile.base_missing)
         {
             schedule_base_tile_fetch(tile.z,
                                      static_cast<int>(tile.x),
@@ -1390,7 +1537,7 @@ void tile_loader_step(TileContext& ctx)
                                      tile.map_source);
         }
 
-        if (g_requested_contour_enabled && tile.has_png_file && !tile.contour_loaded)
+        if (legacy && g_requested_contour_enabled && tile.has_png_file && !tile.contour_loaded)
         {
             schedule_contour_tile_fetch(tile.z,
                                         static_cast<int>(tile.x),
@@ -1422,6 +1569,8 @@ void init_tile_context(TileContext& ctx,
                        bool* has_map_data,
                        bool* has_visible_map_data)
 {
+    if (!ctx.packaged) ctx.packaged = std::make_shared<::platform::linux_runtime::PackagedMapSession>(default_storage_root());
+    g_packaged_session = ctx.packaged;
     ctx.map_container = map_container;
     ctx.anchor = anchor;
     ctx.tiles = tiles;
@@ -1448,6 +1597,8 @@ void init_tile_context(TileContext& ctx,
 
 void cleanup_tiles(TileContext& ctx)
 {
+    if (ctx.packaged) ctx.packaged->cancel();
+    ++ctx.poi_revision;
     if (ctx.tiles)
     {
         for (auto& tile : *ctx.tiles)
@@ -1474,7 +1625,70 @@ void cleanup_tiles(TileContext& ctx)
     }
 }
 
-void release_tile_context(TileContext&)
+void release_tile_context(TileContext& ctx)
 {
-    // Linux tile loading has no dedicated worker lease.
+    ctx.packaged.reset();
+}
+
+void map_poi_snapshot(TileContext& ctx, ui::map::MapPoiSnapshot& out)
+{
+    out.header.valid = false;
+    out.header.version = 1;
+    out.header.generated_at_ms = now_ms();
+    out.enabled = false;
+    out.loading = out.truncated = out.layout_ready = false;
+    out.candidate_count = out.item_count = 0;
+    if (!ctx.tiles || !ctx.anchor || !ctx.anchor->valid || !ctx.map_container) return;
+    out.width = int16_t(lv_obj_get_width(ctx.map_container));
+    out.height = int16_t(lv_obj_get_height(ctx.map_container));
+    const int32_t x = ctx.anchor->gps_tile_screen_x + ctx.anchor->gps_offset_x - ctx.anchor->gps_global_pixel_x;
+    const int32_t y = ctx.anchor->gps_tile_screen_y + ctx.anchor->gps_offset_y - ctx.anchor->gps_global_pixel_y;
+    out.view_key = uint64_t(uint32_t(x)) << 32 | uint32_t(y);
+    out.compatibility_key = uint64_t(ctx.packaged_session) << 16 | uint64_t(uint8_t(ctx.anchor->z)) << 8 | g_requested_map_source;
+    for (const auto& tile : *ctx.tiles)
+    {
+        if (!tile.visible || tile.z != ctx.anchor->z) continue;
+        out.loading = out.loading || tile.packaged_pending;
+        if (!tile.poi || tile.poi->result.status != ui::map_tiles::MapTileReadStatus::Ready || !ui::map_poi::validPayload(tile.poi->data(), tile.poi->result.size)) continue;
+        const auto* header = reinterpret_cast<const ui::map_poi::TileHeader*>(tile.poi->data());
+        out.header.valid = out.header.valid || header->manifest_valid;
+        out.enabled = out.enabled || (header->manifest_valid && header->policy.enabled(ctx.anchor->z));
+        out.labels = header->policy.labels;
+        out.candidate_count += header->count;
+        out.truncated = out.truncated || header->truncated;
+    }
+}
+void visit_map_annotations(TileContext& ctx, ui::map_poi::AnnotationConsumer consume, void* user)
+{
+    if (!consume || !ctx.tiles || !ctx.anchor || !ctx.anchor->valid) return;
+    for (const auto& tile : *ctx.tiles)
+    {
+        if (!tile.visible || tile.z != ctx.anchor->z || !tile.poi || tile.poi->result.status != ui::map_tiles::MapTileReadStatus::Ready || !ui::map_poi::validPayload(tile.poi->data(), tile.poi->result.size)) continue;
+        const auto* header = reinterpret_cast<const ui::map_poi::TileHeader*>(tile.poi->data());
+        const auto* records = ui::map_poi::payloadRecords(tile.poi->data());
+        int tile_x = 0, tile_y = 0;
+        if (!tile_screen_pos_xyz(ctx, tile.x, tile.y, tile.z, tile_x, tile_y)) continue;
+        for (size_t index = 0; index < header->count; ++index)
+        {
+            const auto& record = records[index];
+            int x = 0, y = 0;
+            if (!gps_screen_pos(ctx, record.lat, record.lon, x, y)) continue;
+            ui::map_poi::AnnotationCandidate candidate;
+            candidate.key = record.key;
+            candidate.feature_key = record.feature_key;
+            candidate.name = header->policy.labels ? record.name : "";
+            candidate.category = record.category;
+            candidate.kind = record.kind;
+            candidate.priority = record.priority;
+            candidate.x = clamp_screen_coord(x);
+            candidate.y = clamp_screen_coord(y);
+            candidate.path_points = std::min<uint8_t>(8, record.path_points);
+            for (unsigned point = 0; point < candidate.path_points; ++point)
+            {
+                candidate.path[point * 2] = clamp_screen_coord(tile_x + record.path[point * 2]);
+                candidate.path[point * 2 + 1] = clamp_screen_coord(tile_y + record.path[point * 2 + 1]);
+            }
+            consume(user, candidate);
+        }
+    }
 }

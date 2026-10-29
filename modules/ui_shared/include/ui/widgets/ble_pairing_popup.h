@@ -10,6 +10,7 @@ class BlePairingPopup
 {
   public:
     static void update(uint32_t passkey, bool is_fixed_pin, const char* device_name);
+    static void setState(bool active, uint32_t passkey, bool is_fixed_pin, const char* device_name);
     static void hide();
     static bool isVisible();
 

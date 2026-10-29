@@ -404,6 +404,8 @@ struct KeyVerificationNumberRequestEvent : public Event
 {
     uint32_t node_id;
     uint64_t nonce;
+    bool has_protocol = false;
+    chat::MeshProtocol protocol = chat::MeshProtocol::Meshtastic;
 
     KeyVerificationNumberRequestEvent(uint32_t id, uint64_t n)
         : Event(EventType::KeyVerificationNumberRequest), node_id(id), nonce(n) {}
@@ -417,6 +419,8 @@ struct KeyVerificationNumberInformEvent : public Event
     uint32_t node_id;
     uint64_t nonce;
     uint32_t security_number;
+    bool has_protocol = false;
+    chat::MeshProtocol protocol = chat::MeshProtocol::Meshtastic;
 
     KeyVerificationNumberInformEvent(uint32_t id, uint64_t n, uint32_t number)
         : Event(EventType::KeyVerificationNumberInform), node_id(id), nonce(n), security_number(number) {}
@@ -431,6 +435,9 @@ struct KeyVerificationFinalEvent : public Event
     uint64_t nonce;
     bool is_sender;
     char verification_code[12];
+    bool runtime_failure = false;
+    bool has_protocol = false;
+    chat::MeshProtocol protocol = chat::MeshProtocol::Meshtastic;
 
     KeyVerificationFinalEvent(uint32_t id, uint64_t n, bool sender, const char* code)
         : Event(EventType::KeyVerificationFinal), node_id(id), nonce(n), is_sender(sender)

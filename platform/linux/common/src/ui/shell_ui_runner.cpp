@@ -1,4 +1,6 @@
 #include "ui/shell_ui_runner.h"
+#include "ui/input/pager_navigation.h"
+#include "platform/linux/tmap_creation.h"
 
 #include <chrono>
 #include <cstdint>
@@ -13,8 +15,21 @@
 #include "app/linux_app_facade.h"
 #include "core/canvas.h"
 #include "core/display_profile.h"
+#include "platform/linux/application_lifecycle.h"
+#include "platform/linux/packet_radio.h"
+#include "platform/linux/resource_pack_policy.h"
+#include "platform/linux/runtime_paths.h"
+#include "platform/ui/device_runtime.h"
+#include "platform/ui/quick_controls_runtime.h"
+#include "platform/ui/settings_store.h"
+#include "ui/agenda_runtime_binding.h"
+#include "ui/localization.h"
+#include "ui/lvgl_text_input.h"
+#include "ui/runtime/memory_profile.h"
+#include "ui/screens/geocaching/geocaching_page_shell.h"
 #include "ui/screens/team/team_page_shell.h"
 #include "ui/shared_ui_shell.h"
+#include "ui/voice_runtime_binding.h"
 
 namespace trailmate::cardputer_zero::linux_ui
 {
@@ -62,6 +77,7 @@ std::chrono::steady_clock::time_point g_lvgl_start_time = clock::now();
     case app::InputKey::F1:
         return kLvglFunctionKeyF1;
     case app::InputKey::Unknown:
+    case app::InputKey::TextEdit:
     case app::InputKey::Fn:
     case app::InputKey::Ctrl:
     case app::InputKey::Alt:
@@ -116,14 +132,19 @@ bool dispatchTeamUiEvent(sys::Event* event)
 
 struct ShellSession::Impl
 {
+    bool geocaching_bound = false;
+    std::unique_ptr<::trailmate::linux_ui::VoiceRuntimeBinding> voice;
+    std::unique_ptr<::trailmate::linux_ui::AgendaRuntimeBinding> agenda;
     SharedUiShellStartup startup{};
     std::deque<QueuedKeyEvent> key_events{};
+    LvglTextInput text_input;
 };
 
 ShellSession::ShellSession() : impl_(std::make_unique<Impl>()) {}
 
 ShellSession::~ShellSession()
 {
+    releaseUiBindings();
     if (initialized_)
     {
         setTeamUiEventDispatcher(nullptr);
@@ -131,10 +152,34 @@ ShellSession::~ShellSession()
     }
 }
 
+void ShellSession::releaseUiBindings()
+{
+    impl_->text_input.reset();
+    impl_->voice.reset();
+    if (impl_->agenda) impl_->agenda->releaseUi();
+    if (!impl_->geocaching_bound) return;
+    ::geocaching::ui::shell::exit(nullptr, nullptr);
+    ::geocaching::ui::shell::bind(nullptr);
+    impl_->geocaching_bound = false;
+}
+
 bool ShellSession::begin()
 {
     if (initialized_) return true;
+    if (!::ui::i18n::configure_external_pack_root(::platform::linux_runtime::resource_pack_root().string()))
+        return false;
+    if (!::platform::linux_runtime::configure_resource_pack_policy({::platform::ui::device::firmware_version(), ::ui::runtime::current_memory_profile().name}))
+        return false;
+    if (!::platform::linux_runtime::set_packet_radio_enabled(
+            ::platform::ui::settings_store::get_bool("settings", "radio_enabled", true)))
+        return false;
     if (!app_facade_.initialize()) return false;
+    impl_->voice = std::make_unique<::trailmate::linux_ui::VoiceRuntimeBinding>(app_facade_.voiceSource());
+    impl_->agenda = std::make_unique<::trailmate::linux_ui::AgendaRuntimeBinding>(
+        ::platform::linux_runtime::LinuxAgendaOptions{::platform::linux_runtime::sqlite_database_path(), nullptr, {}});
+    impl_->startup.setAgenda(impl_->agenda->application(), impl_->agenda->markers());
+    ::geocaching::ui::shell::bind(app_facade_.geocachingSource());
+    impl_->geocaching_bound = true;
     setTeamUiEventDispatcher(dispatchTeamUiEvent);
     if (!impl_->startup.begin()) return false;
     initialized_ = true;
@@ -149,6 +194,8 @@ void ShellSession::tick()
     app_facade_.updateCoreServices();
     app_facade_.tickEventRuntime();
     app_facade_.dispatchPendingEvents();
+    ::platform::ui::service_quick_controls();
+    if (impl_->agenda) impl_->agenda->tick();
 }
 
 bool ShellSession::ready() const noexcept
@@ -160,6 +207,11 @@ void ShellSession::enqueueInputs(const std::vector<app::InputEvent>& events)
 {
     for (const auto& event : events)
     {
+        if (event.key == app::InputKey::TextEdit)
+        {
+            impl_->key_events.push_back(QueuedKeyEvent{0, LV_INDEV_STATE_RELEASED, std::make_shared<app::TextEdit>(event.edit)});
+            continue;
+        }
         const std::uint32_t mapped = mapInputEvent(event);
         if (mapped == 0U) continue;
         impl_->key_events.push_back(
@@ -171,6 +223,12 @@ void ShellSession::enqueueInputs(const std::vector<app::InputEvent>& events)
 
 bool ShellSession::dequeueKeyEvent(std::uint32_t* key, lv_indev_state_t* state)
 {
+    while (!impl_->key_events.empty() && impl_->key_events.front().edit)
+    {
+        const auto edit = impl_->key_events.front().edit;
+        impl_->key_events.pop_front();
+        impl_->text_input.apply(*edit);
+    }
     if (impl_->key_events.empty()) return false;
     const QueuedKeyEvent next = impl_->key_events.front();
     impl_->key_events.pop_front();
@@ -183,6 +241,7 @@ bool ShellSession::hasPendingKeyEvent() const noexcept
 {
     return !impl_->key_events.empty();
 }
+app::TextInputState ShellSession::textInputState() { return impl_->text_input.state(); }
 
 // ===================================================================
 // CanvasLvglHost
@@ -231,6 +290,7 @@ CanvasLvglHost::CanvasLvglHost(ShellSession& shell)
 
 CanvasLvglHost::~CanvasLvglHost()
 {
+    shell_.releaseUiBindings();
     if (keypad_ != nullptr)
     {
         lv_indev_delete(keypad_);
@@ -248,6 +308,7 @@ void CanvasLvglHost::tick()
 {
     shell_.tick();
     lv_timer_handler();
+    ::ui::i18n::on_lvgl_frame_completed();
     if (dirty_)
     {
         copyFrameBufferToCanvas();
@@ -284,7 +345,13 @@ void CanvasLvglHost::readInputCb(lv_indev_t* indev, lv_indev_data_t* d)
 
     std::uint32_t key = 0U;
     lv_indev_state_t state = LV_INDEV_STATE_RELEASED;
-    if (!host->shell_.dequeueKeyEvent(&key, &state)) return;
+    for (;;)
+    {
+        if (!host->shell_.dequeueKeyEvent(&key, &state)) return;
+        auto* group = lv_indev_get_group(indev);
+        if (state == LV_INDEV_STATE_PRESSED) ::ui::input::pager::prepare_group(group);
+        if (!::ui::input::pager::handle_key(key, state == LV_INDEV_STATE_PRESSED, group)) break;
+    }
 
     d->state = state;
     d->key = key;
@@ -314,7 +381,7 @@ void CanvasLvglHost::copyFrameBufferToCanvas()
 // ===================================================================
 
 void runShellUi(platform::SurfacePresenter& presenter,
-                std::chrono::milliseconds auto_exit_after)
+                std::chrono::milliseconds auto_exit_after, bool tmap_creation)
 {
     ShellSession shell;
     CanvasLvglHost host{shell};
@@ -322,21 +389,24 @@ void runShellUi(platform::SurfacePresenter& presenter,
     if (!shell.begin())
         throw std::runtime_error(
             "Failed to begin ShellSession for the shared UI shell.");
+    ::platform::linux_runtime::TmapCreationBinding tmap_creator(tmap_creation);
 
     auto next_frame = clock::now();
     const auto started_at = next_frame;
-
-    while (presenter.pump())
+    bool presenting = true;
+    while ((presenting = presenter.pump()) && !::platform::linux_runtime::application_restart_requested())
     {
         shell.enqueueInputs(presenter.drainInput());
 
         if (auto_exit_after > std::chrono::milliseconds::zero() &&
             (clock::now() - started_at) >= auto_exit_after)
         {
+            ::platform::linux_runtime::request_application_exit();
             break;
         }
 
         host.tick();
+        presenter.setTextInputState(shell.textInputState());
         presenter.present(host.canvas());
 
         next_frame += kFrameTime;
@@ -345,6 +415,7 @@ void runShellUi(platform::SurfacePresenter& presenter,
         if (clock::now() > next_frame + std::chrono::milliseconds(250))
             next_frame = clock::now();
     }
+    if (!presenting) ::platform::linux_runtime::request_application_exit();
 }
 
 } // namespace trailmate::cardputer_zero::linux_ui

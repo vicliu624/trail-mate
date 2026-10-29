@@ -1,0 +1,2 @@
+#pragma once
+inline constexpr const char* trailmate_linux_build_version = "@TRAIL_MATE_PROJECT_VERSION@";

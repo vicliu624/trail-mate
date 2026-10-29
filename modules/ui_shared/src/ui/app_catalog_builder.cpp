@@ -1,4 +1,5 @@
 #include "ui/app_catalog_builder.h"
+#include "ui/ux_build_config.h"
 
 #include <cstdio>
 
@@ -16,12 +17,20 @@
 #define TRAIL_MATE_USE_MONO_SCREEN_240X320 0
 #endif
 #if defined(ARDUINO_T_LORA_PAGER) || defined(ARDUINO_T_DECK) || defined(ARDUINO_WIO_TRACKER_L2) || \
-    defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)
-#define TRAIL_MATE_ENABLE_CALCULATOR_APP 1
+    defined(TRAIL_MATE_UI_P4_TOUCH)
 #define TRAIL_MATE_ENABLE_GEOCACHING_APP 1
+#define TRAIL_MATE_ENABLE_MUSIC_APP 1
+#elif defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+#define TRAIL_MATE_ENABLE_GEOCACHING_APP 1
+#define TRAIL_MATE_ENABLE_MUSIC_APP 0
+#else
+#define TRAIL_MATE_ENABLE_GEOCACHING_APP 0
+#define TRAIL_MATE_ENABLE_MUSIC_APP 0
+#endif
+#if TRAIL_MATE_ENABLE_GEOCACHING_APP || defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+#define TRAIL_MATE_ENABLE_CALCULATOR_APP 1
 #else
 #define TRAIL_MATE_ENABLE_CALCULATOR_APP 0
-#define TRAIL_MATE_ENABLE_GEOCACHING_APP 0
 #endif
 #if TRAIL_MATE_USE_MONO_SCREEN_240X320
 #include "ui/mono/screens/screen_240x320/screen_app.h"
@@ -47,6 +56,8 @@
 #include "ui/screens/chat/chat_page_shell.h"
 #if TRAIL_MATE_ENABLE_CALCULATOR_APP
 #include "ui/screens/calculator/calculator_page_shell.h"
+#endif
+#if TRAIL_MATE_ENABLE_MUSIC_APP
 #include "ui/screens/music/music_page_shell.h"
 namespace ui::assets
 {
@@ -248,6 +259,8 @@ ui::CallbackAppScreen s_calculator_app("calculator", "Calculator", CATALOG_ICON(
                                        calculator::ui::shell::enter,
                                        calculator::ui::shell::exit,
                                        &s_menu_host);
+#endif
+#if TRAIL_MATE_ENABLE_MUSIC_APP
 ui::CallbackAppScreen s_music_app("music", "Music", &ui::assets::music,
                                   ui::music_page::enter, ui::music_page::exit, &s_menu_host);
 #endif
@@ -511,6 +524,8 @@ AppCatalog build(const FeatureFlags& flags)
 #endif
 #if TRAIL_MATE_ENABLE_CALCULATOR_APP
         add(&s_calculator_app);
+#endif
+#if TRAIL_MATE_ENABLE_MUSIC_APP
         add(&s_music_app);
 #endif
         if (flags.profile == CatalogProfile::IdfDefault && flags.include_tracker)

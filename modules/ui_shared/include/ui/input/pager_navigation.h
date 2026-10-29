@@ -3,7 +3,7 @@
 
 namespace ui::input::pager
 {
-#if defined(ARDUINO_T_LORA_PAGER)
+#if defined(ARDUINO_T_LORA_PAGER) || defined(__linux__)
 void install_help(lv_obj_t* root, lv_obj_t* title);
 void prepare_group(lv_group_t* group);
 bool handle_key(uint32_t key, bool pressed, lv_group_t* group);

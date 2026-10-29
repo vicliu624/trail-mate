@@ -45,6 +45,8 @@ class ShellSession
     /// Initialize the app facade and begin the shared UI startup sequence.
     /// Must be called after LVGL has been initialized by the host.
     bool begin();
+    // Call before an externally owned LVGL instance is destroyed.
+    void releaseUiBindings();
 
     /// Drive one frame worth of app-layer work: update core services, tick
     /// the event runtime, dispatch pending events.
@@ -52,6 +54,7 @@ class ShellSession
 
     /// Push simulated or evdev input events into the session queue.
     void enqueueInputs(const std::vector<app::InputEvent>& events);
+    app::TextInputState textInputState();
 
     /// Returns true once the startup sequence has finalized.
     bool ready() const noexcept;
@@ -70,6 +73,7 @@ class ShellSession
     {
         std::uint32_t key{};
         lv_indev_state_t state{};
+        std::shared_ptr<const app::TextEdit> edit{};
     };
 
     /// Called by the LVGL host's read-input callback to dequeue one key event.
@@ -171,7 +175,8 @@ class NativeLvglHost
 /// main loop driven by a SurfacePresenter.  Backward-compatible entrypoint.
 void runShellUi(
     platform::SurfacePresenter& presenter,
-    std::chrono::milliseconds auto_exit_after = std::chrono::milliseconds::zero());
+    std::chrono::milliseconds auto_exit_after = std::chrono::milliseconds::zero(),
+    bool tmap_creation = false);
 
 } // namespace linux_ui
 } // namespace trailmate::cardputer_zero

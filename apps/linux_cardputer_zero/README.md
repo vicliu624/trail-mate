@@ -1,20 +1,24 @@
 # Cardputer Zero Linux App Shell
 
+The current [production parity review](../../docs/engineering/cardputer-zero-maintenance.md)
+records corrected stale wiring and outstanding shared Linux/compact UX gaps.
+The compact shell now uses production catalog descriptors, includes Protocol
+Probe, and services queued quick controls. Its target renderer is LVGL.
+
 This app shell is the Trail Mate product route for the Cardputer Zero portable
 Linux device. It is not the Linux simulator.
 
-The first slice intentionally keeps the runtime entry small: the shell validates
+The runtime entry stays small: the shell validates
 the `cardputerzero` target profile, consumes the `boards/cardputerzero` facts,
 selects the `cardputer_compact` UX pack, and builds through
 `builds/linux_cmake`. The device package now owns a Wayland APPLaunch product
 entry and a separate explicit fbdev/evdev debug fallback; hardware validation
 still has to happen on the real device session.
 
-The shared LVGL main-menu profile for this target is already Cardputer Zero
-specific and Pager-derived: `make_cardputer_zero_profile()` starts from
-`make_pager_profile()` and then shrinks geometry for the 320 x 170 display.
-The remaining UI work is page-by-page Cardputer Zero closure from that visual
-baseline, not a Linux-simulator or custom Linux-panel redesign.
+The shared LVGL main-menu profile for this target is Cardputer Zero specific:
+`make_cardputer_zero_profile()` owns a compact focus carousel for the 320 x 170
+display. It remains independent of the Pager's newer grid layout. Business
+pages continue using shared page geometry and runtime ports.
 
 Known hardware facts in this repo:
 
@@ -36,7 +40,9 @@ Known Cardputer Zero Linux session facts in this shell:
 - notifications are created through the standard
   `org.freedesktop.Notifications` D-Bus interface; the
   `$XDG_RUNTIME_DIR/cardputer-zero/notifyd.sock` channel is status/control only
-- text entry uses Fcitx5 through the normal Linux toolkit/frontend path
+- text entry uses the compositor's Wayland text-input-v3 frontend for Fcitx5
+  commits, with UTF-8 XKB fallback for unhandled keys; physical session
+  integration still requires device validation
 - the Cardputer Zero IME addon/panel pair uses
   `$XDG_RUNTIME_DIR/cardputer-zero/ime-panel.sock` only to display preedit,
   candidates, and input-method state
@@ -90,7 +96,8 @@ CMake state, and existing package outputs before copying that snapshot into the
 builder container. This keeps Windows/WSL executable-bit behavior and accidental
 root build artifacts out of the `.deb`.
 
-The container package entrypoint validates package version `0.1.38-alpha`,
+The container package entrypoint validates the selected package version (by default
+resolved from the CI tag or Changelog),
 architecture, required runtime dependencies, APPLaunch paths, executable
 permissions, AArch64 ELF metadata, and `ldd` resolution before copying the
 `.deb` into `build/cardputer-zero-deb/`.
@@ -185,7 +192,7 @@ them.
 Install the package on Cardputer Zero:
 
 ```bash
-sudo apt install ./trailmate-cardputer-zero_0.1.38-alpha_arm64.deb
+sudo apt install ./trailmate-cardputer-zero_1.0.0_arm64.deb
 ```
 
 Check the installed package metadata and APPLaunch entry:
@@ -329,9 +336,10 @@ specific IP family, set `TRAIL_MATE_MAP_IP_RESOLVE=ipv4` or
 reachable from the device network, configure a reachable template such as
 `TRAIL_MATE_OSM_TILE_URL`.
 
-When a local mixed HTTP proxy is already listening on `127.0.0.1:7890`, the
-Cardputer Zero APPLaunch wrapper exports the standard curl proxy variables for
-Trail Mate. Explicit proxy variables supplied by the session are preserved.
+Configure standard curl proxy variables (`HTTPS_PROXY`, `HTTP_PROXY`, or
+`ALL_PROXY`) in the session or the documented environment files when needed.
+The launcher preserves explicit settings and does not infer a proxy from a
+machine-specific listening port.
 
 Check the Cardputer Zero notification path:
 
@@ -357,9 +365,14 @@ distribution.
 
 ## Screenshot Evidence
 
-The current shared LVGL Cardputer compact route has screenshot evidence for the
-ten Cardputer Zero product pages. PC Link, SSTV, Energy Sweep / Spectrum, and
-SD Storage / USB Disk are intentionally excluded from this product menu. SD
+The current shared LVGL Cardputer compact manifest has fourteen product routes,
+including Agenda.
+The checked-in screenshot matrix covers ten earlier pages; Calculator,
+Geocaching and Protocol Probe are also registered and covered by the current
+maintenance tests. Agenda also has current registry/manifest test coverage.
+Missing checked-in images are not evidence of missing routes. The command below
+covers the existing thirteen capture selectors; it does not capture Agenda.
+PC Link, SSTV, and SD Storage / USB Disk are intentionally excluded from this product menu. SD
 Storage is the card-access/USB mass-storage entry, not Extensions.
 
 ```powershell
@@ -371,6 +384,9 @@ $targets = @(
   'sky_plot',
   'team',
   'tracker',
+  'calculator',
+  'geocaching',
+  'energy_sweep', # Capture selector for the Protocol Probe page.
   'walkie',
   'extensions',
   'settings'

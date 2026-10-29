@@ -1103,10 +1103,13 @@ bool MeshPeerDirectoryCore::persistEncodedSnapshot(const uint8_t* data,
     {
         return false;
     }
-    if (revision == persistence_revision_)
-    {
-        dirty_ = false;
-    }
+    (void)acknowledgePersistedRevision(revision);
+    return true;
+}
+bool MeshPeerDirectoryCore::acknowledgePersistedRevision(uint32_t revision)
+{
+    if (revision != persistence_revision_) return false;
+    dirty_ = false;
     return true;
 }
 

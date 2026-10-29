@@ -10,7 +10,7 @@ out_dir="${TRAIL_MATE_CARDPUTER_ZERO_PACKAGE_OUT:-${repo_root}/build/cardputer-z
 jobs="${TRAIL_MATE_CARDPUTER_ZERO_PACKAGE_JOBS:-$(nproc 2>/dev/null || echo 4)}"
 docker_platform="${TRAIL_MATE_CARDPUTER_ZERO_DOCKER_PLATFORM:-linux/arm64}"
 builder_image="${TRAIL_MATE_CARDPUTER_ZERO_BUILDER_IMAGE:-trailmate-cardputer-zero-builder:bookworm-arm64}"
-package_version="${TRAIL_MATE_CARDPUTER_ZERO_PACKAGE_VERSION:-0.1.38-alpha}"
+package_version="${TRAIL_MATE_CARDPUTER_ZERO_PACKAGE_VERSION:-$(python3 "${repo_root}/scripts/project_version.py" --debian)}"
 package_build_type="${TRAIL_MATE_CARDPUTER_ZERO_PACKAGE_BUILD_TYPE:-Release}"
 apt_mirror="${TRAIL_MATE_CARDPUTER_ZERO_APT_MIRROR:-}"
 compose_project="${TRAIL_MATE_CARDPUTER_ZERO_COMPOSE_PROJECT:-trailmate-cardputer-zero-package}"
@@ -82,6 +82,12 @@ tar -C "${repo_root}" \
 find "${source_dir}" -type d -exec chmod 0755 {} +
 find "${source_dir}" -type f -exec chmod 0644 {} +
 find "${source_dir}/apps/linux_cardputer_zero/tools" -type f -name '*.sh' -exec chmod 0755 {} +
+if [ -n "${TRAIL_MATE_TMAP_PRODUCER_DIR:-}" ]; then
+    test -f "${TRAIL_MATE_TMAP_PRODUCER_DIR}/TmapTool"
+    test -f "${TRAIL_MATE_TMAP_PRODUCER_DIR}/producer-manifest.json"
+    mkdir -p "${source_dir}/.tmap-producer"
+    cp -a "${TRAIL_MATE_TMAP_PRODUCER_DIR}/." "${source_dir}/.tmap-producer/"
+fi
 
 export TRAIL_MATE_CARDPUTER_ZERO_DOCKER_PLATFORM="${docker_platform}"
 export TRAIL_MATE_CARDPUTER_ZERO_BUILDER_IMAGE="${builder_image}"
@@ -115,6 +121,7 @@ tar -C "${source_dir}" -cf - . |
 "${docker_cmd[@]}" exec \
     -e TRAIL_MATE_CARDPUTER_ZERO_PACKAGE_JOBS="${jobs}" \
     -e TRAIL_MATE_CARDPUTER_ZERO_PACKAGE_VERSION="${package_version}" \
+    -e GITHUB_REF -e GITHUB_REF_TYPE -e GITHUB_REF_NAME \
     -e TRAIL_MATE_CARDPUTER_ZERO_PACKAGE_BUILD_TYPE="${package_build_type}" \
     "${container_id}" \
     /opt/trailmate/cardputer_zero_deb_package_entrypoint.sh

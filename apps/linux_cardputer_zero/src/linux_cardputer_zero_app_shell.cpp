@@ -67,7 +67,7 @@ bool LinuxCardputerZeroAppShell::validate() const
            std::strcmp(profile->board_id, facts.board_id) == 0 &&
            std::strcmp(profile->app_shell, "apps/linux_cardputer_zero") == 0 &&
            profile->platform == product_composition::TargetPlatform::Linux &&
-           profile->renderer == product_composition::TargetRenderer::Ascii &&
+           profile->renderer == product_composition::TargetRenderer::Lvgl &&
            profile->has_display == facts.display_present &&
            profile->has_keyboard == facts.keyboard_present &&
            profile->has_touch == facts.touch_present &&

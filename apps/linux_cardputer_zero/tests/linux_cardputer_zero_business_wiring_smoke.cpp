@@ -53,23 +53,16 @@ int main(int argc, char** argv)
 
     const std::string shared_shell = read_file(
         repo_root / "platform/linux/common/src/ui/shared_ui_shell.cpp");
-    assert(contains(shared_shell, "Projection::Map"));
-    assert(contains(shared_shell, "gps_route_enter"));
-    assert(contains(shared_shell, "gps_route_exit"));
-    assert(contains(shared_shell, "s_map_spec{\"map\", \"Map\", &gps_icon}"));
-    assert(contains(shared_shell, "s_sky_plot_spec{\"sky_plot\", \"Sky Plot\", &Satellite}"));
-    assert(contains(shared_shell, "gnss::ui::shell::enter"));
-    assert(contains(shared_shell, "s_extensions_spec{\"extensions\", \"Extensions\", &ext}"));
-    assert(not_contains(shared_shell, "Projection::GpsStatus"));
-    assert(not_contains(shared_shell, "s_gps_app"));
-    assert(not_contains(shared_shell, "pc_link_page_shell"));
-    assert(not_contains(shared_shell, "sstv_page_shell"));
-    assert(not_contains(shared_shell, "energy_sweep_page_shell"));
-    assert(not_contains(shared_shell, "usb_page_shell"));
-    assert(not_contains(shared_shell, "s_pc_link_spec"));
-    assert(not_contains(shared_shell, "s_sstv_spec"));
-    assert(not_contains(shared_shell, "s_energy_sweep_spec"));
-    assert(not_contains(shared_shell, "usb_mass_storage"));
+    assert(contains(shared_shell, "ui::app_catalog_builder::build(flags)"));
+    assert(contains(shared_shell, "CatalogProfile::IdfDefault"));
+    assert(contains(shared_shell, "flags.include_walkie_talkie = true"));
+    assert(contains(shared_shell, "flags.include_energy_sweep = true"));
+    assert(contains(shared_shell, "flags.include_sstv = false"));
+    assert(not_contains(shared_shell, "CallbackAppScreen"));
+    const std::string shell_runner = read_file(
+        repo_root / "platform/linux/common/src/ui/shell_ui_runner.cpp");
+    assert(contains(shell_runner, "::platform::ui::service_quick_controls()"));
+    assert(contains(shell_runner, "set_packet_radio_enabled("));
 
     const std::string cardputer_ux = read_file(
         repo_root / "modules/ui_lvgl_ux_packs/src/packs/cardputer_compact_ux_pack.cpp");
@@ -77,7 +70,7 @@ int main(int argc, char** argv)
     assert(contains(cardputer_ux, "\"Sky Plot\""));
     assert(contains(cardputer_ux, "ScreenId::Extensions"));
     assert(not_contains(cardputer_ux, "pc_link"));
-    assert(not_contains(cardputer_ux, "ScreenId::EnergySweep"));
+    assert(contains(cardputer_ux, "ScreenId::EnergySweep"));
     assert(not_contains(cardputer_ux, "ScreenId::Sstv"));
     assert(not_contains(cardputer_ux, "ScreenId::Gps"));
 
@@ -165,7 +158,7 @@ int main(int argc, char** argv)
     assert(contains(menu_runtime, "screenshotShortcutHelpEnabled"));
     assert(contains(menu_runtime, "defined(ARDUINO_T_LORA_PAGER)"));
     assert(contains(menu_runtime, "defined(ARDUINO_T_DECK)"));
-    assert(contains(menu_runtime, "defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)"));
+    assert(contains(menu_runtime, "defined(TRAIL_MATE_UI_P4_TOUCH)"));
     assert(contains(menu_runtime, "{\"ALT\", \"ALT\", \"Save screenshot\"}"));
     assert(contains(menu_runtime,
                     "if (isMenuHelpKey(key))\n    {\n#if defined(ARDUINO_T_DECK_PRO)"));

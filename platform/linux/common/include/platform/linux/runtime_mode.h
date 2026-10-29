@@ -13,9 +13,10 @@ namespace platform::linux_runtime
 //   - SimulatorDemo:  desktop simulator with synthetic peers, loopback mesh,
 //                     dummy crypto, auto-replies.  Enabled by default when
 //                     TRAIL_MATE_SIM_DEMO is not explicitly set to "0".
-//   - DeviceLocal:    real device shell without demo data.  No fake peers,
-//                     no dummy crypto.  Mesh transport is loopback or absent.
-//   - DeviceRealMesh: real device with actual LoRa / BLE transport (future).
+//   - DeviceLocal:    real services with configured IP transports and optional
+//                     radio hardware. No fake peers or dummy crypto.
+//   - DeviceRealMesh: real services with an explicitly selected radio backend
+//                     alongside configured IP transports.
 // ---------------------------------------------------------------------------
 
 enum class LinuxRuntimeMode

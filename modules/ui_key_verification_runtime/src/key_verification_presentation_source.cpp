@@ -214,6 +214,15 @@ void KeyVerificationPresentationSource::onPeerKeyMissing(uint32_t peer_id)
         ::ui::key_verification::VerificationFailureKind::MissingPeerKey;
 }
 
+void KeyVerificationPresentationSource::onRuntimeFailure(uint32_t peer_id)
+{
+    session_ = {};
+    session_.peer_id = peer_id;
+    session_.protocol = currentProtocol();
+    session_.state = ::ui::key_verification::VerificationState::Failed;
+    session_.failure = ::ui::key_verification::VerificationFailureKind::RuntimeUnavailable;
+}
+
 void KeyVerificationPresentationSource::clear()
 {
     session_ = {};

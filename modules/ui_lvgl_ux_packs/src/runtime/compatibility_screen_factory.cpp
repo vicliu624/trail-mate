@@ -9,6 +9,10 @@ const char* bindingIdForScreen(ui::menu::MenuScreenId screen_id)
 {
     switch (screen_id)
     {
+    case ui::menu::MenuScreenId::Calculator:
+        return "calculator";
+    case ui::menu::MenuScreenId::Geocaching:
+        return "geocaching";
     case ui::menu::MenuScreenId::Calendar:
         return "calendar";
     case ui::menu::MenuScreenId::Dashboard:

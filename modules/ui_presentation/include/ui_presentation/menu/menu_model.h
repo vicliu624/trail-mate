@@ -24,6 +24,8 @@ enum class MenuScreenId : uint8_t
     Sstv,
     Extensions,
     Calendar,
+    Calculator,
+    Geocaching,
 };
 
 struct MenuItem

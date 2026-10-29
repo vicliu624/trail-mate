@@ -45,9 +45,12 @@ constexpr CaptureTarget kTargets[] = {
     {"sky_plot", "sky-plot.png", 3},
     {"team", "team.png", 4},
     {"tracker", "tracker.png", 5},
-    {"walkie", "walkie.png", 6},
-    {"extensions", "extensions.png", 7},
-    {"settings", "settings.png", 8},
+    {"calculator", "calculator.png", 6},
+    {"geocaching", "geocaching.png", 7},
+    {"energy_sweep", "protocol-probe.png", 8},
+    {"walkie", "walkie.png", 9},
+    {"extensions", "extensions.png", 10},
+    {"settings", "settings.png", 11},
 };
 
 void tick_for(ShellSession& shell,
@@ -144,6 +147,10 @@ void press_action(ShellSession& shell,
     else if (action == "route" || action == "r")
     {
         press_char(shell, 'r');
+    }
+    else if (action.size() == 1)
+    {
+        press_char(shell, action[0]);
     }
     else if (action == "enter")
     {

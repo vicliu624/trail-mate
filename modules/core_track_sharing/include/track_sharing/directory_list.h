@@ -4,7 +4,8 @@
 namespace track_sharing
 {
 // One bounded row per HostLink response. Caller serializes pool observation.
-inline bool encodeTrackDirectoryPage(const TrackDirectoryPool& pool, size_t cursor, uint8_t* output, size_t capacity, size_t& written)
+template <class PoolView>
+inline bool encodeTrackDirectoryPageView(const PoolView& pool, size_t cursor, uint8_t* output, size_t capacity, size_t& written)
 {
     written = 0;
     if (!output || cursor > pool.size()) return false;
@@ -23,5 +24,9 @@ inline bool encodeTrackDirectoryPage(const TrackDirectoryPool& pool, size_t curs
     }
     written = writer.size();
     return writer.good();
+}
+inline bool encodeTrackDirectoryPage(const TrackDirectoryPool& pool, size_t cursor, uint8_t* output, size_t capacity, size_t& written)
+{
+    return encodeTrackDirectoryPageView(pool, cursor, output, capacity, written);
 }
 } // namespace track_sharing

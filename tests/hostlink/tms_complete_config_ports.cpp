@@ -1,6 +1,7 @@
 // Desktop-only NVS and runtime fixtures. Configuration emit/consume/apply,
 // settings_store, Wi-Fi persistence and module codecs are production code.
 #include "app/tms_config_codec.h"
+#include "chat/domain/reticulum_network_validation.h"
 #include "platform/ui/reticulum_network_config_runtime.h"
 #include "platform/ui/wifi_runtime.h"
 #include <cstdio>

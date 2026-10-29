@@ -1,5 +1,7 @@
 #include "platform/esp/arduino_common/app_config_tms_settings_extension.h"
+#include "app/reticulum_network_records.h"
 #include "app/tms_c6_config_extension.h"
+#include "app/tms_settings_records.h"
 #include "platform/esp/arduino_common/app_config_tms_ble_extension.h"
 #if defined(ESP_PLATFORM) && !defined(ARDUINO)
 #include <sdkconfig.h>
@@ -34,10 +36,11 @@ namespace
 constexpr const char* kSettingsNs = "settings";
 constexpr const char* kPowerNs = "power";
 constexpr const char* kDebugNs = "debug";
-constexpr std::size_t kLocaleBytes = 48U;
-constexpr std::size_t kEnabledImesBytes = 192U;
-constexpr std::size_t kTimezoneTzdefBytes = 192U;
-constexpr std::size_t kAutoReplyBytes = ::platform::ui::auto_reply::kTextMaxBytes;
+constexpr std::size_t kLocaleBytes = tms::SettingsRecords::kLocaleBytes;
+constexpr std::size_t kEnabledImesBytes = tms::SettingsRecords::kEnabledImesBytes;
+constexpr std::size_t kTimezoneTzdefBytes = tms::SettingsRecords::kTimezoneTzdefBytes;
+constexpr std::size_t kAutoReplyBytes = tms::SettingsRecords::kAutoReplyBytes;
+constexpr uint32_t SeenRadioEnabled = tms::SettingsRecords::SeenRadioEnabled;
 constexpr std::size_t kNetworkInterfaceFieldCount = 8U;
 constexpr std::size_t kNetworkPropagationFieldCount = 8U;
 constexpr std::size_t kNetworkSeenCount =
@@ -47,65 +50,9 @@ static_assert(kNetworkSeenCount < 64U,
               "TMS Reticulum network presence mask must remain a scalar");
 constexpr uint64_t kRequiredNetwork = (UINT64_C(1) << kNetworkSeenCount) - UINT64_C(1);
 
-enum Seen : uint32_t
+struct ParseState : tms::SettingsRecords
 {
-    SeenScreenTimeout = 1UL << 0U,
-    SeenBrightness = 1UL << 1U,
-    SeenSpeakerVolume = 1UL << 2U,
-    SeenVibration = 1UL << 3U,
-    SeenLocale = 1UL << 4U,
-    SeenEnabledImes = 1UL << 5U,
-    SeenTimezoneProfile = 1UL << 6U,
-    SeenTimezoneOffset = 1UL << 7U,
-    SeenTimezoneTzdef = 1UL << 8U,
-    SeenMessageAlerts = 1UL << 9U,
-    SeenContactAlerts = 1UL << 10U,
-    SeenAutoReplyEnabled = 1UL << 11U,
-    SeenAutoReplyText = 1UL << 12U,
-    SeenDebugLogs = 1UL << 13U,
-    SeenGaugeDesign = 1UL << 14U,
-    SeenGaugeFull = 1UL << 15U,
-    SeenWifiEnabled = 1UL << 16U,
-    SeenWifiCount = 1UL << 17U,
-    SeenRadioEnabled = 1UL << 18U,
-};
-
-constexpr uint32_t kRequiredBase = SeenScreenTimeout | SeenBrightness | SeenSpeakerVolume |
-                                   SeenVibration | SeenLocale | SeenEnabledImes |
-                                   SeenTimezoneProfile | SeenTimezoneOffset | SeenTimezoneTzdef |
-                                   SeenMessageAlerts | SeenContactAlerts | SeenAutoReplyEnabled |
-                                   SeenAutoReplyText | SeenDebugLogs | SeenGaugeDesign |
-                                   SeenGaugeFull | SeenWifiEnabled | SeenWifiCount;
-
-struct ParseState
-{
-    uint32_t seen = 0U;
     bool applying = false;
-    uint32_t screen_timeout_ms = 30000U;
-    int32_t screen_brightness = 0;
-    int32_t speaker_volume = 45;
-    bool vibration_enabled = true;
-    char locale[kLocaleBytes]{};
-    char enabled_imes[kEnabledImesBytes]{};
-    std::size_t enabled_imes_len = 0U;
-    int32_t timezone_profile = 0;
-    int32_t timezone_offset_minutes = 0;
-    uint8_t timezone_tzdef[kTimezoneTzdefBytes]{};
-    std::size_t timezone_tzdef_len = 0U;
-    int32_t message_alerts = 1;
-    int32_t contact_alerts = 1;
-    bool auto_reply_enabled = false;
-    char auto_reply_text[kAutoReplyBytes + 1U]{};
-    std::size_t auto_reply_text_len = 0U;
-    bool debug_logs_enabled = false;
-    uint32_t gauge_design_mah = 1500U;
-    uint32_t gauge_full_mah = 1500U;
-    bool wifi_enabled = false;
-    bool radio_enabled = true;
-    uint8_t wifi_profile_count = 0U;
-    bool wifi_ssid_seen[::platform::ui::wifi::kMaxSavedProfileCount]{};
-    bool wifi_password_seen[::platform::ui::wifi::kMaxSavedProfileCount]{};
-    ::platform::ui::wifi::Config wifi_profiles[::platform::ui::wifi::kMaxSavedProfileCount]{};
     uint64_t network_seen = 0U;
     uint32_t access_seen = 0U;
     ::chat::reticulum::ReticulumNetworkConfig network{};
@@ -183,7 +130,8 @@ class ScopedWriteState
     {
         if (ready_)
         {
-            s_state = ParseState{};
+            s_state_storage->~ParseState();
+            new (s_state_storage) ParseState{};
         }
     }
 
@@ -195,376 +143,29 @@ class ScopedWriteState
     bool ready_ = false;
 };
 
-bool mark_once(uint32_t bit)
-{
-    if ((s_state.seen & bit) != 0U)
-    {
-        return false;
-    }
-    s_state.seen |= bit;
-    return true;
-}
-
 bool key_equals(const tms::RecordReader& reader, const char* key)
 {
     return std::strcmp(reader.key(), key) == 0;
 }
 
-bool valid_screen_timeout(uint32_t value)
-{
-    return value == 15000U || value == 30000U || value == 60000U || value == 300000U;
-}
-
-bool valid_timezone_offset_minutes(int32_t value)
-{
-    // Civil time zones range from UTC-12 through UTC+14.  Keeping this
-    // bounded prevents a hand-edited raw value from reaching the platform
-    // clock runtime while retaining every real-world offset.
-    return value >= -720 && value <= 840;
-}
-
-bool valid_wifi_profile_set()
-{
-    if (s_state.wifi_profile_count > ::platform::ui::wifi::kMaxSavedProfileCount)
-    {
-        return false;
-    }
-    for (std::size_t index = 0U; index < ::platform::ui::wifi::kMaxSavedProfileCount; ++index)
-    {
-        const bool required = index < s_state.wifi_profile_count;
-        if ((s_state.wifi_ssid_seen[index] || s_state.wifi_password_seen[index]) != required)
-        {
-            return false;
-        }
-        if (!required)
-        {
-            continue;
-        }
-        if (s_state.wifi_profiles[index].ssid[0] == '\0')
-        {
-            return false;
-        }
-        for (std::size_t prior = 0U; prior < index; ++prior)
-        {
-            if (std::strcmp(s_state.wifi_profiles[index].ssid,
-                            s_state.wifi_profiles[prior].ssid) == 0)
-            {
-                return false;
-            }
-        }
-    }
-    return true;
-}
-
-bool mark_network_once(std::size_t index)
-{
-    if (index >= kNetworkSeenCount)
-    {
-        return false;
-    }
-    const uint64_t bit = UINT64_C(1) << index;
-    if ((s_state.network_seen & bit) != 0U)
-    {
-        return false;
-    }
-    s_state.network_seen |= bit;
-    return true;
-}
-
-bool read_network_interface_type(const tms::RecordReader& reader, std::size_t index)
-{
-    uint8_t value = 0U;
-    if (index >= ::chat::reticulum::kMaxNetworkInterfaces || !reader.u8(&value, 2U))
-    {
-        return false;
-    }
-    s_state.network.interfaces[index].type =
-        static_cast<::chat::reticulum::NetworkInterfaceType>(value);
-    return true;
-}
-
-bool read_network_delivery(const tms::RecordReader& reader)
-{
-    uint8_t value = 0U;
-    if (!reader.u8(&value, 2U))
-    {
-        return false;
-    }
-    s_state.network.propagation.delivery =
-        static_cast<::chat::reticulum::LxmfDeliveryPreference>(value);
-    return true;
-}
-
 tms::RecordConsumeResult consume_network_record(const tms::RecordReader& reader)
 {
-    if (key_equals(reader, "rt.net.version"))
-    {
-        uint16_t version = 0U;
-        return mark_network_once(0U) && reader.u16(&version) && version == 1U
-                   ? tms::RecordConsumeResult::Accepted
-                   : tms::RecordConsumeResult::Invalid;
-    }
-    if (key_equals(reader, "rt.net.interface_count"))
-    {
-        return mark_network_once(1U) &&
-                       reader.u8(&s_state.network.interface_count,
-                                 static_cast<uint8_t>(::chat::reticulum::kMaxNetworkInterfaces))
-                   ? tms::RecordConsumeResult::Accepted
-                   : tms::RecordConsumeResult::Invalid;
-    }
-
-    for (std::size_t index = 0U; index < ::chat::reticulum::kMaxNetworkInterfaces; ++index)
-    {
-        const std::size_t base = 2U + index * kNetworkInterfaceFieldCount;
-        char key[48]{};
-        const char* access_fields[] = {"network_name", "passphrase", "ifac_size"};
-        for (unsigned field = 0; field < 3; ++field)
-        {
-            std::snprintf(key, sizeof(key), "rt.net.interface.%u.%s", static_cast<unsigned>(index), access_fields[field]);
-            if (!key_equals(reader, key)) continue;
-            const uint32_t bit = 1U << (index * 3U + field);
-            if (s_state.access_seen & bit) return tms::RecordConsumeResult::Invalid;
-            s_state.access_seen |= bit;
-            auto& access = s_state.network.interfaces[index].access;
-            const bool valid = field == 0   ? reader.text(access.network_name, sizeof(access.network_name))
-                               : field == 1 ? reader.text(access.passphrase, sizeof(access.passphrase))
-                                            : reader.u16(&access.ifac_size_bits, 512U);
-            return valid ? tms::RecordConsumeResult::Accepted : tms::RecordConsumeResult::Invalid;
-        }
-        std::snprintf(key, sizeof(key), "rt.net.interface.%u.id", static_cast<unsigned>(index));
-        if (key_equals(reader, key))
-        {
-            return mark_network_once(base) &&
-                           reader.text(s_state.network.interfaces[index].id,
-                                       sizeof(s_state.network.interfaces[index].id))
-                       ? tms::RecordConsumeResult::Accepted
-                       : tms::RecordConsumeResult::Invalid;
-        }
-        std::snprintf(key, sizeof(key), "rt.net.interface.%u.type", static_cast<unsigned>(index));
-        if (key_equals(reader, key))
-        {
-            return mark_network_once(base + 1U) && read_network_interface_type(reader, index)
-                       ? tms::RecordConsumeResult::Accepted
-                       : tms::RecordConsumeResult::Invalid;
-        }
-        std::snprintf(key, sizeof(key), "rt.net.interface.%u.enabled", static_cast<unsigned>(index));
-        if (key_equals(reader, key))
-        {
-            return mark_network_once(base + 2U) &&
-                           reader.boolean(&s_state.network.interfaces[index].enabled)
-                       ? tms::RecordConsumeResult::Accepted
-                       : tms::RecordConsumeResult::Invalid;
-        }
-        std::snprintf(key, sizeof(key), "rt.net.interface.%u.target_host", static_cast<unsigned>(index));
-        if (key_equals(reader, key))
-        {
-            return mark_network_once(base + 3U) &&
-                           reader.text(s_state.network.interfaces[index].target_host,
-                                       sizeof(s_state.network.interfaces[index].target_host))
-                       ? tms::RecordConsumeResult::Accepted
-                       : tms::RecordConsumeResult::Invalid;
-        }
-        std::snprintf(key, sizeof(key), "rt.net.interface.%u.target_port", static_cast<unsigned>(index));
-        if (key_equals(reader, key))
-        {
-            return mark_network_once(base + 4U) &&
-                           reader.u16(&s_state.network.interfaces[index].target_port)
-                       ? tms::RecordConsumeResult::Accepted
-                       : tms::RecordConsumeResult::Invalid;
-        }
-        std::snprintf(key, sizeof(key), "rt.net.interface.%u.group_id", static_cast<unsigned>(index));
-        if (key_equals(reader, key))
-        {
-            return mark_network_once(base + 5U) &&
-                           reader.text(s_state.network.interfaces[index].group_id,
-                                       sizeof(s_state.network.interfaces[index].group_id))
-                       ? tms::RecordConsumeResult::Accepted
-                       : tms::RecordConsumeResult::Invalid;
-        }
-        std::snprintf(key,
-                      sizeof(key),
-                      "rt.net.interface.%u.discovery_port",
-                      static_cast<unsigned>(index));
-        if (key_equals(reader, key))
-        {
-            return mark_network_once(base + 6U) &&
-                           reader.u16(&s_state.network.interfaces[index].discovery_port)
-                       ? tms::RecordConsumeResult::Accepted
-                       : tms::RecordConsumeResult::Invalid;
-        }
-        std::snprintf(key, sizeof(key), "rt.net.interface.%u.data_port", static_cast<unsigned>(index));
-        if (key_equals(reader, key))
-        {
-            return mark_network_once(base + 7U) &&
-                           reader.u16(&s_state.network.interfaces[index].data_port)
-                       ? tms::RecordConsumeResult::Accepted
-                       : tms::RecordConsumeResult::Invalid;
-        }
-    }
-
-    constexpr std::size_t kPropagationBase =
-        2U + ::chat::reticulum::kMaxNetworkInterfaces * kNetworkInterfaceFieldCount;
-    if (key_equals(reader, "rt.net.propagation.enabled"))
-    {
-        return mark_network_once(kPropagationBase) &&
-                       reader.boolean(&s_state.network.propagation.enabled)
-                   ? tms::RecordConsumeResult::Accepted
-                   : tms::RecordConsumeResult::Invalid;
-    }
-    if (key_equals(reader, "rt.net.propagation.service_enabled"))
-    {
-        return mark_network_once(kPropagationBase + 1U) &&
-                       reader.boolean(&s_state.network.propagation.service_enabled)
-                   ? tms::RecordConsumeResult::Accepted
-                   : tms::RecordConsumeResult::Invalid;
-    }
-    if (key_equals(reader, "rt.net.propagation.delivery"))
-    {
-        return mark_network_once(kPropagationBase + 2U) && read_network_delivery(reader)
-                   ? tms::RecordConsumeResult::Accepted
-                   : tms::RecordConsumeResult::Invalid;
-    }
-    if (key_equals(reader, "rt.net.propagation.automatic_node"))
-    {
-        return mark_network_once(kPropagationBase + 3U) &&
-                       reader.boolean(&s_state.network.propagation.automatic_node)
-                   ? tms::RecordConsumeResult::Accepted
-                   : tms::RecordConsumeResult::Invalid;
-    }
-    if (key_equals(reader, "rt.net.propagation.node_hash"))
-    {
-        std::size_t length = 0U;
-        return mark_network_once(kPropagationBase + 4U) &&
-                       reader.blob(s_state.network.propagation.node_hash,
-                                   sizeof(s_state.network.propagation.node_hash),
-                                   &length) &&
-                       length == sizeof(s_state.network.propagation.node_hash)
-                   ? tms::RecordConsumeResult::Accepted
-                   : tms::RecordConsumeResult::Invalid;
-    }
-    if (key_equals(reader, "rt.net.propagation.sync_on_start"))
-    {
-        return mark_network_once(kPropagationBase + 5U) &&
-                       reader.boolean(&s_state.network.propagation.sync_on_start)
-                   ? tms::RecordConsumeResult::Accepted
-                   : tms::RecordConsumeResult::Invalid;
-    }
-    if (key_equals(reader, "rt.net.propagation.sync_interval_s"))
-    {
-        return mark_network_once(kPropagationBase + 6U) &&
-                       reader.u32(&s_state.network.propagation.sync_interval_s)
-                   ? tms::RecordConsumeResult::Accepted
-                   : tms::RecordConsumeResult::Invalid;
-    }
-    if (key_equals(reader, "rt.net.propagation.max_messages_per_sync"))
-    {
-        return mark_network_once(kPropagationBase + 7U) &&
-                       reader.u8(&s_state.network.propagation.max_messages_per_sync, 64U)
-                   ? tms::RecordConsumeResult::Accepted
-                   : tms::RecordConsumeResult::Invalid;
-    }
-    return tms::RecordConsumeResult::Unhandled;
+    return tms::ReticulumNetworkRecords(s_state.network, s_state.network_seen, s_state.access_seen)
+        .consume_network_record(reader);
 }
 
 bool valid_network_records(uint16_t schema_version)
 {
-    for (std::size_t index = 0; index < ::chat::reticulum::kMaxNetworkInterfaces; ++index)
-    {
-        const auto fields = (s_state.access_seen >> (index * 3U)) & 7U;
-        if (fields && (fields != 7U || index >= s_state.network.interface_count)) return false;
-    }
-    if (s_state.network_seen == 0U)
-    {
-        return schema_version != tms::kSchemaVersion;
-    }
-    return s_state.network_seen == kRequiredNetwork &&
-           ::platform::ui::reticulum_network_config::validateForTms(s_state.network);
+    return tms::ReticulumNetworkRecords(s_state.network, s_state.network_seen, s_state.access_seen)
+               .valid_network_records(schema_version) &&
+           (!s_state.network_seen || ::platform::ui::reticulum_network_config::validateForTms(s_state.network));
 }
 
 bool write_network_records(tms::RecordWriter& writer, const AppConfig& config)
 {
-    if (!::platform::ui::reticulum_network_config::snapshotForTms(config.reticulumConfig(),
-                                                                  &s_state.network) ||
-        !writer.u16("rt.net.version", 1U) ||
-        !writer.u8("rt.net.interface_count", s_state.network.interface_count))
-    {
-        return false;
-    }
-    for (std::size_t index = 0U; index < ::chat::reticulum::kMaxNetworkInterfaces; ++index)
-    {
-        const auto& interface_config = s_state.network.interfaces[index];
-        char key[48]{};
-        std::snprintf(key, sizeof(key), "rt.net.interface.%u.id", static_cast<unsigned>(index));
-        if (!writer.text(key, interface_config.id))
-        {
-            return false;
-        }
-        std::snprintf(key, sizeof(key), "rt.net.interface.%u.type", static_cast<unsigned>(index));
-        if (!writer.u8(key, static_cast<uint8_t>(interface_config.type)))
-        {
-            return false;
-        }
-        std::snprintf(key, sizeof(key), "rt.net.interface.%u.enabled", static_cast<unsigned>(index));
-        if (!writer.boolean(key, interface_config.enabled))
-        {
-            return false;
-        }
-        std::snprintf(key, sizeof(key), "rt.net.interface.%u.target_host", static_cast<unsigned>(index));
-        if (!writer.text(key, interface_config.target_host))
-        {
-            return false;
-        }
-        std::snprintf(key, sizeof(key), "rt.net.interface.%u.target_port", static_cast<unsigned>(index));
-        if (!writer.u16(key, interface_config.target_port))
-        {
-            return false;
-        }
-        std::snprintf(key, sizeof(key), "rt.net.interface.%u.group_id", static_cast<unsigned>(index));
-        if (!writer.text(key, interface_config.group_id))
-        {
-            return false;
-        }
-        std::snprintf(key,
-                      sizeof(key),
-                      "rt.net.interface.%u.discovery_port",
-                      static_cast<unsigned>(index));
-        if (!writer.u16(key, interface_config.discovery_port))
-        {
-            return false;
-        }
-        std::snprintf(key, sizeof(key), "rt.net.interface.%u.data_port", static_cast<unsigned>(index));
-        if (!writer.u16(key, interface_config.data_port))
-        {
-            return false;
-        }
-        if (interface_config.access.enabled())
-        {
-            std::snprintf(key, sizeof(key), "rt.net.interface.%u.network_name", static_cast<unsigned>(index));
-            if (!writer.text(key, interface_config.access.network_name)) return false;
-            std::snprintf(key, sizeof(key), "rt.net.interface.%u.passphrase", static_cast<unsigned>(index));
-            if (!writer.text(key, interface_config.access.passphrase)) return false;
-            std::snprintf(key, sizeof(key), "rt.net.interface.%u.ifac_size", static_cast<unsigned>(index));
-            if (!writer.u16(key, interface_config.access.ifac_size_bits)) return false;
-        }
-    }
-    const auto& propagation = s_state.network.propagation;
-    return writer.boolean("rt.net.propagation.enabled", propagation.enabled) &&
-           writer.boolean("rt.net.propagation.service_enabled", propagation.service_enabled) &&
-           writer.u8("rt.net.propagation.delivery",
-                     static_cast<uint8_t>(propagation.delivery)) &&
-           writer.boolean("rt.net.propagation.automatic_node", propagation.automatic_node) &&
-           writer.blob("rt.net.propagation.node_hash",
-                       propagation.node_hash,
-                       sizeof(propagation.node_hash)) &&
-           writer.boolean("rt.net.propagation.sync_on_start", propagation.sync_on_start) &&
-           writer.u32("rt.net.propagation.sync_interval_s", propagation.sync_interval_s) &&
-           writer.u8("rt.net.propagation.max_messages_per_sync",
-                     propagation.max_messages_per_sync);
-}
-
-bool valid_text_blob(const char* value, std::size_t length)
-{
-    return value != nullptr && std::memchr(value, '\0', length) == nullptr;
+    return ::platform::ui::reticulum_network_config::snapshotForTms(config.reticulumConfig(), &s_state.network) &&
+           tms::ReticulumNetworkRecords(s_state.network, s_state.network_seen, s_state.access_seen)
+               .write_network_records(writer);
 }
 
 bool write_i32_setting(tms::RecordWriter& writer, const char* document_key,
@@ -835,7 +436,8 @@ void beginRead(bool applying)
         release_parse_state();
         return;
     }
-    s_state = ParseState{};
+    s_state_storage->~ParseState();
+    new (s_state_storage) ParseState{};
     s_state.applying = applying;
 }
 
@@ -855,155 +457,8 @@ tms::RecordConsumeResult consumeRecord(void*, const tms::RecordReader& reader)
     const auto companion = tms::c6::consume(s_state.companion, reader);
     if (companion != tms::RecordConsumeResult::Unhandled) return companion;
 #endif
-    if (key_equals(reader, "ui.screen.timeout_ms"))
-    {
-        return mark_once(SeenScreenTimeout) && reader.u32(&s_state.screen_timeout_ms)
-                   ? tms::RecordConsumeResult::Accepted
-                   : tms::RecordConsumeResult::Invalid;
-    }
-    if (key_equals(reader, "ui.display.brightness"))
-    {
-        return mark_once(SeenBrightness) && reader.i32(&s_state.screen_brightness)
-                   ? tms::RecordConsumeResult::Accepted
-                   : tms::RecordConsumeResult::Invalid;
-    }
-    if (key_equals(reader, "ui.audio.speaker_volume"))
-    {
-        return mark_once(SeenSpeakerVolume) && reader.i32(&s_state.speaker_volume)
-                   ? tms::RecordConsumeResult::Accepted
-                   : tms::RecordConsumeResult::Invalid;
-    }
-    if (key_equals(reader, "ui.haptics.vibration_enabled"))
-    {
-        return mark_once(SeenVibration) && reader.boolean(&s_state.vibration_enabled)
-                   ? tms::RecordConsumeResult::Accepted
-                   : tms::RecordConsumeResult::Invalid;
-    }
-    if (key_equals(reader, "ui.locale"))
-    {
-        return mark_once(SeenLocale) && reader.text(s_state.locale, sizeof(s_state.locale))
-                   ? tms::RecordConsumeResult::Accepted
-                   : tms::RecordConsumeResult::Invalid;
-    }
-    if (key_equals(reader, "ui.ime.enabled"))
-    {
-        return mark_once(SeenEnabledImes) &&
-                       reader.blob(reinterpret_cast<uint8_t*>(s_state.enabled_imes),
-                                   sizeof(s_state.enabled_imes) - 1U,
-                                   &s_state.enabled_imes_len)
-                   ? tms::RecordConsumeResult::Accepted
-                   : tms::RecordConsumeResult::Invalid;
-    }
-    if (key_equals(reader, "ui.timezone.profile"))
-    {
-        return mark_once(SeenTimezoneProfile) && reader.i32(&s_state.timezone_profile)
-                   ? tms::RecordConsumeResult::Accepted
-                   : tms::RecordConsumeResult::Invalid;
-    }
-    if (key_equals(reader, "ui.timezone.offset_minutes"))
-    {
-        return mark_once(SeenTimezoneOffset) && reader.i32(&s_state.timezone_offset_minutes)
-                   ? tms::RecordConsumeResult::Accepted
-                   : tms::RecordConsumeResult::Invalid;
-    }
-    if (key_equals(reader, "ui.timezone.tzdef"))
-    {
-        return mark_once(SeenTimezoneTzdef) &&
-                       reader.blob(s_state.timezone_tzdef,
-                                   sizeof(s_state.timezone_tzdef),
-                                   &s_state.timezone_tzdef_len)
-                   ? tms::RecordConsumeResult::Accepted
-                   : tms::RecordConsumeResult::Invalid;
-    }
-    if (key_equals(reader, "chat.alerts.message"))
-    {
-        return mark_once(SeenMessageAlerts) && reader.i32(&s_state.message_alerts)
-                   ? tms::RecordConsumeResult::Accepted
-                   : tms::RecordConsumeResult::Invalid;
-    }
-    if (key_equals(reader, "chat.alerts.contact"))
-    {
-        return mark_once(SeenContactAlerts) && reader.i32(&s_state.contact_alerts)
-                   ? tms::RecordConsumeResult::Accepted
-                   : tms::RecordConsumeResult::Invalid;
-    }
-    if (key_equals(reader, "chat.auto_reply.enabled"))
-    {
-        return mark_once(SeenAutoReplyEnabled) && reader.boolean(&s_state.auto_reply_enabled)
-                   ? tms::RecordConsumeResult::Accepted
-                   : tms::RecordConsumeResult::Invalid;
-    }
-    if (key_equals(reader, "chat.auto_reply.text"))
-    {
-        return mark_once(SeenAutoReplyText) &&
-                       reader.blob(reinterpret_cast<uint8_t*>(s_state.auto_reply_text),
-                                   kAutoReplyBytes,
-                                   &s_state.auto_reply_text_len)
-                   ? tms::RecordConsumeResult::Accepted
-                   : tms::RecordConsumeResult::Invalid;
-    }
-    if (key_equals(reader, "debug.sd_logs_enabled"))
-    {
-        return mark_once(SeenDebugLogs) && reader.boolean(&s_state.debug_logs_enabled)
-                   ? tms::RecordConsumeResult::Accepted
-                   : tms::RecordConsumeResult::Invalid;
-    }
-    if (key_equals(reader, "power.gauge.design_mah"))
-    {
-        return mark_once(SeenGaugeDesign) && reader.u32(&s_state.gauge_design_mah)
-                   ? tms::RecordConsumeResult::Accepted
-                   : tms::RecordConsumeResult::Invalid;
-    }
-    if (key_equals(reader, "power.gauge.full_mah"))
-    {
-        return mark_once(SeenGaugeFull) && reader.u32(&s_state.gauge_full_mah)
-                   ? tms::RecordConsumeResult::Accepted
-                   : tms::RecordConsumeResult::Invalid;
-    }
-    if (key_equals(reader, "wifi.enabled"))
-    {
-        return mark_once(SeenWifiEnabled) && reader.boolean(&s_state.wifi_enabled)
-                   ? tms::RecordConsumeResult::Accepted
-                   : tms::RecordConsumeResult::Invalid;
-    }
-    if (key_equals(reader, "radio.enabled"))
-    {
-        return mark_once(SeenRadioEnabled) && reader.boolean(&s_state.radio_enabled)
-                   ? tms::RecordConsumeResult::Accepted
-                   : tms::RecordConsumeResult::Invalid;
-    }
-    if (key_equals(reader, "wifi.profile_count"))
-    {
-        return mark_once(SeenWifiCount) &&
-                       reader.u8(&s_state.wifi_profile_count,
-                                 static_cast<uint8_t>(::platform::ui::wifi::kMaxSavedProfileCount))
-                   ? tms::RecordConsumeResult::Accepted
-                   : tms::RecordConsumeResult::Invalid;
-    }
-    for (std::size_t index = 0U; index < ::platform::ui::wifi::kMaxSavedProfileCount; ++index)
-    {
-        char key[48]{};
-        std::snprintf(key, sizeof(key), "wifi.profile.%u.ssid", static_cast<unsigned>(index));
-        if (key_equals(reader, key))
-        {
-            return !s_state.wifi_ssid_seen[index] &&
-                           reader.text(s_state.wifi_profiles[index].ssid,
-                                       sizeof(s_state.wifi_profiles[index].ssid))
-                       ? (s_state.wifi_ssid_seen[index] = true,
-                          tms::RecordConsumeResult::Accepted)
-                       : tms::RecordConsumeResult::Invalid;
-        }
-        std::snprintf(key, sizeof(key), "wifi.profile.%u.password", static_cast<unsigned>(index));
-        if (key_equals(reader, key))
-        {
-            return !s_state.wifi_password_seen[index] &&
-                           reader.text(s_state.wifi_profiles[index].password,
-                                       sizeof(s_state.wifi_profiles[index].password))
-                       ? (s_state.wifi_password_seen[index] = true,
-                          tms::RecordConsumeResult::Accepted)
-                       : tms::RecordConsumeResult::Invalid;
-        }
-    }
+    const auto base_result = s_state.consume(reader);
+    if (base_result != tms::RecordConsumeResult::Unhandled) return base_result;
 
     const tms::RecordConsumeResult network_result = consume_network_record(reader);
     if (network_result != tms::RecordConsumeResult::Unhandled)
@@ -1122,17 +577,7 @@ bool finishDocument(void*, bool applying, uint16_t schema_version)
         // normal sync.
         return ble_extension::finishDocument(applying, schema_version);
     }
-    if ((s_state.seen & kRequiredBase) != kRequiredBase ||
-        !valid_screen_timeout(s_state.screen_timeout_ms) ||
-        s_state.screen_brightness < 0 || s_state.screen_brightness > 255 ||
-        s_state.speaker_volume < 0 || s_state.speaker_volume > 100 ||
-        !valid_timezone_offset_minutes(s_state.timezone_offset_minutes) ||
-        !valid_text_blob(s_state.enabled_imes, s_state.enabled_imes_len) ||
-        s_state.message_alerts < 0 || s_state.message_alerts > 1 ||
-        s_state.contact_alerts < 0 || s_state.contact_alerts > 2 ||
-        s_state.gauge_design_mah == 0U || s_state.gauge_design_mah > 10000U ||
-        s_state.gauge_full_mah == 0U || s_state.gauge_full_mah > 10000U ||
-        !valid_wifi_profile_set() || !valid_network_records(schema_version))
+    if (!s_state.valid() || !valid_network_records(schema_version))
     {
         return false;
     }

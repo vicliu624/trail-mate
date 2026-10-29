@@ -3520,7 +3520,12 @@ MeshSendResult MeshCoreAdapter::sendTextDetailed(ChannelId channel, const std::s
     uint8_t buffer[256];
     size_t index = 0;
     buffer[index++] = buildHeader(kRouteTypeFlood, kPayloadTypeGrpTxt, payloadVersion(profile));
-    buffer[index++] = 0; // path_len = 0
+    uint8_t path_descriptor = 0;
+    if (!encodePathDescriptor(profile, 0, &path_descriptor))
+    {
+        return MeshSendResult::fail(MeshOperationFailure::EncodeFailed);
+    }
+    buffer[index++] = path_descriptor;
     memcpy(buffer + index, channel_hash, channel_hash_len);
     index += channel_hash_len;
     memcpy(&buffer[index], encrypted, encrypted_len);
@@ -5115,7 +5120,7 @@ void MeshCoreAdapter::handleRawPacketInternal(const uint8_t* data, size_t size, 
             }
             return;
         }
-        plain_len = trimTrailingZeros(plain, plain_len);
+        plain_len = chat::meshcore::trimPeerPlaintextPadding(parsed.payload_type, plain, plain_len);
         // Do not infer zero-hop route from direct packets that already traversed a path.
         // Route candidates should be learned from PATH payloads (or flood-derived returns).
         PeerRouteEntry& route = upsertPeerRoute(profile, src_hash, now_ms);
@@ -5484,7 +5489,7 @@ void MeshCoreAdapter::handleRawPacketInternal(const uint8_t* data, size_t size, 
                          static_cast<unsigned>(rx_channel));
             return;
         }
-        plain_len = trimTrailingZeros(plain, plain_len);
+        plain_len = chat::meshcore::trimGroupPlaintextPadding(plain, plain_len);
         if (plain_len < sizeof(uint32_t))
         {
             return;

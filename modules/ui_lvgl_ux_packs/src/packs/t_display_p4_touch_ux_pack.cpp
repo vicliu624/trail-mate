@@ -8,6 +8,7 @@ namespace
 void build_page_manifest(ScreenRegistry& out)
 {
     out.clear();
+    (void)out.add({ScreenId::Calendar, "Agenda", true});
     (void)out.add({ScreenId::Dashboard, "Dashboard", true});
     (void)out.add({ScreenId::Chat, "Chat", true});
     (void)out.add({ScreenId::Contacts, "Contacts", true});

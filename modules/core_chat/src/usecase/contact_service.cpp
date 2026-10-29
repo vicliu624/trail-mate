@@ -204,7 +204,8 @@ class ProjectionVisitor final : public IMeshPeerDirectoryVisitor
 
     bool visit(const MeshPeerRecord& record) override
     {
-        if (meshPeerProjectedNodeId(record) == 0)
+        if (meshPeerProjectedNodeId(record) == 0 &&
+            !(meshPeerIsReticulumProtocol(record.identity.protocol) && hasReticulumDestinationIdentity(record.identity.reticulum)))
         {
             return true;
         }
@@ -269,11 +270,6 @@ void ContactService::setActiveProtocol(MeshProtocol protocol)
 void ContactService::applyNodeUpdate(uint32_t node_id,
                                      const NodeUpdate& update)
 {
-    if (node_id == 0)
-    {
-        return;
-    }
-
     MeshProtocol protocol = active_protocol_;
     if (update.has_protocol)
     {
@@ -287,8 +283,14 @@ void ContactService::applyNodeUpdate(uint32_t node_id,
         }
     }
 
-    const bool found =
-        directory_.findByNodeId(protocol, node_id, lookup_scratch_).succeeded();
+    const bool full_reticulum_identity = protocol == MeshProtocol::Reticulum && hasReticulumDestinationIdentity(update.reticulum_identity);
+    if (!node_id && !full_reticulum_identity) return;
+    const auto find_record = [&](MeshPeerRecord& out)
+    {
+        return full_reticulum_identity ? directory_.find(makeMeshPeerReticulumIdentity(update.reticulum_identity), out)
+                                       : directory_.findByNodeId(protocol, node_id, out);
+    };
+    const bool found = find_record(lookup_scratch_).succeeded();
     update_scratch_ = {};
     update_scratch_.valid = true;
     update_scratch_.source = MeshPeerSource::RuntimeRx;
@@ -405,7 +407,7 @@ void ContactService::applyNodeUpdate(uint32_t node_id,
     {
         return;
     }
-    if (directory_.findByNodeId(protocol, node_id, lookup_scratch_).succeeded())
+    if (find_record(lookup_scratch_).succeeded())
     {
         if (update.has_is_ignored)
         {

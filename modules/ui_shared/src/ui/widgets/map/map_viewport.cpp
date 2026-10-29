@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <new>
 #include <string>
@@ -39,13 +40,31 @@ namespace ui::widgets::map
 #if defined(TRAIL_MATE_MAP_POI_AVAILABLE)
 struct PoiSnapshotDeleter
 {
-    void operator()(ui::map::MapPoiItem* data) const noexcept { heap_caps_free(data); }
+    void operator()(ui::map::MapPoiItem* data) const noexcept
+    {
+#if defined(ESP_PLATFORM)
+        heap_caps_free(data);
+#else
+        std::free(data);
+#endif
+    }
 };
 void* allocate_annotation_memory(std::size_t bytes, void*)
 {
+#if defined(ESP_PLATFORM)
     return heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+#else
+    return std::malloc(bytes);
+#endif
 }
-void release_annotation_memory(void* memory, void*) { heap_caps_free(memory); }
+void release_annotation_memory(void* memory, void*)
+{
+#if defined(ESP_PLATFORM)
+    heap_caps_free(memory);
+#else
+    std::free(memory);
+#endif
+}
 #endif
 
 struct MarkerSession

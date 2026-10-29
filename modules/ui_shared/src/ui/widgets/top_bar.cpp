@@ -211,7 +211,7 @@ void top_bar_init(TopBar& bar, lv_obj_t* parent, const TopBarConfig& config)
     {
         top_bar_power::bind(bar);
     }
-#if defined(ARDUINO_T_LORA_PAGER)
+#if defined(ARDUINO_T_LORA_PAGER) || defined(TRAIL_MATE_PLATFORM_LINUX)
     if (config.page_help)
     {
         // Dialog headers own their shortcuts. Registering them as pages would

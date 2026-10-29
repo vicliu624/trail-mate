@@ -38,22 +38,23 @@ REQUIRED_FILES = [
         "platform/esp/arduino_common/include/platform/esp/arduino_common/"
         "chat/infra/lxmf/lxmf_destination_registry.h"
     ),
-    Path("platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_destination_registry.cpp"),
+    Path("modules/core_chat/src/infra/lxmf/lxmf_destination_registry.cpp"),
+    Path("modules/core_chat/src/infra/lxmf/lxmf_peer_directory.cpp"),
     Path(
         "platform/esp/arduino_common/include/platform/esp/arduino_common/"
         "chat/infra/lxmf/lxmf_path_manager.h"
     ),
-    Path("platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_path_manager.cpp"),
+    Path("modules/core_chat/src/infra/lxmf/lxmf_path_manager.cpp"),
     Path(
         "platform/esp/arduino_common/include/platform/esp/arduino_common/"
         "chat/infra/lxmf/lxmf_link_manager.h"
     ),
-    Path("platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_link_manager.cpp"),
+    Path("modules/core_chat/src/infra/lxmf/lxmf_link_manager.cpp"),
     Path(
         "platform/esp/arduino_common/include/platform/esp/arduino_common/"
         "chat/infra/lxmf/lxmf_packet_router.h"
     ),
-    Path("platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_packet_router.cpp"),
+    Path("modules/core_chat/src/infra/lxmf/lxmf_packet_router.cpp"),
     Path(
         "platform/esp/arduino_common/include/platform/esp/arduino_common/"
         "chat/infra/lxmf/lxmf_announce_ingestor.h"
@@ -83,32 +84,41 @@ REQUIRED_FILES = [
         "platform/esp/arduino_common/include/platform/esp/arduino_common/"
         "chat/infra/lxmf/lxmf_transport_runtime.h"
     ),
-    Path("platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_transport_runtime.cpp"),
+    Path("modules/core_chat/src/infra/lxmf/lxmf_transport_runtime.cpp"),
     Path(
         "platform/esp/arduino_common/include/platform/esp/arduino_common/"
         "chat/infra/lxmf/lxmf_link_runtime.h"
     ),
-    Path("platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_link_runtime.cpp"),
+    Path("modules/core_chat/src/infra/lxmf/lxmf_link_runtime.cpp"),
     Path(
         "platform/esp/arduino_common/include/platform/esp/arduino_common/"
         "chat/infra/lxmf/lxmf_resource_runtime.h"
     ),
-    Path("platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_resource_runtime.cpp"),
+    Path("modules/core_chat/src/infra/lxmf/lxmf_resource_runtime.cpp"),
     Path(
         "platform/esp/arduino_common/include/platform/esp/arduino_common/"
         "chat/infra/lxmf/lxmf_propagation_runtime.h"
     ),
     Path("platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_propagation_runtime.cpp"),
+    Path("modules/core_chat/include/chat/infra/lxmf/lxmf_propagation_runtime.h"),
+    Path("modules/core_chat/src/infra/lxmf/lxmf_propagation_runtime.cpp"),
     Path(
         "platform/esp/arduino_common/include/platform/esp/arduino_common/"
         "chat/infra/lxmf/lxmf_propagation_service_runtime.h"
     ),
     Path("platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_propagation_service_runtime.cpp"),
+    Path("modules/core_chat/include/chat/infra/lxmf/lxmf_propagation_service_runtime.h"),
+    Path("modules/core_chat/src/infra/lxmf/lxmf_propagation_service_runtime.cpp"),
+    Path("modules/core_chat/include/chat/infra/lxmf/lxmf_propagation_sync.h"),
+    Path("modules/core_chat/include/chat/infra/lxmf/lxmf_propagation_stamp.h"),
+    Path("modules/core_chat/include/chat/infra/lxmf/lxmf_delivery_planner.h"),
+    Path("modules/core_chat/src/infra/lxmf/lxmf_delivery_planner.cpp"),
+    Path("modules/core_chat/src/infra/lxmf/lxmf_propagation_sync.cpp"),
     Path(
         "platform/esp/arduino_common/include/platform/esp/arduino_common/"
         "chat/infra/lxmf/lxmf_delivery_runtime.h"
     ),
-    Path("platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_delivery_runtime.cpp"),
+    Path("modules/core_chat/src/infra/lxmf/lxmf_delivery_runtime.cpp"),
 ]
 
 FIXTURE_FILES = [

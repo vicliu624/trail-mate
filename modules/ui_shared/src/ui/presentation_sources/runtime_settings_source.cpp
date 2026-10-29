@@ -322,7 +322,7 @@ void applyMeshCoreRegionPreset(chat::MeshConfig& mesh, uint8_t preset_id)
     mesh.tx_power = preset->tx_power_dbm;
 }
 
-#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM)
+#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM) || defined(TRAIL_MATE_PLATFORM_LINUX)
 size_t selected_tcp_slot = 0;
 const chat::reticulum::NetworkInterfaceConfig* tcpEntry(size_t slot)
 {
@@ -411,7 +411,7 @@ void buildRadioSection(ui::settings::SettingsSnapshot& out, const app::AppConfig
         addBoolOption(section, "rt_wifi_auto", "Wi-Fi Auto", mesh.reticulum_wifi_auto_connect);
         addBoolOption(section, "rt_anonymous", "Anonymous Peer", mesh.reticulum_anonymous_peer);
         addBoolOption(section, "rt_location", "Location Requests", mesh.reticulum_allow_location_requests);
-#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM)
+#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM) || defined(TRAIL_MATE_PLATFORM_LINUX)
         {
             const auto* entry = tcpEntry(selected_tcp_slot);
             char port[6];
@@ -698,7 +698,7 @@ ui::UiActionResult RuntimeSettingsActionSink::applySetting(
     const Direction direction = patchDirection(patch);
     const app::AppConfig& current = app::configFacade().readConfig();
 
-#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM)
+#if defined(ARDUINO_ARCH_ESP32) || defined(ESP_PLATFORM) || defined(TRAIL_MATE_PLATFORM_LINUX)
     if (keyEquals(patch, "rt_tcp_slot"))
     {
         if (direction == Direction::None) return ui::UiActionResult::fail(ui::UiActionFailure::InvalidInput);
@@ -729,7 +729,6 @@ ui::UiActionResult RuntimeSettingsActionSink::applySetting(
             return ui::UiActionResult::fail(ui::UiActionFailure::InvalidInput);
         auto& facade = app::appFacade();
         facade.requestSaveConfig(app::AppConfigChangeSet::mesh());
-        facade.applyMeshConfig();
         return ui::UiActionResult::success();
     }
 #endif

@@ -15,8 +15,13 @@ inside the Cardputer Zero user session. The framebuffer/evdev executable exists
 only as an explicit device-debug fallback, not as the APPLaunch product path.
 
 The shared LVGL main-menu profile is not simulator-owned. Cardputer Zero selects
-`make_cardputer_zero_profile()`, which is derived from the Pager profile and
-then constrained for the 320 x 170 keyboard device.
+`make_cardputer_zero_profile()`, an independent focus carousel constrained for
+the 320 x 170 keyboard device. Its page descriptors come from the production
+catalog; the compact page set also includes Protocol Probe, Calculator, Calendar
+and Geocaching. Calendar uses the native worker and shared page/reminder/Map
+flow, including durable waypoint saving and selection through its native worker.
+Geocaching supports local drafts through the shared Linux
+background source; directory transport and signed publication remain incomplete.
 
 ## Board Facts
 

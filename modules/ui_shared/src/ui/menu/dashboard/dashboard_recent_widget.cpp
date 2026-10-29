@@ -41,13 +41,25 @@ constexpr size_t kVisibleRows = 2;
 template <size_t N>
 void set_recent_text(lv_obj_t* label, std::array<char, N>& cached, const char* text)
 {
-    // DOT mode temporarily modifies LVGL's text buffer. Compare the full source
-    // instead, otherwise an unchanged elided label is redrawn every second.
-    if (label != nullptr && text != nullptr && std::strcmp(cached.data(), text) != 0)
-    {
-        std::snprintf(cached.data(), cached.size(), "%s", text);
-        ::ui::i18n::set_label_text_raw(label, text);
-    }
+    static_assert(N >= 4, "Recent text needs room for an ellipsis and terminator");
+    if (!label || !text) return;
+    size_t length = 0;
+    while (length < N && text[length]) ++length;
+    const bool truncated = length == N;
+    size_t prefix = truncated ? N - 4 : length;
+    // The first excluded byte must begin a UTF-8 character. Do not split a
+    // localized name or preview when reserving the final ASCII ellipsis.
+    if (truncated)
+        while (prefix && (static_cast<unsigned char>(text[prefix]) & 0xc0U) == 0x80U) --prefix;
+    const char* suffix = truncated ? "..." : "";
+    const size_t suffix_size = truncated ? 3 : 0;
+    // DOT mode mutates LVGL's own text. Compare our bounded source cache;
+    // passing the full message would force long layout work on every refresh.
+    if (std::strlen(cached.data()) == prefix + suffix_size &&
+        !std::memcmp(cached.data(), text, prefix) && !std::strcmp(cached.data() + prefix, suffix)) return;
+    std::memcpy(cached.data(), text, prefix);
+    std::memcpy(cached.data() + prefix, suffix, suffix_size + 1);
+    ::ui::i18n::set_label_text_raw(label, cached.data());
 }
 
 void set_label_text_if_changed_raw(lv_obj_t* label, const char* text)

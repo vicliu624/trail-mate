@@ -1,8 +1,10 @@
 #include "platform/linux/mesh/linux_sqlite_mesh_identity_store.h"
 
+#include "platform/linux/settings_transaction.h"
 #include "platform/ui/settings_store.h"
 
 #include <algorithm>
+#include <array>
 #include <cstring>
 
 namespace platform::linux_runtime::mesh
@@ -51,6 +53,11 @@ bool validIdentity(const ::mesh::LocalIdentity& identity)
     return identity.valid &&
            !isZero(identity.private_key, sizeof(identity.private_key));
 }
+bool validOptions(const LinuxSqliteLocalIdentityStore::Options& options)
+{
+    return options.ns && *options.ns && options.public_key && *options.public_key &&
+           options.private_key && *options.private_key && std::strcmp(options.public_key, options.private_key) != 0;
+}
 
 } // namespace
 
@@ -67,64 +74,73 @@ LinuxSqliteLocalIdentityStore::LinuxSqliteLocalIdentityStore(const Options& opti
 ::mesh::StoreResult LinuxSqliteLocalIdentityStore::load(::mesh::LocalIdentity& out)
 {
     out = ::mesh::LocalIdentity{};
-
-    std::vector<std::uint8_t> public_blob;
-    std::vector<std::uint8_t> private_blob;
-    const bool have_public =
-        ::platform::ui::settings_store::get_blob(options_.ns, options_.public_key, public_blob);
-    const bool have_private =
-        ::platform::ui::settings_store::get_blob(options_.ns, options_.private_key, private_blob);
-    if (!have_public && !have_private)
+    using Failure = ::mesh::StoreFailure;
+    if (!validOptions(options_)) return ::mesh::StoreResult::fail(Failure::InvalidArgument);
+    struct Read
     {
-        return ::mesh::StoreResult::fail(::mesh::StoreFailure::NotFound);
-    }
-    if (!have_public || !have_private ||
-        public_blob.size() != sizeof(out.public_key) ||
-        private_blob.size() != sizeof(out.private_key))
-    {
-        return ::mesh::StoreResult::fail(::mesh::StoreFailure::Corrupt);
-    }
-
-    std::memcpy(out.public_key, public_blob.data(), sizeof(out.public_key));
-    std::memcpy(out.private_key, private_blob.data(), sizeof(out.private_key));
-    out.valid = !isZero(out.private_key, sizeof(out.private_key));
-    if (!out.valid)
-    {
-        return ::mesh::StoreResult::fail(::mesh::StoreFailure::Corrupt);
-    }
+        const Options& options;
+        ::mesh::LocalIdentity value{};
+        Failure failure = Failure::IoError;
+        ~Read()
+        {
+            volatile uint8_t* bytes = value.private_key;
+            for (size_t i = 0; i < sizeof(value.private_key); ++i) bytes[i] = 0;
+        }
+    } read{options_};
+    const bool snapshot = ::platform::linux_runtime::read_settings_snapshot([](void* context, const ::platform::linux_runtime::SettingsReadView& view)
+                                                                            {
+        auto& read = *static_cast<Read*>(context);
+        using B = ::platform::ui::settings_store::BlobReadResult;
+        size_t public_size = 0, private_size = 0;
+        const auto public_result = view.read_blob_into(read.options.ns, read.options.public_key, read.value.public_key, sizeof(read.value.public_key), &public_size);
+        const auto private_result = view.read_blob_into(read.options.ns, read.options.private_key, read.value.private_key, sizeof(read.value.private_key), &private_size);
+        if (public_result == B::Unavailable || private_result == B::Unavailable) read.failure = Failure::IoError;
+        else if (public_result == B::Missing && private_result == B::Missing) read.failure = Failure::NotFound;
+        else if (public_result != B::Ok || private_result != B::Ok || public_size != sizeof(read.value.public_key) ||
+                 private_size != sizeof(read.value.private_key) || isZero(read.value.private_key, sizeof(read.value.private_key))) read.failure = Failure::Corrupt;
+        else { read.value.valid = true; read.failure = Failure::None; }
+        return true; },
+                                                                            &read);
+    if (!snapshot || read.failure != Failure::None) return ::mesh::StoreResult::fail(snapshot ? read.failure : Failure::IoError);
+    out = read.value;
     return ::mesh::StoreResult::success();
 }
 
 ::mesh::StoreResult LinuxSqliteLocalIdentityStore::save(
     const ::mesh::LocalIdentity& identity)
 {
-    if (!validIdentity(identity))
+    if (!validOptions(options_) || !validIdentity(identity))
     {
         return ::mesh::StoreResult::fail(::mesh::StoreFailure::InvalidArgument);
     }
 
-    const bool public_ok = ::platform::ui::settings_store::put_blob(
-        options_.ns,
-        options_.public_key,
-        identity.public_key,
-        sizeof(identity.public_key));
-    const bool private_ok = ::platform::ui::settings_store::put_blob(
-        options_.ns,
-        options_.private_key,
-        identity.private_key,
-        sizeof(identity.private_key));
-    if (!public_ok || !private_ok)
+    struct Changes
     {
-        return ::mesh::StoreResult::fail(::mesh::StoreFailure::IoError);
-    }
-    return ::mesh::StoreResult::success();
+        std::array<::platform::linux_runtime::SettingsMutation, 2> values;
+        ~Changes()
+        {
+            for (auto& value : values)
+            {
+                volatile char* bytes = value.payload.data();
+                for (size_t i = 0; i < value.payload.size(); ++i) bytes[i] = 0;
+            }
+        }
+    } changes;
+    changes.values[0] = {options_.public_key, 'x', std::string(reinterpret_cast<const char*>(identity.public_key), sizeof(identity.public_key))};
+    changes.values[1] = {options_.private_key, 'x', std::string(reinterpret_cast<const char*>(identity.private_key), sizeof(identity.private_key))};
+    return ::platform::linux_runtime::write_settings_batch(options_.ns, changes.values.data(), changes.values.size())
+               ? ::mesh::StoreResult::success()
+               : ::mesh::StoreResult::fail(::mesh::StoreFailure::IoError);
 }
 
 ::mesh::StoreResult LinuxSqliteLocalIdentityStore::clear()
 {
-    const char* keys[] = {options_.public_key, options_.private_key};
-    ::platform::ui::settings_store::remove_keys(options_.ns, keys, 2);
-    return ::mesh::StoreResult::success();
+    if (!validOptions(options_)) return ::mesh::StoreResult::fail(::mesh::StoreFailure::InvalidArgument);
+    const ::platform::linux_runtime::SettingsMutation changes[] = {
+        {options_.public_key, 'x', {}, true}, {options_.private_key, 'x', {}, true}};
+    return ::platform::linux_runtime::write_settings_batch(options_.ns, changes, 2)
+               ? ::mesh::StoreResult::success()
+               : ::mesh::StoreResult::fail(::mesh::StoreFailure::IoError);
 }
 
 LinuxSqlitePeerKeyStore::LinuxSqlitePeerKeyStore()

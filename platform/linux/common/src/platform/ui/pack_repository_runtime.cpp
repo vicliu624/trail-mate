@@ -1,15 +1,23 @@
 #include "platform/ui/pack_repository_runtime.h"
 
-#include "platform/ui/settings_store.h"
+#include "platform/linux/resource_pack_store.h"
+#include "platform/linux/resource_pack_policy.h"
+#include "platform/linux/runtime_paths.h"
+#include "platform/linux/remote_pack_repository.h"
+#include "platform/linux/resource_pack_tasks.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <map>
+#include <mutex>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <unordered_set>
 #include <vector>
 
@@ -19,13 +27,27 @@ namespace
 {
 
 constexpr const char* kPackRootEnv = "TRAIL_MATE_PACK_ROOT";
-constexpr const char* kSettingsNs = "extensions";
-constexpr const char* kInstalledIdsKey = "installed_package_ids_v1";
-constexpr const char* kInstalledStorage = "linux-local";
 constexpr std::size_t kTextFileReadChunkBytes = 4096;
 constexpr std::size_t kMaxDescriptionBytes = 16 * 1024;
 
-PackageInstallStatus s_install_status{};
+struct InstallWorker
+{
+    std::mutex status_mutex;
+    std::mutex start_mutex;
+    PackageInstallStatus status;
+    std::thread thread;
+    std::atomic_bool stopping{false};
+    ~InstallWorker()
+    {
+        stopping = true;
+        if (thread.joinable()) thread.join();
+    }
+};
+InstallWorker& install_worker()
+{
+    static InstallWorker worker;
+    return worker;
+}
 
 void set_install_status(PackageInstallPhase phase,
                         bool busy,
@@ -33,11 +55,15 @@ void set_install_status(PackageInstallPhase phase,
                         const char* message,
                         const char* detail = nullptr)
 {
-    s_install_status.phase = phase;
-    s_install_status.busy = busy;
-    s_install_status.package_id = package_id;
-    s_install_status.message = message ? message : "";
-    s_install_status.detail = detail ? detail : "";
+    auto& worker = install_worker();
+    std::lock_guard<std::mutex> lock(worker.status_mutex);
+    worker.status.phase = phase;
+    worker.status.busy = busy;
+    worker.status.package_id = package_id;
+    worker.status.message = message ? message : "";
+    worker.status.detail = detail ? detail : "";
+    if (phase == PackageInstallPhase::Installing) worker.status.progress_percent = 0;
+    else if (phase == PackageInstallPhase::Succeeded) worker.status.progress_percent = 100;
 }
 
 std::string trim_copy(std::string value)
@@ -98,16 +124,6 @@ std::string read_trimmed_text_file(const std::filesystem::path& path)
     return trim_copy(std::move(contents));
 }
 
-std::filesystem::path repo_root_from_source()
-{
-    std::filesystem::path path = std::filesystem::path(__FILE__).parent_path();
-    for (int i = 0; i < 6; ++i)
-    {
-        path = path.parent_path();
-    }
-    return path.lexically_normal();
-}
-
 std::filesystem::path pack_root()
 {
     if (const char* configured = std::getenv(kPackRootEnv))
@@ -117,7 +133,7 @@ std::filesystem::path pack_root()
             return std::filesystem::path(configured);
         }
     }
-    return repo_root_from_source() / "packs";
+    return ::platform::linux_runtime::sd_child("pack-catalog");
 }
 
 std::size_t directory_size_bytes(const std::filesystem::path& root)
@@ -168,46 +184,6 @@ std::vector<std::string> collect_manifest_ids(const std::filesystem::path& root,
 
     std::sort(ids.begin(), ids.end());
     return ids;
-}
-
-std::unordered_set<std::string> load_installed_id_set()
-{
-    std::string persisted;
-    if (!::platform::ui::settings_store::get_string(kSettingsNs, kInstalledIdsKey, persisted))
-    {
-        return {};
-    }
-
-    std::unordered_set<std::string> out;
-    std::stringstream stream(persisted);
-    std::string line;
-    while (std::getline(stream, line))
-    {
-        line = trim_copy(line);
-        if (!line.empty())
-        {
-            out.insert(line);
-        }
-    }
-    return out;
-}
-
-bool save_installed_id_set(const std::unordered_set<std::string>& ids)
-{
-    std::vector<std::string> ordered(ids.begin(), ids.end());
-    std::sort(ordered.begin(), ordered.end());
-
-    std::ostringstream stream;
-    for (std::size_t i = 0; i < ordered.size(); ++i)
-    {
-        if (i > 0)
-        {
-            stream << '\n';
-        }
-        stream << ordered[i];
-    }
-    return ::platform::ui::settings_store::put_string(
-        kSettingsNs, kInstalledIdsKey, stream.str().c_str());
 }
 
 bool load_package_from_dir(const std::filesystem::path& dir, PackageRecord& out_package, std::string& out_error)
@@ -302,8 +278,36 @@ bool load_package_from_dir(const std::filesystem::path& dir, PackageRecord& out_
     out_package.provided_ime_ids = collect_manifest_ids(dir, "ime");
     out_package.archive_size_bytes = directory_size_bytes(dir);
     out_package.archive_path = dir.string();
-    out_package.compatible_memory_profile = true;
-    out_package.compatible_firmware = true;
+    ::platform::linux_runtime::evaluate_resource_pack_compatibility(out_package, ::platform::linux_runtime::resource_pack_policy());
+    return true;
+}
+
+bool annotate_installed(std::vector<PackageRecord>& packages, std::string& error)
+{
+    std::vector<InstalledPackageRecord> records;
+    if (!load_installed_packages(records, error)) return false;
+    std::map<std::string, InstalledPackageRecord> remaining;
+    for (const auto& record : records) remaining.emplace(record.id, record);
+    for (auto& package : packages)
+    {
+        ::platform::linux_runtime::evaluate_resource_pack_compatibility(package, ::platform::linux_runtime::resource_pack_policy());
+        if (auto found = remaining.find(package.id); found != remaining.end())
+        {
+            package.installed = true;
+            package.installed_record = found->second;
+            package.update_available = package.version != found->second.version ||
+                                       (!package.archive_sha256.empty() && package.archive_sha256 != found->second.archive_sha256);
+            remaining.erase(found);
+        }
+    }
+    for (const auto& [id, record] : remaining)
+    {
+        PackageRecord package;
+        package.id = package.display_name = id; package.version = record.version;
+        package.installed = true; package.installed_record = record;
+        packages.push_back(std::move(package));
+    }
+    std::sort(packages.begin(), packages.end(), [](const auto& left, const auto& right) { return left.display_name < right.display_name; });
     return true;
 }
 
@@ -314,14 +318,11 @@ bool build_catalog(std::vector<PackageRecord>& out_packages, std::string& out_er
 
     const std::filesystem::path root = pack_root();
     std::error_code ec;
-    if (!std::filesystem::exists(root, ec) || ec)
-    {
-        out_error = "Local pack catalog not found.";
-        return false;
-    }
-
-    const auto installed_ids = load_installed_id_set();
-    for (std::filesystem::directory_iterator it(root, ec), end; !ec && it != end; it.increment(ec))
+    const bool has_catalog = std::filesystem::is_directory(root, ec);
+    ec.clear();
+    std::filesystem::directory_iterator begin;
+    if (has_catalog) begin = std::filesystem::directory_iterator(root, ec);
+    for (auto it = begin, end = std::filesystem::directory_iterator(); !ec && it != end; it.increment(ec))
     {
         if (ec)
         {
@@ -339,23 +340,14 @@ bool build_catalog(std::vector<PackageRecord>& out_packages, std::string& out_er
             continue;
         }
 
-        if (installed_ids.find(package.id) != installed_ids.end())
-        {
-            package.installed = true;
-            package.installed_record.id = package.id;
-            package.installed_record.version = package.version;
-            package.installed_record.storage = kInstalledStorage;
-            package.installed_record.installed_at_epoch = 0;
-        }
         out_packages.push_back(std::move(package));
     }
-
-    std::sort(out_packages.begin(),
-              out_packages.end(),
-              [](const PackageRecord& lhs, const PackageRecord& rhs)
-              {
-                  return lhs.display_name < rhs.display_name;
-              });
+    if (ec)
+    {
+        out_error = "Unable to read local pack catalog";
+        return false;
+    }
+    if (!annotate_installed(out_packages, out_error)) return false;
 
     if (out_packages.empty())
     {
@@ -368,96 +360,121 @@ bool build_catalog(std::vector<PackageRecord>& out_packages, std::string& out_er
 
 } // namespace
 
+CatalogStatus catalog_status() { return ::platform::linux_runtime::remote_pack_catalog_status(); }
+void request_catalog_refresh() { if (::platform::linux_runtime::remote_pack_catalog_enabled()) ::platform::linux_runtime::refresh_remote_pack_catalog(); }
+
 bool is_supported()
 {
+    if (::platform::linux_runtime::remote_pack_catalog_enabled()) return true;
     std::error_code ec;
-    return std::filesystem::exists(pack_root(), ec) && !ec;
+    if (std::filesystem::is_directory(pack_root(), ec) && !ec) return true;
+    std::vector<InstalledPackageRecord> installed;
+    std::string error;
+    return load_installed_packages(installed, error) && !installed.empty();
 }
 
 bool load_installed_packages(std::vector<InstalledPackageRecord>& out_installed, std::string& out_error)
 {
-    out_installed.clear();
-    out_error.clear();
-
-    std::vector<PackageRecord> catalog;
-    if (!build_catalog(catalog, out_error))
-    {
-        return false;
-    }
-
-    for (const PackageRecord& package : catalog)
-    {
-        if (package.installed)
-        {
-            out_installed.push_back(package.installed_record);
-        }
-    }
-    return true;
+    return ::platform::linux_runtime::ResourcePackStore(::platform::linux_runtime::resource_pack_root())
+        .installed(out_installed, out_error);
 }
 
 bool fetch_catalog(std::vector<PackageRecord>& out_packages, std::string& out_error)
 {
+    if (::platform::linux_runtime::remote_pack_catalog_enabled())
+    {
+        if (::platform::linux_runtime::remote_pack_catalog_snapshot(out_packages, out_error))
+            return annotate_installed(out_packages, out_error);
+        const auto remote_error = out_error;
+        if (build_catalog(out_packages, out_error)) return true;
+        out_error = remote_error;
+        return false;
+    }
     return build_catalog(out_packages, out_error);
 }
 
-bool install_package(const PackageRecord& package, std::string& out_error)
+namespace
 {
-    out_error.clear();
-    if (package.id.empty())
+bool install_package_impl(const PackageRecord& package, std::string& out_error, const std::atomic_bool* cancelled,
+                          std::function<void(int)> progress)
+{
+    namespace native = ::platform::linux_runtime;
+    auto ready = package;
+    std::unique_ptr<native::StagedResourcePack> staged;
+    const auto root = native::resource_pack_root();
+    if (!package.download_url.empty())
     {
-        out_error = "Invalid package id";
-        return false;
+        staged = native::stage_remote_pack(package, native::resolve_paths().cache_root, root, out_error, cancelled, progress);
+        if (!staged) return false;
+        ready.archive_path = staged->directory();
     }
-
-    auto installed_ids = load_installed_id_set();
-    installed_ids.insert(package.id);
-    if (!save_installed_id_set(installed_ids))
-    {
-        out_error = "Failed to save installed package state";
-        return false;
-    }
-    return true;
+    if (progress) progress(85);
+    return native::ResourcePackStore(root, [progress] { if (progress) progress(95); },
+                                     [cancelled] { return cancelled && cancelled->load(); }).install(ready, out_error);
 }
+}
+bool install_package(const PackageRecord& package, std::string& out_error) { return install_package_impl(package, out_error, nullptr, {}); }
 
 bool start_install_package(const PackageRecord& package, std::string& out_error)
 {
+    auto& worker = install_worker();
+    std::lock_guard<std::mutex> start_lock(worker.start_mutex);
+    if (install_status().busy)
+    {
+        out_error = "A package installation is already running";
+        return false;
+    }
+    if (worker.thread.joinable()) worker.thread.join();
+    worker.stopping = false;
+    out_error.clear();
     set_install_status(PackageInstallPhase::Installing,
                        true,
                        package.id,
                        "Installing package...",
                        package.id.c_str());
-    const bool ok = install_package(package, out_error);
-    set_install_status(ok ? PackageInstallPhase::Succeeded : PackageInstallPhase::Failed,
-                       false,
-                       package.id,
-                       ok ? "Package installed"
-                          : (out_error.empty() ? "Install package failed" : out_error.c_str()),
-                       package.id.c_str());
-    return ok;
+    try
+    {
+        worker.thread = std::thread([package]
+                                    {
+            std::string error;
+            bool ok = false;
+            try { ok = install_package_impl(package, error, &install_worker().stopping, [](int percent)
+                                             { std::lock_guard<std::mutex> lock(install_worker().status_mutex); install_worker().status.progress_percent = percent; }); }
+            catch (const std::exception& exception) { error = exception.what(); }
+            set_install_status(ok ? PackageInstallPhase::Succeeded : PackageInstallPhase::Failed,
+                               false, package.id, ok ? "Package installed" : error.c_str(), package.id.c_str()); });
+        return true;
+    }
+    catch (const std::exception& exception)
+    {
+        out_error = exception.what();
+        set_install_status(PackageInstallPhase::Failed, false, package.id, out_error.c_str());
+        return false;
+    }
 }
 
 PackageInstallStatus install_status()
 {
-    return s_install_status;
+    auto& worker = install_worker();
+    std::lock_guard<std::mutex> lock(worker.status_mutex);
+    return worker.status;
 }
 
 bool uninstall_package(const PackageRecord& package, std::string& out_error)
 {
-    out_error.clear();
-    if (package.id.empty())
-    {
-        out_error = "Invalid package id";
-        return false;
-    }
-
-    auto installed_ids = load_installed_id_set();
-    installed_ids.erase(package.id);
-    if (!save_installed_id_set(installed_ids))
-    {
-        out_error = "Failed to save installed package state";
-        return false;
-    }
-    return true;
+    return ::platform::linux_runtime::ResourcePackStore(::platform::linux_runtime::resource_pack_root())
+        .uninstall(package.id, out_error);
 }
 
 } // namespace ui::runtime::packs
+
+namespace platform::linux_runtime
+{
+void stop_resource_pack_tasks()
+{
+    stop_remote_pack_catalog();
+    auto& worker = ::ui::runtime::packs::install_worker();
+    worker.stopping = true;
+    if (worker.thread.joinable()) worker.thread.join();
+}
+}

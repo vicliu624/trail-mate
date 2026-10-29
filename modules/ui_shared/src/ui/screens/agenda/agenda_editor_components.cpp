@@ -9,6 +9,7 @@
 #include "ui_lvgl_ux_packs/common/touch_text_editor.h"
 #include "ui_presentation/waypoint/waypoint_model.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 
@@ -161,6 +162,11 @@ void date_picker(int width, int height)
     lv_obj_set_style_text_font(calendar, ::ui::page_profile::resolve_body_font(), 0);
     lv_obj_set_style_pad_all(calendar, 1, 0);
     auto* days_grid = lv_calendar_get_btnmatrix(calendar);
+    lv_obj_update_layout(calendar);
+    const auto* date_font = ::ui::page_profile::resolve_body_font();
+    if (lv_obj_get_content_height(days_grid) / 7 < date_font->line_height + 2)
+        date_font = ::ui::page_profile::resolve_caption_font();
+    lv_obj_set_style_text_font(days_grid, date_font, LV_PART_ITEMS);
     lv_obj_set_style_bg_color(days_grid, ::ui::theme::surface(), 0);
     lv_obj_set_style_text_color(days_grid, ::ui::theme::text(), LV_PART_ITEMS);
     lv_obj_set_style_text_color(days_grid, ::ui::theme::text(), LV_PART_ITEMS | LV_STATE_PRESSED);
@@ -207,16 +213,16 @@ void step_time(lv_event_t* event)
     if (data & 1) lv_spinbox_increment(field);
     else lv_spinbox_decrement(field);
 }
-void clock_field(int index, int x, int y, int value, int maximum)
+void clock_field(lv_obj_t* parent, int index, int x, int y, int value, int maximum, int height)
 {
     auto& s = *state();
-    auto* spin = lv_spinbox_create(s.body);
+    auto* spin = lv_spinbox_create(parent);
     lv_spinbox_set_range(spin, 0, maximum);
     lv_spinbox_set_digit_format(spin, 2, 0);
     lv_spinbox_set_rollover(spin, true);
     lv_spinbox_set_step(spin, 1);
     lv_spinbox_set_value(spin, value);
-    put(spin, x + 26, y, 46, 30);
+    put(spin, x + 26, y, 46, height);
     lv_obj_set_style_pad_all(spin, 4, 0);
     lv_obj_set_style_bg_color(spin, ::ui::theme::surface(), 0);
     lv_obj_set_style_border_color(spin, ::ui::theme::border(), 0);
@@ -229,9 +235,9 @@ void clock_field(int index, int x, int y, int value, int maximum)
     input::bind(spin);
     for (unsigned increment = 0; increment < 2; ++increment)
     {
-        auto* button = components::addButton(s.body, increment ? "+" : "-", Action::None);
+        auto* button = components::addButton(parent, increment ? "+" : "-", Action::None);
         lv_obj_remove_event_cb(button, input::activate);
-        put(button, x + (increment ? 74 : 0), y, 24, 30);
+        put(button, x + (increment ? 74 : 0), y, 24, height);
         lv_obj_add_event_cb(button, step_time, LV_EVENT_CLICKED,
                             reinterpret_cast<void*>((static_cast<uintptr_t>(index) << 1) | increment));
     }
@@ -242,12 +248,25 @@ void time_picker(int width, int height)
     ::agenda::CivilTime start, end;
     ::agenda::fromCalendarSeconds(s.draft.event.start_time, start);
     ::agenda::fromCalendarSeconds(s.draft.event.flags & ::agenda::HasEndTime ? s.draft.event.end_time : s.draft.event.start_time, end);
-    put(components::addLabel(s.body, "Start time", true, true), 4, 0, width - 8);
-    clock_field(0, width / 2 - 110, 21, start.hour, 23);
-    clock_field(1, width / 2 + 10, 21, start.minute, 59);
-    s.editor_widgets.end_enabled = lv_checkbox_create(s.body);
+    const int caption_height = ::ui::page_profile::resolve_caption_font()->line_height;
+    const int footer_height = std::max(24, int(::ui::page_profile::resolve_control_button_height()));
+    const int checkbox_height = std::max(20, caption_height + 4);
+    const int field_height = std::clamp((height - footer_height - 2 * caption_height - checkbox_height - 16) / 2, 24, 30);
+    const int first_y = caption_height + 2;
+    const int checkbox_y = first_y + field_height + 3;
+    const int second_y = checkbox_y + checkbox_height + 3;
+    auto* fields = lv_obj_create(s.body);
+    box(fields);
+    put(fields, 0, 0, width, height - footer_height - 2);
+    lv_obj_add_flag(fields, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scroll_dir(fields, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(fields, LV_SCROLLBAR_MODE_AUTO);
+    put(components::addLabel(fields, "Start time", true, true), 4, 0, width - 8);
+    clock_field(fields, 0, width / 2 - 110, first_y, start.hour, 23, field_height);
+    clock_field(fields, 1, width / 2 + 10, first_y, start.minute, 59, field_height);
+    s.editor_widgets.end_enabled = lv_checkbox_create(fields);
     lv_checkbox_set_text(s.editor_widgets.end_enabled, ::ui::i18n::tr("End time (optional)"));
-    put(s.editor_widgets.end_enabled, 4, 60, width - 8, 24);
+    put(s.editor_widgets.end_enabled, 4, checkbox_y, width - 8, checkbox_height);
     lv_obj_set_style_text_color(s.editor_widgets.end_enabled, ::ui::theme::text(), 0);
     lv_obj_set_style_text_font(s.editor_widgets.end_enabled, ::ui::page_profile::resolve_body_font(), 0);
     lv_obj_set_style_bg_color(s.editor_widgets.end_enabled, ::ui::theme::surface(), LV_PART_INDICATOR);
@@ -258,11 +277,10 @@ void time_picker(int width, int height)
     lv_obj_set_style_anim_duration(s.editor_widgets.end_enabled, 0, LV_PART_INDICATOR);
     if (s.draft.event.flags & ::agenda::HasEndTime) lv_obj_add_state(s.editor_widgets.end_enabled, LV_STATE_CHECKED);
     input::bind(s.editor_widgets.end_enabled);
-    clock_field(2, width / 2 - 110, 90, end.hour, 23);
-    clock_field(3, width / 2 + 10, 90, end.minute, 59);
-    // Keep the helper above the footer even on the 222-pixel-tall profile.
-    put(components::addLabel(s.body, "End <= start: next day", true, true), 4, 121, width - 8, 14);
-    put(components::addButton(s.body, "OK", Action::AcceptTime), 4, height - 28, width - 8, 28);
+    clock_field(fields, 2, width / 2 - 110, second_y, end.hour, 23, field_height);
+    clock_field(fields, 3, width / 2 + 10, second_y, end.minute, 59, field_height);
+    put(components::addLabel(fields, "End <= start: next day", true, true), 4, second_y + field_height + 3, width - 8, caption_height);
+    put(components::addButton(s.body, "OK", Action::AcceptTime), 4, height - footer_height, width - 8, footer_height);
     s.editor_widgets.focus = s.editor_widgets.clock_fields[0];
 }
 void presets(int width, int height, bool reminder)
@@ -281,15 +299,20 @@ void presets(int width, int height, bool reminder)
 void location_picker(int width, int height)
 {
     auto& s = *state();
-    put(components::addLabel(s.body, "Location is optional", true, true), 4, 0, width - 8);
-    auto* current = components::addButton(s.body, "Current position", Action::CurrentLocation);
+    auto* choices = lv_obj_create(s.body);
+    box(choices);
+    put(choices, 0, 0, width, height - 34);
+    lv_obj_set_scroll_dir(choices, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(choices, LV_SCROLLBAR_MODE_AUTO);
+    put(components::addLabel(choices, "Location is optional", true, true), 4, 0, width - 8);
+    auto* current = components::addButton(choices, "Current position", Action::CurrentLocation);
     put(current, 4, 24, width - 8, 32);
     if (!s.host->locations) lv_obj_add_state(current, LV_STATE_DISABLED);
     s.editor_widgets.focus = current;
-    auto* map = components::addButton(s.body, "Choose on map", Action::ChooseOnMap);
+    auto* map = components::addButton(choices, "Choose on map", Action::ChooseOnMap);
     put(map, 4, 60, width - 8, 32);
     if (!s.host->request_map) lv_obj_add_state(map, LV_STATE_DISABLED);
-    auto* saved = components::addButton(s.body, "Saved waypoint", Action::PickWaypoint);
+    auto* saved = components::addButton(choices, "Saved waypoint", Action::PickWaypoint);
     put(saved, 4, 96, width - 8, 28);
     if (!s.host->waypoints) lv_obj_add_state(saved, LV_STATE_DISABLED);
     auto* remove = components::addButton(s.body, "Remove location", Action::ClearLocation);

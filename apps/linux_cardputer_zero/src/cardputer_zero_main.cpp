@@ -5,6 +5,7 @@
 #include <string>
 
 #include "platform/device/linux_framebuffer_platform.h"
+#include "platform/linux/application_lifecycle.h"
 #include "ui/shell_ui_runner.h"
 
 namespace
@@ -36,20 +37,22 @@ std::chrono::milliseconds auto_exit_after()
 
 } // namespace
 
-int main()
+int main(int, char** argv)
 {
+    return ::platform::linux_runtime::run_application(argv, [&]() -> int
+                                                      {
     try
     {
         trailmate::cardputer_zero::platform::device::LinuxFramebufferPlatform
             presenter(framebuffer_path());
         trailmate::cardputer_zero::linux_ui::runShellUi(
             presenter,
-            auto_exit_after());
+            auto_exit_after(), true);
         return 0;
     }
     catch (const std::exception& error)
     {
         std::fprintf(stderr, "trailmate-cardputer-zero: %s\n", error.what());
         return 1;
-    }
+    } });
 }

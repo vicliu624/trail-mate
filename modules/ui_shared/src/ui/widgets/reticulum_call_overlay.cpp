@@ -7,6 +7,7 @@
 
 #include "lvgl.h"
 #include "platform/ui/reticulum_call_runtime.h"
+#include "sys/clock.h"
 #include "ui/app_runtime.h"
 #include "ui/assets/fonts/font_utils.h"
 #include "ui/callback_app_screen.h"
@@ -70,6 +71,7 @@ struct PageState
 };
 
 PageState s_page;
+uint32_t s_failed_dial_revision = 0;
 
 const lv_font_t* body_font()
 {
@@ -602,7 +604,7 @@ void update_page(const call::Snapshot& snapshot)
     char status[96] = {};
     if (!snapshot.wifi_ready)
     {
-        std::snprintf(status, sizeof(status), "%s", "Wi-Fi gateway unavailable");
+        std::snprintf(status, sizeof(status), "%s", "Network gateway unavailable");
     }
     else if (!snapshot.media_supported)
     {
@@ -625,7 +627,7 @@ void update_page(const call::Snapshot& snapshot)
         const uint32_t elapsed_s =
             snapshot.active_since_ms == 0
                 ? 0
-                : (lv_tick_get() - snapshot.active_since_ms) / 1000U;
+                : (sys::millis_now() - snapshot.active_since_ms) / 1000U;
         std::snprintf(status,
                       sizeof(status),
                       "%02lu:%02lu RX %lu/%luB TX %lu/%luB drop %lu/%lu",
@@ -749,11 +751,23 @@ void update_page(const call::Snapshot& snapshot)
 
 } // namespace
 
+void release()
+{
+    if (!s_page.presented) return;
+    auto* parent = app_parent();
+    s_page.presented = false;
+    ui_dismiss_interruption_app(parent);
+}
 void tick()
 {
     call::service_ui_runtime();
     const call::Snapshot snapshot = call::snapshot();
     const bool active = snapshot.realtime_phase != call::RealtimePhase::Idle;
+    if (snapshot.failed_dial_revision && snapshot.failed_dial_revision != s_failed_dial_revision)
+    {
+        s_failed_dial_revision = snapshot.failed_dial_revision;
+        ::ui::feedback::show_notice("Call could not start", 2200);
+    }
 
     if (active && s_page.presented && !page_root_valid())
     {

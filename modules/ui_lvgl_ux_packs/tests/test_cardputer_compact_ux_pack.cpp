@@ -22,13 +22,15 @@ int main()
 
     ui_lvgl_ux::ScreenRegistry screens;
     pack.buildScreens(screens);
-    assert(screens.size() == 10);
+    assert(screens.size() == 14);
+    assert(screens.items()[7].id == ui_lvgl_ux::ScreenId::Calculator);
+    assert(screens.items()[8].id == ui_lvgl_ux::ScreenId::Geocaching);
+    assert(screens.items()[9].id == ui_lvgl_ux::ScreenId::EnergySweep);
     assert(screens.items()[3].id == ui_lvgl_ux::ScreenId::Map);
     assert(screens.items()[4].id == ui_lvgl_ux::ScreenId::SkyPlot);
     for (std::size_t index = 0; index < screens.size(); ++index)
     {
         assert(screens.items()[index].id != ui_lvgl_ux::ScreenId::Gps);
-        assert(screens.items()[index].id != ui_lvgl_ux::ScreenId::EnergySweep);
         assert(screens.items()[index].id != ui_lvgl_ux::ScreenId::Sstv);
     }
 

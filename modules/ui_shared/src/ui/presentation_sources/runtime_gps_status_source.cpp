@@ -60,20 +60,23 @@ bool RuntimeGpsStatusSource::buildGpsStatusSnapshot(ui::gps::GpsStatusSnapshot& 
 
     const auto diagnostics = ::platform::ui::gps::diagnostics();
     const auto state = ::platform::ui::gps::get_data();
+    out.receiver_configured = diagnostics.code != ::gps::GpsDiagnosticCode::NotConfigured;
+    out.receiver_ready = out.receiver_enabled && out.receiver_powered && out.receiver_configured && diagnostics.ready &&
+                         diagnostics.code != ::gps::GpsDiagnosticCode::NoTraffic && diagnostics.code != ::gps::GpsDiagnosticCode::TrafficStalled;
 
-    out.fix_valid = state.valid || diagnostics.has_fix;
-    out.latitude = state.lat;
-    out.longitude = state.lng;
-    out.has_altitude = state.valid && state.has_alt;
+    out.fix_valid = out.receiver_ready && (state.valid || diagnostics.has_fix);
+    out.latitude = out.receiver_ready ? state.lat : 0.0;
+    out.longitude = out.receiver_ready ? state.lng : 0.0;
+    out.has_altitude = out.fix_valid && state.has_alt;
     out.altitude_m = out.has_altitude ? static_cast<float>(state.alt_m) : 0.0f;
-    out.speed_mps = state.has_speed ? static_cast<float>(state.speed_mps) : 0.0f;
-    out.course_deg = state.has_course ? static_cast<float>(state.course_deg) : 0.0f;
+    out.speed_mps = out.fix_valid && state.has_speed ? static_cast<float>(state.speed_mps) : 0.0f;
+    out.course_deg = out.fix_valid && state.has_course ? static_cast<float>(state.course_deg) : 0.0f;
     platform::ui::gps::GnssStatus gnss_status{};
     std::size_t gnss_count = 0;
     (void)::platform::ui::gps::get_gnss_snapshot(nullptr, 0, &gnss_count, &gnss_status);
 
-    out.satellites = diagnostics.sats_in_view > 0 ? diagnostics.sats_in_view : state.satellites;
-    out.hdop = gnss_status.hdop;
+    out.satellites = out.receiver_ready ? (diagnostics.sats_in_view > 0 ? diagnostics.sats_in_view : state.satellites) : 0;
+    out.hdop = out.receiver_ready ? gnss_status.hdop : 0.0f;
     out.time_synced = out.fix_valid;
     out.epoch_seconds = out.time_synced ? static_cast<uint64_t>(sys::epoch_seconds_now()) : 0ULL;
 
@@ -81,11 +84,15 @@ bool RuntimeGpsStatusSource::buildGpsStatusSnapshot(ui::gps::GpsStatusSnapshot& 
     {
         ui::copyText(out.fix_label, "GPS OFF");
     }
+    else if (!out.receiver_configured)
+    {
+        ui::copyText(out.fix_label, "GPS N/A");
+    }
     else if (!out.receiver_powered)
     {
         ui::copyText(out.fix_label, "GPS POWER");
     }
-    else if (!diagnostics.ready)
+    else if (!out.receiver_ready)
     {
         ui::copyText(out.fix_label, "NO RX");
     }
@@ -95,7 +102,8 @@ bool RuntimeGpsStatusSource::buildGpsStatusSnapshot(ui::gps::GpsStatusSnapshot& 
     }
 
     copyCoordinateLabel(out);
-    copySatelliteLabel(out, diagnostics);
+    if (out.receiver_ready) copySatelliteLabel(out, diagnostics);
+    else ui::copyText(out.satellite_label, "0 SAT");
     ui::copyText(out.time_label, out.time_synced ? "SYNCED" : "UNSYNCED");
     return true;
 }

@@ -59,3 +59,14 @@ test('new blank Wi-Fi rows block submission and duplicate identifiers are reject
  next.set('wifi.profile.2.ssid','Home');assert.ok(configCollectionIssues(next).some(issue=>issue.message.includes('重复')&&issue.code==='COLLECTION_DUPLICATE'));
  next.set('wifi.profile.2.ssid','Trail');assert.deepEqual(configCollectionIssues(next),[]);
 });
+
+test('AutoInterface accepts complete access control and rejects discovery/data port conflicts',()=>{
+ const next=changeConfigCollection(fixture(),'interfaces','access',1);
+ next.set('rt.net.interface.1.network_name','Private LAN');next.set('rt.net.interface.1.ifac_size',128);
+ assert.deepEqual(configCollectionIssues(next),[]);
+ next.set('rt.net.interface.1.discovery_port',65535);
+ assert(configCollectionIssues(next).some(issue=>issue.key==='rt.net.interface.1.discovery_port'&&issue.code==='CONFIG_RANGE'));
+ next.set('rt.net.interface.1.discovery_port',29716);next.set('rt.net.interface.1.data_port',29717);
+ assert(configCollectionIssues(next).some(issue=>issue.key==='rt.net.interface.1.data_port'));
+ next.set('rt.net.interface.1.data_port',42671);assert.deepEqual(configCollectionIssues(next),[]);
+});

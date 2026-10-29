@@ -113,6 +113,8 @@ size_t paddedTokenPlaintextSize(size_t plaintext_len);
 size_t tokenSizeForPlaintext(size_t plaintext_len);
 
 void fullHash(const uint8_t* data, size_t len, uint8_t out_hash[kFullHashSize]);
+bool fullHashJoined(const uint8_t* first, size_t first_len, const uint8_t* second, size_t second_len,
+                    uint8_t out_hash[kFullHashSize]);
 void truncatedHash(const uint8_t* data, size_t len, uint8_t out_hash[kTruncatedHashSize]);
 void computeNameHash(const char* app_name, const char* aspect,
                      uint8_t out_hash[kNameHashSize]);

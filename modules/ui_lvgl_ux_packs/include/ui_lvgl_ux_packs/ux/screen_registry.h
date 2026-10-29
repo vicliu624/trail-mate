@@ -22,6 +22,8 @@ enum class ScreenId : uint8_t
     Sstv,
     Extensions,
     Calendar,
+    Calculator,
+    Geocaching,
 };
 
 struct ScreenDescriptor

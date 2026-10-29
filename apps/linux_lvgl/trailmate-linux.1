@@ -1,0 +1,41 @@
+.TH TRAILMATE-LINUX 1 "October 2026" "Trail Mate" "User Commands"
+.SH NAME
+trailmate-linux \- configurable Trail Mate LVGL desktop application
+.SH SYNOPSIS
+.B trailmate-linux
+.BI --profile " FILE"
+.RI [ options ]
+.SH DESCRIPTION
+Runs the shared Trail Mate interface in an SDL desktop window.
+The selected device profile defines dimensions, rotation, fullscreen policy,
+physical keyboard availability and UX pack.
+The profile UX pack must match the executable's build composition.
+Alt+F4 and window-close requests exit the application and stop its services.
+.SH OPTIONS
+.TP
+.BI --profile " FILE"
+Read the device profile. This option is required.
+.TP
+.B --windowed
+Override the profile's fullscreen setting for this session.
+.TP
+.BI --quit-after-ms " N"
+Exit after N milliseconds in the application loop. Zero disables this limit.
+.TP
+.BI --screenshot " FILE.bmp"
+Save the logical, unrotated UI as a BMP image on exit.
+.TP
+.B --help
+Print usage and exit.
+.SH ENVIRONMENT
+.TP
+.B SDL_VIDEODRIVER
+Select the SDL desktop backend, for example wayland or x11.
+.TP
+.B TRAIL_MATE_RUNTIME_MODE
+Select local, mesh or demo service behavior. The default is local.
+.SH FILES
+Device profiles installed by a device package are located under
+.IR /usr/share/trailmate/devices/ .
+Copy a profile to a user-owned location to customize it and pass that path
+with the --profile option.

@@ -14,6 +14,8 @@ struct GpsStatusSnapshot
 
     bool receiver_enabled = false;
     bool receiver_powered = false;
+    bool receiver_configured = true;
+    bool receiver_ready = false;
 
     bool fix_valid = false;
     double latitude = 0.0;

@@ -132,13 +132,45 @@ _trailmate_set_linux_paths()
 # ---------------------------------------------------------------------------
 
 set(TRAIL_MATE_LINUX_COMMON_SOURCES
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/wifi_profile_store.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/src/platform/audio/audio_focus.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_agenda/src/event_codec.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_agenda/src/recurrence.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_agenda/src/agenda_query.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_agenda/src/agenda_service.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_agenda/src/reminder_scheduler.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/agenda_store.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/peer_directory.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/agenda_clock.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/agenda_source.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/src/agenda/agenda_workspace_model.cpp"
     "${TRAIL_MATE_REPO_ROOT}/third_party/yxml/yxml.c"
     # app facade
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/app/linux_app_services.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/app/linux_phone_facade.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/app/linux_phone_bluetooth_config.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/app/linux_tms_document.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/app/linux_tms_store.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/app/linux_phone_protocol.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/app/linux_phone_runtime.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/app/linux_app_facade.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/app/linux_demo_world.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_noop_mesh_adapter.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_raw_lora_mesh_adapter.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_mesh_worker.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_meshcore_group_wire.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_meshcore_advert_wire.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_meshcore_discovery.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_meshcore_repeater.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_mqtt_client.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_meshtastic_mqtt_codec.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_mesh_mqtt_bridge.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/mqtt/mqtt311_codec.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_meshcore_direct_wire.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_meshcore_direct_state.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_meshcore_verification.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/mesh/linux_meshcore_identity.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/mesh/linux_radio_identity_store.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_sqlite_chat_store.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/app/demo_app.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/app/demo_app_runner.cpp"
@@ -147,7 +179,11 @@ set(TRAIL_MATE_LINUX_COMMON_SOURCES
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/core/canvas.cpp"
     # platform/linux shared infrastructure (P4)
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/runtime_paths.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/application_lifecycle.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/env_config.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/process_runner.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/iio_sensors.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/network_manager_wifi.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/map_contour_tile_generator.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/map_diagnostics.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/map_tile_cache.cpp"
@@ -156,6 +192,31 @@ set(TRAIL_MATE_LINUX_COMMON_SOURCES
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/mesh/linux_sqlite_mesh_identity_store.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/runtime_packet_log.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/sx126x_radio.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/native_audio_service.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/backlight.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/gamma_control.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/keyboard_backlight.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/output_power.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/memory_monitor.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/storage_monitor.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/battery_monitor.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/vmp_radio.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/node_identity.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/geocaching_draft_store.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/tmap_creation.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/hostlink_geocaching_drafts.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/geocaching_crypto.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/geocaching_record_store.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/geocaching_gpx_stage.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/geocaching_install_journal.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/geocaching_volume_lease.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/geocaching_gpx_file_port.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/geocaching_source.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/geocaching_offline_cache.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/sstv_service.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/walkie_service.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/packet_radio.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/radio_power.cpp"
     # platform::ui::* runtime implementations
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/device_runtime.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/firmware_update_runtime.cpp"
@@ -163,12 +224,49 @@ set(TRAIL_MATE_LINUX_COMMON_SOURCES
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/map_diagnostics.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/hostlink_runtime.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/lora_runtime.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/lora_receive_session.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/agenda_widget_runtime.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/music_runtime.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/quick_controls_runtime.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/resource_lock.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/orientation_runtime.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/pack_repository_runtime.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/resource_pack_store.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/rtc_clock.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/network_runtime.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/http_client_runtime.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/route_image_cache.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/hostlink_management.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/hostlink_track_catalog.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/hostlink_track_snapshots.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/hostlink_track_prepare.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/hostlink_track_directories.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/track_directory_runtime.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_track_directories.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_track_publication.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/track_publication_runtime.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/hostlink_track_publication.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/hostlink_track_confirmation.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/track_read_runtime.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_track_read.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/hostlink_identity_backup.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/hostlink_radio_identity.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/identity_restore_bridge.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/identity_owner_lease.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/hostlink_config_snapshot.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/tms_snapshot_bridge.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/tms_import_bridge.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/hostlink_config_transfer.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/hostlink_uploads.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/hostlink_package_input.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/stored_route_package.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/hostlink_package_install.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/route_package_images.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/pack_catalog_json.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/remote_pack_catalog.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/remote_pack_archive.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/resource_pack_policy.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/build_identity.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/route_storage.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/screen_runtime.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/reticulum_directory_runtime.cpp"
@@ -178,6 +276,12 @@ set(TRAIL_MATE_LINUX_COMMON_SOURCES
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/team_ui_store_runtime.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/time_runtime.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/tracker_runtime.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/navigation_runtime.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/map_search_runtime.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/packaged_map.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/call_audio_service.cpp"
+    "${TRAIL_MATE_UI_MAP_RUNTIME_SRC_ROOT}/map_tiles/tmap_map_tile_source.cpp"
+    "${TRAIL_MATE_UI_MAP_RUNTIME_SRC_ROOT}/map_tiles/map_tile_resolver.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/usb_support_runtime.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/walkie_runtime.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/wireless_companion_runtime.cpp"
@@ -194,6 +298,7 @@ set(TRAIL_MATE_LINUX_COMMON_SOURCES
     "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_delivery_message_projection.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_delivery_send_result_projection.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/mesh_protocol_utils.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/rnode/rnode_packet_wire.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/mesh_peer_directory_core.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/meshcore/mc_region_presets.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/meshcore/meshcore_identity_crypto.cpp"
@@ -217,6 +322,49 @@ set(TRAIL_MATE_LINUX_COMMON_SOURCES
     "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/meshtastic/mt_radio_config.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/meshtastic/mt_region.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/reticulum/reticulum_wire.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/reticulum/announce_verifier.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/reticulum/path_request_wire.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_packet_router.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_destination_registry.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_link_manager.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/reticulum/link_handshake_wire.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/reticulum/interface_access_codec.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/third_party/rweather_crypto/SHA256.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/third_party/rweather_crypto/Hash.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/third_party/rweather_crypto/Crypto.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_link_runtime.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_resource_runtime.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_resource_wire.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_propagation_runtime.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_propagation_service_runtime.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_propagation_sync.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_delivery_planner.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_announce_projection.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_wire.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_delivery_runtime.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_delivery_attempt_ledger.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_incoming_envelope.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_peer_directory.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_path_manager.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/lxmf/lxmf_transport_runtime.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/mesh/linux_reticulum_identity.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_reticulum_ingress.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_reticulum_links.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_reticulum_calls.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_reticulum_tcp.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_reticulum_network.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_reticulum_propagation.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_reticulum_auto.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_reticulum_network_store.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/reticulum_network_config_runtime.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/settings_reset_runtime.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/src/app/tms_config_codec.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_reticulum_announce.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_reticulum_resources.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_reticulum_requests.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_reticulum_outgoing.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_reticulum_stamp.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_reticulum_upload.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/voice/vmp_wire.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/voice/vmp_contact_secrets.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/voice/vmp_control_auth.cpp"
@@ -235,9 +383,12 @@ set(TRAIL_MATE_LINUX_COMMON_SOURCES
     "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/third_party/nanopb/pb_common.c"
     "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/third_party/nanopb/pb_decode.c"
     "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/third_party/nanopb/pb_encode.c"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/generated/meshtastic/admin.pb.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/generated/meshtastic/channel.pb.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/generated/meshtastic/config.pb.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/generated/meshtastic/connection_status.pb.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/generated/meshtastic/device_ui.pb.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/generated/meshtastic/localonly.pb.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/generated/meshtastic/mesh.pb.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/generated/meshtastic/module_config.pb.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/generated/meshtastic/mqtt.pb.cpp"
@@ -269,10 +420,17 @@ set(TRAIL_MATE_LINUX_COMMON_SOURCES
     "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/src/usecase/time_authority.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/core_gps/src/motion_policy.cpp"
     # modules/core_hostlink
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_hostlink/src/hostlink_codec.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_hostlink/src/hostlink_config_codec.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_hostlink/src/hostlink_frame_router.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_hostlink/src/hostlink_service_codec.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/core_hostlink/src/hostlink_session.cpp"
     # modules/core_sys
     "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/src/app/app_facade_access.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/src/platform/ui/reticulum_call_runtime.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/reticulum/audio_call_wire.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/reticulum/lxst_telephony_wire.cpp"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/reticulum/lxst_call_state_machine.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/src/platform/ui/screen_power_state_machine.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/src/sys/clock.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/src/platform/ui/timezone_profile.cpp"
@@ -310,9 +468,21 @@ set(TRAIL_MATE_LINUX_COMMON_SOURCES
 
 set(TRAIL_MATE_LINUX_UI_SHELL_SOURCES
     # platform/linux/common �?shared Linux UI layer
-    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/ui/localization.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/ui/shared_ui_shell.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/ui/shell_ui_runner.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/ui/voice_runtime_binding.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/ui/phone_pairing_binding.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/ui/agenda_runtime_binding.cpp"
+    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/assets/agenda.c"
+    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/agenda/agenda_state.cpp"
+    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/agenda/agenda_page_shell.cpp"
+    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/agenda/agenda_page_runtime.cpp"
+    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/agenda/agenda_page_input.cpp"
+    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/agenda/agenda_page_components.cpp"
+    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/agenda/agenda_editor_runtime.cpp"
+    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/agenda/agenda_editor_components.cpp"
+    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/agenda/agenda_page_flow.cpp"
+    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/agenda/agenda_reminder_popup.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/ui/ui_common.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/ui_status.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/ui/widgets/map/map_tiles.cpp"
@@ -379,7 +549,9 @@ set(TRAIL_MATE_LINUX_UI_SHELL_SOURCES
     "${TRAIL_MATE_UI_MAP_RUNTIME_SRC_ROOT}/map_tiles/filesystem_map_tile_source.cpp"
     "${TRAIL_MATE_UI_MAP_RUNTIME_SRC_ROOT}/map_tiles/map_tile_async_runtime.cpp"
     "${TRAIL_MATE_UI_MAP_RUNTIME_SRC_ROOT}/map_tiles/map_tile_render_queue.cpp"
-    "${TRAIL_MATE_UI_MAP_RUNTIME_SRC_ROOT}/map_tiles/map_tile_resolver.cpp"
+    "${TRAIL_MATE_UI_MAP_RUNTIME_SRC_ROOT}/map_poi/annotation_frame.cpp"
+    "${TRAIL_MATE_UI_MAP_RUNTIME_SRC_ROOT}/map_poi/annotation_layout.cpp"
+    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/widgets/map/poi_overlay.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/team_presentation/team_rich_payload_projector.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/assets/fonts/font_utils.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/components/info_card.cpp"
@@ -469,6 +641,7 @@ set(TRAIL_MATE_LINUX_UI_SHELL_SOURCES
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/energy_sweep/energy_sweep_page_shell.cpp"
     # extensions
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/extensions/extensions_page_runtime.cpp"
+    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/extensions/tmap_creator_page.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/extensions/extensions_page_shell.cpp"
     # gnss
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/gnss/gnss_skyplot_page_runtime.cpp"
@@ -560,6 +733,8 @@ set(TRAIL_MATE_LINUX_UI_SHELL_SOURCES
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/widgets/text_candidate_picker.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/widgets/toast/toast_widget.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/widgets/top_bar.cpp"
+    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/input/pager_navigation.cpp"
+    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/widgets/ble_pairing_popup.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/widgets/top_bar_power_presenter.cpp"
 )
 
@@ -568,6 +743,9 @@ set(TRAIL_MATE_LINUX_UI_SHELL_SOURCES
 # ---------------------------------------------------------------------------
 
 set(TRAIL_MATE_LINUX_COMMON_INCLUDES
+    "${TRAIL_MATE_REPO_ROOT}/third_party/rweather_crypto"
+    "${TRAIL_MATE_PLATFORM_SHARED_INCLUDE_ROOT}"
+    "${TRAIL_MATE_REPO_ROOT}/modules/core_agenda/include"
     "${TRAIL_MATE_REPO_ROOT}/modules/core_music/include"
     "${TRAIL_MATE_LINUX_COMMON_INCLUDE_ROOT}"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}"
@@ -635,9 +813,28 @@ function(trailmate_apply_linux_common_warnings target_name)
 endfunction()
 
 function(trailmate_add_linux_common target_name)
+    include("${TRAIL_MATE_REPO_ROOT}/cmake/TrailMateProjectVersion.cmake")
+    if(NOT TARGET trailmate_linux_bzip2)
+        set(bzip2_root "${TRAIL_MATE_REPO_ROOT}/third_party/bzip2/src")
+        add_library(trailmate_linux_bzip2 STATIC
+            "${bzip2_root}/blocksort.c" "${bzip2_root}/compress.c"
+            "${bzip2_root}/decompress.c" "${bzip2_root}/bzlib.c"
+            "${bzip2_root}/crctable.c" "${bzip2_root}/randtable.c"
+            "${bzip2_root}/huffman.c" "${bzip2_root}/bz_internal_error.c")
+        target_compile_definitions(trailmate_linux_bzip2 PRIVATE BZ_NO_STDIO)
+        target_include_directories(trailmate_linux_bzip2 PUBLIC "${bzip2_root}")
+    endif()
+    include("${TRAIL_MATE_REPO_ROOT}/cmake/TrailMateLinuxGnss.cmake")
+    trailmate_add_linux_gnss()
+    include("${TRAIL_MATE_REPO_ROOT}/cmake/TrailMateLinuxBluez.cmake")
+    trailmate_add_linux_bluez()
+    cmake_parse_arguments(LINUX_COMMON "ENABLE_LR2021;ENABLE_MEDIA" "" "" ${ARGN})
     include("${TRAIL_MATE_REPO_ROOT}/cmake/TrailMateTmap.cmake")
     trailmate_add_tmap()
     find_package(CURL REQUIRED)
+    find_package(JPEG REQUIRED)
+    find_package(PNG REQUIRED)
+    find_package(LibArchive 3.3 REQUIRED)
     find_package(SQLite3 REQUIRED)
     find_package(OpenSSL QUIET)
 
@@ -651,14 +848,32 @@ function(trailmate_add_linux_common target_name)
         PUBLIC ${linux_common_includes}
     )
     target_compile_features(${target_name} PUBLIC cxx_std_20)
+    set_property(SOURCE "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/build_identity.cpp"
+        APPEND PROPERTY INCLUDE_DIRECTORIES "${CMAKE_BINARY_DIR}/generated")
+    if(LINUX_COMMON_ENABLE_MEDIA)
+        include("${TRAIL_MATE_REPO_ROOT}/cmake/TrailMateLinuxMedia.cmake")
+        trailmate_enable_linux_media(${target_name})
+    endif()
+    if(LINUX_COMMON_ENABLE_LR2021 AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        include("${TRAIL_MATE_REPO_ROOT}/cmake/TrailMateLinuxRadioLib.cmake")
+        trailmate_add_linux_lr2021(trailmate_linux_lr2021)
+        target_compile_definitions(${target_name} PRIVATE TRAIL_MATE_LINUX_HAS_LR2021=1)
+        target_link_libraries(${target_name} PRIVATE trailmate_linux_lr2021)
+    endif()
     target_compile_definitions(${target_name}
         PUBLIC TRAIL_MATE_LORA_TX_POWER_MAX_DBM=22
     )
     target_link_libraries(${target_name}
         PUBLIC
             tmap::tmap
+            trailmate_linux_gnss_source
+            trailmate_linux_bzip2
+            trailmate_linux_bluez
             Threads::Threads
             CURL::libcurl
+            JPEG::JPEG
+            PNG::PNG
+            LibArchive::LibArchive
             SQLite::SQLite3
     )
     if(OpenSSL_FOUND)
@@ -676,8 +891,32 @@ function(trailmate_add_linux_common target_name)
 endfunction()
 
 function(trailmate_add_linux_ui_shell target_name common_target)
+    if(NOT TARGET trailmate_linux_waypoint)
+        add_library(trailmate_linux_waypoint
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_waypoint/src/waypoint.cpp"
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_waypoint/src/record_codec.cpp"
+            "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/waypoint_store.cpp"
+            "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/waypoint_source.cpp")
+        target_include_directories(trailmate_linux_waypoint PUBLIC
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_waypoint/include"
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_presentation/include"
+            "${TRAIL_MATE_LINUX_COMMON_INCLUDE_ROOT}")
+        target_link_libraries(trailmate_linux_waypoint PUBLIC SQLite::SQLite3 Threads::Threads)
+        target_compile_features(trailmate_linux_waypoint PUBLIC cxx_std_17)
+    endif()
+    cmake_parse_arguments(UI "" "UX_PACK" "" ${ARGN})
+    if(NOT UI_UX_PACK)
+        set(UI_UX_PACK "cardputer_compact")
+    endif()
     set(linux_ui_shell_sources ${TRAIL_MATE_LINUX_UI_SHELL_SOURCES})
     set(linux_ui_shell_includes ${TRAIL_MATE_LINUX_UI_SHELL_INCLUDES})
+    if(NOT UI_UX_PACK STREQUAL "cardputer_compact")
+        # Legacy compact compositions own these startup/session wrappers.
+        # Configurable desktop compositions provide their own catalog hooks.
+        list(REMOVE_ITEM linux_ui_shell_sources
+            "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/ui/shared_ui_shell.cpp"
+            "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/ui/shell_ui_runner.cpp")
+    endif()
 
     # common_target must already be created (via trailmate_add_linux_common).
     add_library(${target_name}
@@ -691,13 +930,33 @@ function(trailmate_add_linux_ui_shell target_name common_target)
         ${target_name}
         PRIVATE
             TRAIL_MATE_BOOT_MIN_SHOW_MS=1200
-            TRAIL_MATE_CARDPUTER_ZERO_LINUX=1
             GAT562_NO_PINYIN_IME=1
+            TRAIL_MATE_PLATFORM_LINUX=1
     )
+    if(UI_UX_PACK STREQUAL "cardputer_compact")
+        target_compile_definitions(${target_name} PRIVATE TRAIL_MATE_CARDPUTER_ZERO_LINUX=1)
+    elseif(UI_UX_PACK STREQUAL "t_display_p4_touch")
+        target_compile_definitions(${target_name} PRIVATE TRAIL_MATE_UI_P4_TOUCH=1)
+        target_sources(${target_name} PRIVATE
+            "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/music/music_page_layout.cpp"
+            "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/music/music_page_input.cpp"
+            "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/music/music_state.cpp"
+            "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/music/music_page_shell.cpp")
+    else()
+        message(FATAL_ERROR "Unsupported Linux LVGL UX pack: ${UI_UX_PACK}")
+    endif()
+    target_sources(${target_name} PRIVATE
+        "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/assets/calc.c"
+        "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/assets/geocaching.c"
+        "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/calculator/calculator_engine.cpp"
+        "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/calculator/calculator_page_layout.cpp"
+        "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/calculator/calculator_page_runtime.cpp"
+        "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/calculator/calculator_page_shell.cpp")
     target_link_libraries(${target_name}
         PUBLIC
             lvgl
             ${common_target}
+            trailmate_linux_waypoint
     )
     trailmate_apply_linux_common_warnings(${target_name})
 endfunction()

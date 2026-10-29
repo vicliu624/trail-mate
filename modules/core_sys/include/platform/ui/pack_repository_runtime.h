@@ -63,6 +63,14 @@ struct PackageInstallStatus
     std::string detail;
 };
 
+struct CatalogStatus
+{
+    bool busy = false;
+    std::uint32_t revision = 0;
+};
+CatalogStatus catalog_status();
+void request_catalog_refresh();
+
 bool is_supported();
 bool load_installed_packages(std::vector<InstalledPackageRecord>& out_installed, std::string& out_error);
 bool fetch_catalog(std::vector<PackageRecord>& out_packages, std::string& out_error);
