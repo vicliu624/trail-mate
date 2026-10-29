@@ -67,7 +67,7 @@ export function changeConfigCollection(document,name,action,index,type=2){
    const other=index+(action==='up'?-1:1);if(other<0||other>=count)throw Error('条目已位于边界');
    [rows[index],rows[other]]=[rows[other],rows[index]];
   }else if(action==='access'||action==='remove-access'){
-   if(name!=='interfaces'||(action==='access'&&rows[index].find(r=>r.field==='type').value!==2))throw Error('接口访问控制仅支持 TCP 接口');
+   if(name!=='interfaces'||(action==='access'&&![1,2].includes(rows[index].find(r=>r.field==='type').value)))throw Error('接口访问控制仅支持 TCP 或 AutoInterface');
    rows[index]=rows[index].filter(r=>!Object.hasOwn(access,r.field));
    if(action==='access')for(const [field,kind] of Object.entries(access))rows[index].push({...typed('value',kind,kind==='str'?'':0),field});
   }else throw Error('未知集合操作');
@@ -111,7 +111,9 @@ export function configCollectionIssues(document){
     if(type===2&&!value('target_host'))add(key('target_host'),'TCP 接口需要主机名或 IP 地址','COLLECTION_TCP_HOST_REQUIRED');
     if(type===1&&!value('group_id'))add(key('group_id'),'AutoInterface 需要接口组','COLLECTION_AUTO_GROUP_REQUIRED');
     const enabled=Boolean(value('network_name')||value('passphrase')),size=value('ifac_size')??0;
-    if(enabled&&(type!==2||size<8||size>512||size%8))add(key('ifac_size'),'访问控制仅支持 TCP；IFAC 长度须为 8–512 位且为 8 的倍数','COLLECTION_IFAC_INVALID');
+    if(enabled&&(![1,2].includes(type)||size<8||size>512||size%8))add(key('ifac_size'),'访问控制仅支持 TCP 或 AutoInterface；IFAC 长度须为 8–512 位且为 8 的倍数','COLLECTION_IFAC_INVALID');
+    if(type===1&&value('discovery_port')===65535)add(key('discovery_port'),'发现端口必须为相邻控制端口保留空间','CONFIG_RANGE');
+    if(type===1&&[value('discovery_port'),value('discovery_port')+1].includes(value('data_port')))add(key('data_port'),'数据端口不能与发现或控制端口冲突','CONFIG_RANGE');
     if(!enabled&&size!==0)add(key('ifac_size'),'未设置网络名称或口令时 IFAC 长度须为 0','COLLECTION_IFAC_ZERO');
    }
   });

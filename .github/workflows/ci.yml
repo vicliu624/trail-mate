@@ -130,6 +130,7 @@ jobs:
         working-directory: site
         run: |
           npm run build:device
+          npm run build:components
           npm run build:geocaching
             npm run build:tracks
           npx playwright install --with-deps chromium
@@ -138,6 +139,7 @@ jobs:
           mkdir -p docs/locales/zh-Hans/web-outdoor-management/assets docs/locales/zh-Hans/web-outdoor-management/images
           node tests/site/device-page.browser.mjs
           node tests/site/device-page.browser.mjs --normal-flow
+          node tests/site/navigation.browser.mjs
           node tests/site/radio-identity.browser.mjs
       - name: Verify KML workspace and file maintenance in Chromium
         run: |
@@ -214,6 +216,20 @@ jobs:
       - name: Verify browser device trail synchronization
         run: |
           node tests/site/track-device-sync.browser.mjs
+
+      - name: Retain browser network failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-network-diagnostics
+          path: |
+            .codex-build/hostlink-codec/geocaching-network-page/page-state.json
+            .codex-build/hostlink-codec/geocaching-network-page/page.png
+            .codex-build/hostlink-codec/geocaching-network-page/*.log
+            .codex-build/hostlink-codec/shared-directory-network/*.json
+            .codex-build/hostlink-codec/shared-directory-network/*.log
+          if-no-files-found: ignore
+          retention-days: 7
 
   geocaching_web:
     name: Geocaching Live Web Map

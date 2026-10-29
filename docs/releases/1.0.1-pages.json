@@ -1,0 +1,122 @@
+{
+  "checkedAt": "2026-10-17T02:29:30.235Z",
+  "tag": "v1.0.1",
+  "targets": [
+    {
+      "board": "wio-tracker-l2",
+      "version": "1.0.1",
+      "files": [
+        {
+          "name": "trail-mate-wio-tracker-l2-webflash.bin",
+          "bytes": 5106704,
+          "sha256": "a735dadb25afab7f87919b0280637e5edc0321fdb83748d03aac8defbd2908aa"
+        }
+      ],
+      "ota": {
+        "name": "trail-mate-wio_tracker_l2-v1.0.1.bin",
+        "bytes": 5041168,
+        "sha256": "9e6b0974f25f43db893500642546997e6d283b8bf1b9a2c98605e9d3a9d30fcd"
+      }
+    },
+    {
+      "board": "tlora-pager-sx1262",
+      "version": "1.0.1",
+      "files": [
+        {
+          "name": "trail-mate-tlora-pager-sx1262-webflash.bin",
+          "bytes": 5220704,
+          "sha256": "1694770e0608222c95e88118d95a80592d9e731d1018f250b41d657445b31150"
+        }
+      ],
+      "ota": {
+        "name": "trail-mate-tlora_pager_sx1262-v1.0.1.bin",
+        "bytes": 5155168,
+        "sha256": "bc05575a8722fb2c48bf3155af6223146ce2f773f3ca1d87c6923a3cf125ff1e"
+      }
+    },
+    {
+      "board": "tlora-pager-lr1121",
+      "version": "1.0.1",
+      "files": [
+        {
+          "name": "trail-mate-tlora-pager-lr1121-webflash.bin",
+          "bytes": 5222208,
+          "sha256": "1acb706ea6c7dffcd58bfdfe4fe1b75f9d655cfc96d78b45a809e4bcee7d624b"
+        }
+      ],
+      "ota": {
+        "name": "trail-mate-tlora_pager_lr1121-v1.0.1.bin",
+        "bytes": 5156672,
+        "sha256": "c60b9f8eabe6b4998686526de90fc3710b4ffa61e989c0033b85857402ca40c0"
+      }
+    },
+    {
+      "board": "tdeck",
+      "version": "1.0.1",
+      "files": [
+        {
+          "name": "trail-mate-tdeck-webflash.bin",
+          "bytes": 5020928,
+          "sha256": "9f46c9e6a24cdfec23280f22022d97969ead6313685e112ac53afff067adb19e"
+        }
+      ],
+      "ota": {
+        "name": "trail-mate-tdeck-v1.0.1.bin",
+        "bytes": 4955392,
+        "sha256": "0b11574604e0037de6dc58029f4fa0be2cc9936a0494d51f9d3a304319cab92a"
+      }
+    },
+    {
+      "board": "lilygo-twatch-s3",
+      "version": "1.0.1",
+      "files": [
+        {
+          "name": "trail-mate-lilygo-twatch-s3-webflash.bin",
+          "bytes": 4560064,
+          "sha256": "0326f3e95b51b6cb2e82af7dcb95db69540f28376c65ca4dd923e658c97f1665"
+        }
+      ],
+      "ota": {
+        "name": "trail-mate-lilygo_twatch_s3-v1.0.1.bin",
+        "bytes": 4494528,
+        "sha256": "d5b1fd91c9c54058b9fe07a9efb01732a5f792fd7f0df28bac9e3df73f42d0b4"
+      }
+    },
+    {
+      "board": "t-display-p4-tft",
+      "version": "1.0.1",
+      "files": [
+        {
+          "name": "trail-mate-t-display-p4-tft-webflash.bin",
+          "bytes": 5342304,
+          "sha256": "758d80585979cd05cac62d0f2bfc8fcf87d79785fba699d2032f651c4ee3dd64"
+        }
+      ],
+      "ota": {
+        "name": "trail-mate-t_display_p4_tft-v1.0.1.bin",
+        "bytes": 5276768,
+        "sha256": "b088ec1d358df7ba036a3ce3f0f41e1dba4068e34f9a0989190821f6b25dee74"
+      }
+    },
+    {
+      "board": "t-display-p4-amoled",
+      "version": "1.0.1",
+      "files": [
+        {
+          "name": "trail-mate-t-display-p4-amoled-webflash.bin",
+          "bytes": 4742592,
+          "sha256": "f438502d6d9c6a0395a20d65e8bb21e5f8957007165d75ed47c99e946ea55037"
+        }
+      ],
+      "ota": {
+        "name": "trail-mate-t_display_p4_amoled-v1.0.1.bin",
+        "bytes": 4677056,
+        "sha256": "13ef2b5e1225b59fdc269305936c9c64f716460db7634f64483b3a2e7ac9de50"
+      }
+    }
+  ],
+  "unavailableTargets": [
+    "tdeck-pro-a7682e",
+    "tdeck-pro-pcm512a"
+  ]
+}

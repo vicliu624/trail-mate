@@ -668,9 +668,9 @@ def filter_product_specific_ui_mono_screens():
 
 def disable_arduino_tinyusb_dfu_for_release_esp32():
     # Arduino-ESP32 ships both TinyUSB DFU device classes precompiled for every
-    # ESP32-S3 memory profile. Release Pager and T-Deck builds do not expose an
-    # application USB maintenance interface: flashing remains available through
-    # the ESP32-S3 ROM downloader after the physical BOOT + RESET sequence.
+    # ESP32-S3 memory profile. Release firmware keeps DFU disabled. Pager uses
+    # CDC for HostLink management; flashing remains available through the
+    # ESP32-S3 ROM downloader after the physical BOOT + RESET sequence.
     #
     # Remove both Arduino DFU drivers from a build-private archive. In addition
     # to the full DFU driver's permanent 4 KiB transfer buffer, this keeps DFU

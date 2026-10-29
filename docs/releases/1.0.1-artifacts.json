@@ -1,0 +1,235 @@
+{
+  "tag": "v1.0.1",
+  "git_sha": "c63ea60d33439a0d1862f524504f01d3f661b884",
+  "ci_url": "https://github.com/vicliu624/trail-mate/actions/runs/38993563719",
+  "ci_conclusion": "success",
+  "release_url": "https://github.com/vicliu624/trail-mate/releases/tag/v1.0.1",
+  "published_at": "2026-10-17T02:22:24Z",
+  "expected_assets": 30,
+  "assets": [
+    {
+      "name": "trail-mate-c6-companion-v1.0.1.bin",
+      "size": 1242288,
+      "digest": "sha256:01737348295645931bb42ce1aab13341237b999ca5916e775cba8eb8722e2277",
+      "browser_download_url": "https://github.com/vicliu624/trail-mate/releases/download/v1.0.1/trail-mate-c6-companion-v1.0.1.bin"
+    },
+    {
+      "name": "trail-mate-gat562_mesh_evb_pro-v1.0.1-symbols.zip",
+      "size": 942750,
+      "digest": "sha256:263b5ed63145c1eb148d74857c600f906bed866c4f22249f5cf8418fc8f854d0",
+      "browser_download_url": "https://github.com/vicliu624/trail-mate/releases/download/v1.0.1/trail-mate-gat562_mesh_evb_pro-v1.0.1-symbols.zip"
+    },
+    {
+      "name": "trail-mate-gat562_mesh_evb_pro-v1.0.1.hex",
+      "size": 1349529,
+      "digest": "sha256:c7ef19cf6e71bf6348be89f99fb928c4b984f217224473ec7d3524089f7efd3d",
+      "browser_download_url": "https://github.com/vicliu624/trail-mate/releases/download/v1.0.1/trail-mate-gat562_mesh_evb_pro-v1.0.1.hex"
+    },
+    {
+      "name": "trail-mate-gat562_mesh_evb_pro-v1.0.1.uf2",
+      "size": 960000,
+      "digest": "sha256:5fffe2ca9b7e8b1036266442a6beb3fd712c27247362c7fa7abab090cbf4c711",
+      "browser_download_url": "https://github.com/vicliu624/trail-mate/releases/download/v1.0.1/trail-mate-gat562_mesh_evb_pro-v1.0.1.uf2"
+    },
+    {
+      "name": "trail-mate-gat562_mesh_evb_pro-v1.0.1.zip",
+      "size": 480567,
+      "digest": "sha256:da315626e6a8f3a5b692f5d6d964da2a52f8645676f717551853a007d9f42807",
+      "browser_download_url": "https://github.com/vicliu624/trail-mate/releases/download/v1.0.1/trail-mate-gat562_mesh_evb_pro-v1.0.1.zip"
+    },
+    {
+      "name": "trail-mate-lilygo-twatch-s3-webflash.bin",
+      "size": 4560064,
+      "digest": "sha256:0326f3e95b51b6cb2e82af7dcb95db69540f28376c65ca4dd923e658c97f1665",
+      "browser_download_url": "https://github.com/vicliu624/trail-mate/releases/download/v1.0.1/trail-mate-lilygo-twatch-s3-webflash.bin"
+    },
+    {
+      "name": "trail-mate-lilygo_twatch_s3-v1.0.1-symbols.zip",
+      "size": 39393306,
+      "digest": "sha256:11ef5b77d8840f37198dd6f276f5ef1b3b8eb01b5a2515227cc9b68dc48e56c6",
+      "browser_download_url": "https://github.com/vicliu624/trail-mate/releases/download/v1.0.1/trail-mate-lilygo_twatch_s3-v1.0.1-symbols.zip"
+    },
+    {
+      "name": "trail-mate-lilygo_twatch_s3-v1.0.1.bin",
+      "size": 4494528,
+      "digest": "sha256:d5b1fd91c9c54058b9fe07a9efb01732a5f792fd7f0df28bac9e3df73f42d0b4",
+      "browser_download_url": "https://github.com/vicliu624/trail-mate/releases/download/v1.0.1/trail-mate-lilygo_twatch_s3-v1.0.1.bin"
+    },
+    {
+      "name": "trail-mate-t-display-p4-amoled-webflash.bin",
+      "size": 4742592,
+      "digest": "sha256:f438502d6d9c6a0395a20d65e8bb21e5f8957007165d75ed47c99e946ea55037",
+      "browser_download_url": "https://github.com/vicliu624/trail-mate/releases/download/v1.0.1/trail-mate-t-display-p4-amoled-webflash.bin"
+    },
+    {
+      "name": "trail-mate-t-display-p4-tft-webflash.bin",
+      "size": 5342304,
+      "digest": "sha256:758d80585979cd05cac62d0f2bfc8fcf87d79785fba699d2032f651c4ee3dd64",
+      "browser_download_url": "https://github.com/vicliu624/trail-mate/releases/download/v1.0.1/trail-mate-t-display-p4-tft-webflash.bin"
+    },
+    {
+      "name": "trail-mate-t-echo-lite-v1.0.1-symbols.zip",
+      "size": 1313921,
+      "digest": "sha256:c938fadfe48ceb218774fcbf131221c1294e580caf6c5882c27e96b6fa2a2d1e",
+      "browser_download_url": "https://github.com/vicliu624/trail-mate/releases/download/v1.0.1/trail-mate-t-echo-lite-v1.0.1-symbols.zip"
+    },
+    {
+      "name": "trail-mate-t-echo-lite-v1.0.1.hex",
+      "size": 2007423,
+      "digest": "sha256:6929694bc397b92f930195d66c65cabd72dfddf00689ddeb0b220a22a5e69b8f",
+      "browser_download_url": "https://github.com/vicliu624/trail-mate/releases/download/v1.0.1/trail-mate-t-echo-lite-v1.0.1.hex"
+    },
+    {
+      "name": "trail-mate-t-echo-lite-v1.0.1.uf2",
+      "size": 1427456,
+      "digest": "sha256:bd559d024bb438a1cf12631b63f6d2bc14a10fa05fce9b0aa26b98edab1cd9d3",
+      "browser_download_url": "https://github.com/vicliu624/trail-mate/releases/download/v1.0.1/trail-mate-t-echo-lite-v1.0.1.uf2"
+    },
+    {
+      "name": "trail-mate-t-echo-lite-v1.0.1.zip",
+      "size": 714463,
+      "digest": "sha256:6edb77d7fe8ad0e25b2082414663089b39d436eaa87bb57a3d7ead3978011168",
+      "browser_download_url": "https://github.com/vicliu624/trail-mate/releases/download/v1.0.1/trail-mate-t-echo-lite-v1.0.1.zip"
+    },
+    {
+      "name": "trail-mate-tdeck-v1.0.1-symbols.zip",
+      "size": 44383619,
+      "digest": "sha256:d7746e7c93d2f66350b1883645b96cdd8a4fe59794b403952891fb05ad510034",
+      "browser_download_url": "https://github.com/vicliu624/trail-mate/releases/download/v1.0.1/trail-mate-tdeck-v1.0.1-symbols.zip"
+    },
+    {
+      "name": "trail-mate-tdeck-v1.0.1.bin",
+      "size": 4955392,
+      "digest": "sha256:0b11574604e0037de6dc58029f4fa0be2cc9936a0494d51f9d3a304319cab92a",
+      "browser_download_url": "https://github.com/vicliu624/trail-mate/releases/download/v1.0.1/trail-mate-tdeck-v1.0.1.bin"
+    },
+    {
+      "name": "trail-mate-tdeck-webflash.bin",
+      "size": 5020928,
+      "digest": "sha256:9f46c9e6a24cdfec23280f22022d97969ead6313685e112ac53afff067adb19e",
+      "browser_download_url": "https://github.com/vicliu624/trail-mate/releases/download/v1.0.1/trail-mate-tdeck-webflash.bin"
+    },
+    {
+      "name": "trail-mate-tlora-pager-lr1121-webflash.bin",
+      "size": 5222208,
+      "digest": "sha256:1acb706ea6c7dffcd58bfdfe4fe1b75f9d655cfc96d78b45a809e4bcee7d624b",
+      "browser_download_url": "https://github.com/vicliu624/trail-mate/releases/download/v1.0.1/trail-mate-tlora-pager-lr1121-webflash.bin"
+    },
+    {
+      "name": "trail-mate-tlora-pager-sx1262-webflash.bin",
+      "size": 5220704,
+      "digest": "sha256:1694770e0608222c95e88118d95a80592d9e731d1018f250b41d657445b31150",
+      "browser_download_url": "https://github.com/vicliu624/trail-mate/releases/download/v1.0.1/trail-mate-tlora-pager-sx1262-webflash.bin"
+    },
+    {
+      "name": "trail-mate-tlora_pager_lr1121-v1.0.1-symbols.zip",
+      "size": 45259512,
+      "digest": "sha256:df90f06876fe2681681aef2b2206b2579e13cfca1370b49d393ba29faafd99c7",
+      "browser_download_url": "https://github.com/vicliu624/trail-mate/releases/download/v1.0.1/trail-mate-tlora_pager_lr1121-v1.0.1-symbols.zip"
+    },
+    {
+      "name": "trail-mate-tlora_pager_lr1121-v1.0.1.bin",
+      "size": 5156672,
+      "digest": "sha256:c60b9f8eabe6b4998686526de90fc3710b4ffa61e989c0033b85857402ca40c0",
+      "browser_download_url": "https://github.com/vicliu624/trail-mate/releases/download/v1.0.1/trail-mate-tlora_pager_lr1121-v1.0.1.bin"
+    },
+    {
+      "name": "trail-mate-tlora_pager_sx1262-v1.0.1-symbols.zip",
+      "size": 45239109,
+      "digest": "sha256:b33adc9bc262fc18d90a66c7a182c5107a40316dfe2be9fc73341489c6f9993f",
+      "browser_download_url": "https://github.com/vicliu624/trail-mate/releases/download/v1.0.1/trail-mate-tlora_pager_sx1262-v1.0.1-symbols.zip"
+    },
+    {
+      "name": "trail-mate-tlora_pager_sx1262-v1.0.1.bin",
+      "size": 5155168,
+      "digest": "sha256:bc05575a8722fb2c48bf3155af6223146ce2f773f3ca1d87c6923a3cf125ff1e",
+      "browser_download_url": "https://github.com/vicliu624/trail-mate/releases/download/v1.0.1/trail-mate-tlora_pager_sx1262-v1.0.1.bin"
+    },
+    {
+      "name": "trail-mate-t_display_p4_amoled-v1.0.1-symbols.zip",
+      "size": 28005146,
+      "digest": "sha256:2db0519bdd81b43a80688c337acdc430ec78c1fa664a70fd7c5a81725ccc1b80",
+      "browser_download_url": "https://github.com/vicliu624/trail-mate/releases/download/v1.0.1/trail-mate-t_display_p4_amoled-v1.0.1-symbols.zip"
+    },
+    {
+      "name": "trail-mate-t_display_p4_amoled-v1.0.1.bin",
+      "size": 4677056,
+      "digest": "sha256:13ef2b5e1225b59fdc269305936c9c64f716460db7634f64483b3a2e7ac9de50",
+      "browser_download_url": "https://github.com/vicliu624/trail-mate/releases/download/v1.0.1/trail-mate-t_display_p4_amoled-v1.0.1.bin"
+    },
+    {
+      "name": "trail-mate-t_display_p4_tft-v1.0.1-symbols.zip",
+      "size": 33183959,
+      "digest": "sha256:90c4921cfc01a2f18136e85370dd7f432fe22a89b819a046e9df0781dba151a7",
+      "browser_download_url": "https://github.com/vicliu624/trail-mate/releases/download/v1.0.1/trail-mate-t_display_p4_tft-v1.0.1-symbols.zip"
+    },
+    {
+      "name": "trail-mate-t_display_p4_tft-v1.0.1.bin",
+      "size": 5276768,
+      "digest": "sha256:b088ec1d358df7ba036a3ce3f0f41e1dba4068e34f9a0989190821f6b25dee74",
+      "browser_download_url": "https://github.com/vicliu624/trail-mate/releases/download/v1.0.1/trail-mate-t_display_p4_tft-v1.0.1.bin"
+    },
+    {
+      "name": "trail-mate-wio-tracker-l2-webflash.bin",
+      "size": 5106704,
+      "digest": "sha256:a735dadb25afab7f87919b0280637e5edc0321fdb83748d03aac8defbd2908aa",
+      "browser_download_url": "https://github.com/vicliu624/trail-mate/releases/download/v1.0.1/trail-mate-wio-tracker-l2-webflash.bin"
+    },
+    {
+      "name": "trail-mate-wio_tracker_l2-v1.0.1-symbols.zip",
+      "size": 48161942,
+      "digest": "sha256:814cbdc1a116ee31660dffe196cfd7025582e67b4c3fceba7a3fc88ab5c9ac8f",
+      "browser_download_url": "https://github.com/vicliu624/trail-mate/releases/download/v1.0.1/trail-mate-wio_tracker_l2-v1.0.1-symbols.zip"
+    },
+    {
+      "name": "trail-mate-wio_tracker_l2-v1.0.1.bin",
+      "size": 5041168,
+      "digest": "sha256:9e6b0974f25f43db893500642546997e6d283b8bf1b9a2c98605e9d3a9d30fcd",
+      "browser_download_url": "https://github.com/vicliu624/trail-mate/releases/download/v1.0.1/trail-mate-wio_tracker_l2-v1.0.1.bin"
+    }
+  ],
+  "downloaded_images": [
+    {
+      "name": "trail-mate-tlora_pager_sx1262-v1.0.1.bin",
+      "bytes": 5155168,
+      "sha256": "bc05575a8722fb2c48bf3155af6223146ce2f773f3ca1d87c6923a3cf125ff1e",
+      "esp_app_descriptor_version": "esp-idf: v4.4.7 38eeba213a",
+      "contains_runtime_version": true
+    },
+    {
+      "name": "trail-mate-tlora_pager_lr1121-v1.0.1.bin",
+      "bytes": 5156672,
+      "sha256": "c60b9f8eabe6b4998686526de90fc3710b4ffa61e989c0033b85857402ca40c0",
+      "esp_app_descriptor_version": "esp-idf: v4.4.7 38eeba213a",
+      "contains_runtime_version": true
+    },
+    {
+      "name": "trail-mate-tdeck-v1.0.1.bin",
+      "bytes": 4955392,
+      "sha256": "0b11574604e0037de6dc58029f4fa0be2cc9936a0494d51f9d3a304319cab92a",
+      "esp_app_descriptor_version": "esp-idf: v4.4.7 38eeba213a",
+      "contains_runtime_version": true
+    },
+    {
+      "name": "trail-mate-t_display_p4_tft-v1.0.1.bin",
+      "bytes": 5276768,
+      "sha256": "b088ec1d358df7ba036a3ce3f0f41e1dba4068e34f9a0989190821f6b25dee74",
+      "esp_app_descriptor_version": "1.0.1",
+      "contains_runtime_version": true
+    },
+    {
+      "name": "trail-mate-t_display_p4_amoled-v1.0.1.bin",
+      "bytes": 4677056,
+      "sha256": "13ef2b5e1225b59fdc269305936c9c64f716460db7634f64483b3a2e7ac9de50",
+      "esp_app_descriptor_version": "1.0.1",
+      "contains_runtime_version": true
+    },
+    {
+      "name": "trail-mate-c6-companion-v1.0.1.bin",
+      "bytes": 1242288,
+      "sha256": "01737348295645931bb42ce1aab13341237b999ca5916e775cba8eb8722e2277",
+      "esp_app_descriptor_version": "1.0.1",
+      "contains_runtime_version": true
+    }
+  ]
+}

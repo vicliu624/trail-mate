@@ -8,6 +8,46 @@ and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Older releases used the pre-1.0 alpha version line. Version 1.0.0 is the first
 stable firmware release. Hardware support and validation remain target-specific.
 
+## [Unreleased]
+
+## [1.0.1] - 2026-10-17
+
+This patch enables the browser-management USB path in Pager and T-Deck release
+images, improves connection diagnostics, and updates the website UI and privacy
+positioning. Install the new board-specific firmware to gain USB management;
+updating the website alone cannot change an installed 1.0.0 image.
+
+### Fixed
+
+- Pager SX1262, Pager LR1121 and T-Deck release builds now include USB CDC and HostLink
+  management, using the same connection-driven service lifecycle as Wio L2.
+  Release checks require these components while continuing to exclude DFU.
+  Browser connection errors identify the failed stage and retain serial read
+  diagnostics instead of replacing them with a generic disconnect.
+- The website now exposes Device management, Tracks and Geocaching from every
+  page, with shared navigation, current-page highlighting, language-preserving
+  links, responsive layouts and a keyboard-accessible Resources menu. The home
+  page includes task-oriented tool cards. Tool connection controls remain in a
+  separate action row, and existing unsaved-edit protections remain active.
+- Release-facing Web illustrations are recaptured in English from the current
+  production bundles. Their provenance identifies simulated USB/sample data
+  separately from read-only directory queries and physical-device acceptance.
+- Closing a shared-track map during zoom no longer leaves Leaflet's completion
+  callback accessing a destroyed view. Track maps share a public-option
+  workaround, with a browser regression that reproduces the former failure.
+
+### Changed
+
+- Animal Island UI is updated from 2.0.0 to 2.2.1 and naive-icons from 1.2.0 to
+  1.6.0. Device text inputs use the library Input, native file/range and dynamic
+  editor controls receive shared theme/focus states, and long section titles
+  wrap on narrow screens.
+- Homepage positioning now explains the privacy intent behind device-held keys,
+  local records, pseudonymous authorship and independently operated services:
+  reducing the personal information a platform needs to hold. The bilingual
+  promotional set is reduced to four A4 posters per language around those core
+  benefits, decentralized communication and offline maps.
+
 ## [1.0.0] - 2026-10-17
 
 ### 1.0.0 — first stable firmware release

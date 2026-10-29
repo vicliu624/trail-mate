@@ -1,23 +1,23 @@
 :root {
   color-scheme: light;
 
-  --animal-primary: #19c8b9;
-  --animal-primary-hover: #3dd4c6;
-  --animal-primary-active: #11a89b;
-  --animal-primary-bg: #e6f9f6;
-  --animal-success: #6fba2c;
-  --animal-warning: #f5c31c;
-  --animal-error: #e05a5a;
-  --animal-text: #794f27;
-  --animal-text-body: #725d42;
-  --animal-text-muted: #8a7b66;
-  --animal-text-secondary: #9f927d;
-  --animal-border: #c4b89e;
+  --animal-primary: var(--animal-primary-color, #19c8b9);
+  --animal-primary-hover: var(--animal-primary-color-hover, #3dd4c6);
+  --animal-primary-active: var(--animal-primary-color-active, #50b9ab);
+  --animal-primary-bg: var(--animal-primary-color-bg, #e6f9f6);
+  --animal-success: var(--animal-success-color, #6fba2c);
+  --animal-warning: var(--animal-warning-color, #f5c31c);
+  --animal-error: var(--animal-error-color, #e05a5a);
+  --animal-text: var(--animal-text-color, #794f27);
+  --animal-text-body: var(--animal-text-color, #794f27);
+  --animal-text-muted: var(--animal-text-color-secondary, #9f927d);
+  --animal-text-secondary: var(--animal-text-color-secondary, #9f927d);
+  --animal-border: var(--animal-border-color, #dcd8d1);
   --animal-border-strong: #9f927d;
   --animal-border-hover: #a89878;
-  --animal-bg: #f8f8f0;
-  --animal-bg-content: #f7f3df;
-  --animal-bg-soft: #fffaf0;
+  --animal-bg: var(--animal-bg-color, #f8f8f0);
+  --animal-bg-content: var(--animal-bg-color-secondary, #f0e8d8);
+  --animal-bg-soft: var(--animal-bg-color, #f8f8f0);
   --animal-shadow-btn: #bdaea0;
   --animal-shadow-input: #d4c9b4;
   --animal-focus: #ffcc00;

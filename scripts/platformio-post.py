@@ -27,15 +27,26 @@ def verify_release_esp32_tinyusb_dfu_disabled(target, source, env):
     forbidden_members = (
         "dfu_device.c.obj",
         "dfu_rt_device.c.obj",
-        "USBCDC.cpp.o",
         ".bss._dfu_ctx",
     )
+    managed_pager = env.get("PIOENV") in {
+        "tlora_pager_sx1262", "tlora_pager_lr1121"
+    }
+    managed_tdeck = env.get("PIOENV") == "tdeck"
+    if not (managed_pager or managed_tdeck):
+        forbidden_members += ("USBCDC.cpp.o",)
     if any(member in map_contents for member in forbidden_members):
         raise RuntimeError(
-            "Release image contains an application USB maintenance component; "
-            "CDC, full DFU, and DFU Runtime must all be absent"
+            "Release image contains a forbidden USB component; "
+            "DFU must be absent and CDC is allowed only on managed targets"
         )
-    print("[pio] post: verified application USB CDC and DFU fully removed from release")
+    if managed_pager or managed_tdeck:
+        required = ("USBCDC.cpp.o", "hostlink_service.cpp.o", "usb_cdc_transport.cpp.o")
+        if any(member not in map_contents for member in required):
+            raise RuntimeError("Pager/T-Deck release must link USB CDC and HostLink management")
+        print("[pio] post: verified Pager/T-Deck CDC management present and DFU absent")
+    else:
+        print("[pio] post: verified application USB CDC and DFU fully removed from release")
 
 
 def verify_debug_esp32_tinyusb_dfu_enabled(target, source, env):

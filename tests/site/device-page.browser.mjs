@@ -57,6 +57,8 @@ import {configRadioPolicyText} from '../../site/i18n/config-radio-policy-labels.
 import {configTimezoneText} from '../../site/i18n/config-timezone-labels.js';
 import {updateStructuredModuleField} from '../../site/device/src/meshtastic-module-model.js';
 const root=process.cwd();
+const releaseOutput=process.env.TRAIL_MATE_DOCS_OUTPUT??'docs/images/release-1.0.0';
+await fs.mkdir(releaseOutput,{recursive:true});
 // Node and Edge ship different ICU defaults for Arabic numbering. Compare
 // translated copy/units exactly while accepting either native digit system.
 const precisionCopy=value=>value.replace(/[٠-٩]/g,digit=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit))).replaceAll('٫','.');
@@ -136,11 +138,31 @@ await page.addInitScript(()=>{
 });
 try{
  normalFlow:{
- if(process.argv.includes('--normal-flow')){writeSupport=true;authorSupport=true;}
+ if(process.argv.includes('--normal-flow')||process.argv.includes('--release-docs')){writeSupport=true;authorSupport=true;}
  await page.goto(origin+'/site/device/?lang=zh-Hans');
  await page.getByRole('button',{name:'连接设备',exact:true}).click();
  await page.getByText(/已验证配置快照/).waitFor();
  await page.waitForFunction(()=>document.querySelector('.brand-logo')?.naturalWidth>0);
+ if(process.argv.includes('--release-docs')){
+  await page.locator('.management-language select').selectOption('en');
+  await page.waitForFunction(()=>document.documentElement.lang==='en'&&document.querySelector('.site-primary a').textContent==='Device management');
+  await page.locator('.device-nav button').nth(6).click();
+  await page.setViewportSize({width:1440,height:1000});
+  await page.evaluate(()=>scrollTo(0,0));
+  const section=page.locator('[id="field-ui.display.brightness"]').locator('xpath=ancestor::*[contains(concat(" ",normalize-space(@class)," ")," device-section ")][1]');
+  await section.screenshot({path:`${releaseOutput}/web-config-percent.png`});
+  await page.evaluate(()=>scrollTo(0,0));
+  await page.screenshot({path:`${releaseOutput}/web-device-management.png`});
+  // Navigation must preserve edits when the user cancels the native leave prompt.
+  const brightness=page.locator('[id="field-ui.display.brightness"]');
+  await brightness.fill('35');
+  let prompts=0;
+  page.on('dialog',async dialog=>{assert.equal(dialog.type(),'beforeunload');prompts++;await dialog.dismiss();});
+  await page.locator('.site-primary a').nth(1).click({noWaitAfter:true});
+  await page.waitForFunction(()=>document.querySelector('[id="field-ui.display.brightness"]')?.value==='34.9');
+  assert.equal(prompts,1);assert.ok(page.url().includes('/device/'));assert.equal(await brightness.inputValue(),'34.9');
+  break normalFlow;
+ }
  if(process.argv.includes('--normal-flow')){
   await page.locator('[id="field-device.node_name"]').fill('Trail group');
   await page.getByRole('button',{name:'无线与协议',exact:true}).click();await page.locator('[id="module-mqtt"]').click();
@@ -407,7 +429,7 @@ try{
  await page.getByRole('button',{name:'GPS 与定位',exact:true}).click();
  assert.equal(await page.locator('[id="field-gps.enabled"]').isChecked(),true);
  const nmeaHz=page.locator('[id="field-gps.external_nmea_hz"]'),nmeaSentences=page.locator('[id="field-gps.external_nmea_mask"]');assert.equal(await nmeaHz.evaluate(element=>element.tagName),'SELECT');assert.equal(await nmeaSentences.evaluate(element=>element.tagName),'SELECT');await nmeaHz.selectOption('5');await nmeaSentences.selectOption('2');assert.equal(await nmeaSentences.locator('option:checked').textContent(),'GGA + RMC');await nmeaHz.selectOption('0');await nmeaSentences.selectOption('0');
- const gpsMask=page.locator('[id="field-gps.sat_mask"]');assert.equal(await gpsMask.inputValue(),'141');await page.getByRole('checkbox',{name:/GLONASS$/}).check();assert.equal(await gpsMask.inputValue(),'143');await page.getByRole('checkbox',{name:/BeiDou$/}).uncheck();assert.equal(await gpsMask.inputValue(),'135');await gpsMask.locator('..').locator('summary').click();await gpsMask.fill('141');assert.equal(await page.getByRole('checkbox',{name:/GLONASS$/}).isChecked(),false);assert.equal(await page.getByRole('checkbox',{name:/BeiDou$/}).isChecked(),true);
+ const gpsMask=page.locator('[id="field-gps.sat_mask"]');assert.equal(await gpsMask.inputValue(),'141');await page.getByRole('checkbox',{name:/GLONASS$/}).check();assert.equal(await gpsMask.inputValue(),'143');await page.getByRole('checkbox',{name:/BeiDou$/}).uncheck();assert.equal(await gpsMask.inputValue(),'135');await gpsMask.locator('xpath=ancestor::details[1]').locator('summary').click();await gpsMask.fill('141');assert.equal(await page.getByRole('checkbox',{name:/GLONASS$/}).isChecked(),false);assert.equal(await page.getByRole('checkbox',{name:/BeiDou$/}).isChecked(),true);
  const gpsMode=page.locator('[id="field-gps.mode"]'),gpsFormat=page.locator('[id="field-gps.coord_format"]'),positionCommands=managementCommands;
  assert.equal(await gpsMode.evaluate(element=>element.tagName),'SELECT');assert.equal(await gpsMode.inputValue(),'1');assert.equal(await gpsFormat.inputValue(),'2');
  for(const locale of locales){await page.locator('.management-language select').selectOption(locale.id);await gpsMode.getByRole('option',{name:configPositionText(locale.id).powerSave,exact:true}).waitFor({state:'attached'});assert.equal(await gpsMode.inputValue(),'1');assert.equal(managementCommands,positionCommands);}await page.locator('.management-language select').selectOption('zh-Hans');
@@ -820,5 +842,5 @@ try{
  }
  }
  assert.deepEqual(errors,[]);
- console.log(process.argv.includes('--normal-flow')?'Device config normal flow passed: connect, edit, readable review, save, reconnect/readback; percent controls, satellite choices and 11 locales. Simulated serial, no hardware.':process.argv.includes('--presentation-only')?'Device config presentation: 11 locales, no companion BLE configuration, exact duration units, character bytes, custom motion IDs and presets passed.':'Device page verified config recovery and actual author proof verification, rejection, disconnect revocation and narrow-screen layout.');
+ console.log(process.argv.includes('--release-docs')?'Current English device captures and cancelled navigation preserving unsaved settings passed; synthetic USB only.':process.argv.includes('--normal-flow')?'Device config normal flow passed: connect, edit, readable review, save, reconnect/readback; percent controls, satellite choices and 11 locales. Simulated serial, no hardware.':process.argv.includes('--presentation-only')?'Device config presentation: 11 locales, no companion BLE configuration, exact duration units, character bytes, custom motion IDs and presets passed.':'Device page verified config recovery and actual author proof verification, rejection, disconnect revocation and narrow-screen layout.');
 }finally{await browser.close();server.close();}

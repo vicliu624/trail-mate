@@ -92,3 +92,27 @@ test('physical disconnect automatically releases locks before advertising discon
  await c.open();port.end();await disconnected;
  assert.equal(port.readable.locked,false);assert.equal(port.writable.locked,false);assert.equal(port.opened,false);
 });
+
+test('connection failure identifies port, USB signalling and handshake stages',async()=>{
+ for(const [operation,stage] of [['open','Opening serial port'],['setSignals','Enabling USB serial']]){
+  const port=fakePort(()=>{});
+  port[operation]=async()=>{throw new DOMException('Port access denied','NetworkError');};
+  const connection=new HostlinkConnection(port,{timeoutMs:30});
+  await assert.rejects(connection.open(),error=>error.stage===stage&&error.message.includes('Port access denied'));
+  assert.equal(connection.state,'disconnected');
+ }
+ const port=fakePort(()=>{}),connection=new HostlinkConnection(port,{timeoutMs:30});
+ await assert.rejects(connection.open(),error=>error.code==='TIMEOUT'&&error.stage==='HostLink handshake');
+ assert.equal(port.readable.locked,false);assert.equal(port.writable.locked,false);
+});
+
+test('serial receive errors retain the actual diagnostic during handshake',async()=>{
+ const port=fakePort(()=>{});
+ port.open=async function(){
+  this.readable=new ReadableStream({start(controller){controller.error(new DOMException('USB receive failed','NetworkError'));}});
+  this.writable=new WritableStream();
+ };
+ const connection=new HostlinkConnection(port);
+ await assert.rejects(connection.open(),error=>error.stage==='HostLink handshake'&&error.message.includes('USB receive failed'));
+ assert.equal(port.readable.locked,false);assert.equal(port.writable.locked,false);
+});

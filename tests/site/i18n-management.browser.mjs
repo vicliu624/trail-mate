@@ -48,7 +48,7 @@ try{
   assert.equal(await page.evaluate(()=>globalThis.retainedEditor===document.querySelector('.tracks-editor input')),true);
   assert.equal(await page.getAttribute('html','dir'),locale.direction);
   assert.equal(new URL(page.url()).searchParams.get('task'),'keep');
-  assert.equal(new URL(await page.locator('.top-actions a[href*="device"]').getAttribute('href')).searchParams.get('lang'),locale.id);
+  assert.equal(new URL(await page.locator('.site-primary a[href*="/device/"]').getAttribute('href')).searchParams.get('lang'),locale.id);
  }
  await page.setViewportSize({width:375,height:812});
  await page.locator('.management-language select').selectOption('ar');
@@ -67,7 +67,7 @@ try{
   const onboarding=configOnboardingText(locale.id);await page.getByRole('heading',{name:onboarding.startTitle,exact:true}).waitFor();await page.getByText(onboarding.startHelp,{exact:true}).waitFor();await page.getByText(onboarding.capabilities,{exact:true}).waitFor();
  }
  await page.locator('.management-language select').selectOption('en');await page.waitForFunction(()=>document.documentElement.dir==='ltr');
- assert.equal(new URL(await page.locator('.top-actions a[href*="tracks"]').getAttribute('href')).searchParams.get('lang'),'en');
+ assert.equal(new URL(await page.locator('.site-primary a[href*="/tracks/"]').getAttribute('href')).searchParams.get('lang'),'en');
  assert.deepEqual(errors,[]);
  console.log('Built management pages: 11 live language switches preserve unsaved KML input and DOM identity; URL/navigation, Arabic direction, narrow selector and device switch passed.');
 }finally{await browser?.close();await new Promise(resolve=>server.close(resolve));}

@@ -1,0 +1,96 @@
+{
+  "capturedAt": "2026-10-17T02:02:11.869Z",
+  "sourceRevision": "f3e66efdf1bcc7800dac91f6488a4636f7fa36fb",
+  "sourceBranch": "main",
+  "bundleSha256": {
+    "site/components-dist/components.js": "168c21e0158e77203ce6e8e09fee361c8b5cd411f9e5582f40056fa7c80c153a",
+    "site/components-dist/components.css": "98933ea8e5fe16ab5d2f4918c298b3e3f18d7ba2c014716286bfd6b7c575181f",
+    "site/device/dist/device.js": "b72d839b5ed4cc1e3c160b050882b17ae9c54ec9a07ba75f8ff02469798b9c05",
+    "site/device/dist/device.css": "c60c2568ddd0a59ac41208e94bece9fef10eefd0cfde3c8ef4f426b156812a14",
+    "site/tracks/dist/tracks.js": "0bdb4c78ea3d3d8eeeb7fc0adf6ad51582b71f463750db7f5deeef0d05d15d44",
+    "site/tracks/dist/tracks.css": "03ac4dc3f67997ef4f58b41bd77deeb02324a858aa0d814f8b92c6b03a846752",
+    "site/geocaching/dist/page.js": "a53699fb1bc1880a001362c3dec8da0c0b003b185f7f953a35d643e4ed4f466e",
+    "site/geocaching/dist/page.css": "e23ca3cd6d5d014ed90d2416a9e79e5b25ef13b4cd977aad3b56d7b891ff7db9",
+    "site/geocaching/dist/reticulum-worker.js": "57d830247aa825c771e11dafef8175dbb9b8f4f4162261cc1bf23c8b6c273ef7"
+  },
+  "captures": [
+    {
+      "file": "web-home-tools.png",
+      "url": "https://vicliu624.github.io/trail-mate/?lang=en&feature=home&demo-device=pager",
+      "locale": "en",
+      "viewport": {
+        "width": 1440,
+        "height": 1080
+      },
+      "sha256": "02e6221c3dfc0dbe504c906b8cee921323b3a2d8f62396a46670e36132cea14c",
+      "capturedAt": "2026-10-17T02:29:53.618Z",
+      "sourceRevision": "c63ea60d33439a0d1862f524504f01d3f661b884",
+      "sourcePagesRun": "https://github.com/vicliu624/trail-mate/actions/runs/38994670042",
+      "kind": "public production site after v1.0.1 metadata deployment",
+      "release": "v1.0.1"
+    },
+    {
+      "file": "web-track-workspace.png",
+      "url": "http://127.0.0.1:24496/trail-mate/tracks/?lang=en",
+      "locale": "en",
+      "viewport": {
+        "width": 1440,
+        "height": 1080
+      },
+      "sha256": "dc168aa973756ba9a3074ebf3b0393f62c1ad641cb0a743df21a479a6bb6487c"
+    },
+    {
+      "file": "web-track-elevation.png",
+      "url": "http://127.0.0.1:24496/trail-mate/tracks/?lang=en",
+      "locale": "en",
+      "viewport": {
+        "width": 1440,
+        "height": 1080
+      },
+      "sha256": "63b8dc477be979e72f92751f78db4bd07deeb3d167c1db1785a25173da13e72c"
+    },
+    {
+      "file": "web-track-country-search.png",
+      "url": "https://vicliu624.github.io/trail-mate/tracks/?lang=en",
+      "locale": "en",
+      "publicReadOnly": true,
+      "assets": "local production build served under site origin for gateway Origin policy",
+      "sha256": "27a686ed32d39e6571963549e780349a80cf7f0dd36a8d40067233854350bbc6"
+    },
+    {
+      "file": "web-track-administrative-search.png",
+      "url": "https://vicliu624.github.io/trail-mate/tracks/?lang=en",
+      "locale": "en",
+      "publicReadOnly": true,
+      "assets": "local production build served under site origin for gateway Origin policy",
+      "sha256": "f089d9219cb64d3e7897fbf759f33331fc0e9c5f2bd35592219b1ba3a95a0dc9"
+    },
+    {
+      "file": "web-config-percent.png",
+      "locale": "en",
+      "command": "node tests/site/device-page.browser.mjs --release-docs",
+      "kind": "production controls; synthetic USB fixture",
+      "sha256": "8cb9527b30d9af959e503664c900fca3db9b4555ebb808dcd6aaa0277e52f273"
+    },
+    {
+      "file": "web-device-management.png",
+      "locale": "en",
+      "command": "node tests/site/device-page.browser.mjs --release-docs",
+      "kind": "production UI; synthetic USB author/configuration",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "sha256": "4d34d09dc2c14518efd7718c8a6002c595bd06394507db5f578d67597aee3366"
+    },
+    {
+      "file": "web-geocaching-maintenance.png",
+      "locale": "en",
+      "command": "node tests/site/geocaching-network-maintenance.browser.mjs --release-docs",
+      "kind": "production UI/Worker/native loopback directory; synthetic USB author with real signatures",
+      "sha256": "4c16c64c8c86c9c96f49b8a5ad6a4362310c5da0a67617f2d72c833ac14d859e"
+    }
+  ],
+  "pageErrors": [],
+  "publicSiteVerification": "public-site-verification.json"
+}

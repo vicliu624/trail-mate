@@ -1,0 +1,56 @@
+/* Native controls retained for DOM-driven editors and browser file/range APIs.
+   Library components own their internal styles; this bridge only targets
+   unclassed native elements and uses Animal Island's public runtime tokens. */
+:where(.device-shell,.tracks-shell,#geocaching-app) :is(input:not([type=checkbox],[type=radio],[type=range],[type=color],[type=file]),select,textarea):not([class]) {
+  box-sizing:border-box;
+  min-width:0;
+  max-width:100%;
+  font:inherit;
+  color:var(--animal-text-color);
+  background:var(--animal-bg-color);
+  border:2px solid var(--animal-border-color);
+  border-radius:var(--animal-border-radius-pill,50px);
+  padding:10px 16px;
+  transition:border-color .2s var(--animal-ease,cubic-bezier(.4,0,.2,1));
+}
+:where(.device-shell,.tracks-shell,#geocaching-app) textarea:not([class]) {
+  border-radius:var(--animal-border-radius-base,18px);
+  line-height:1.6;
+  resize:vertical;
+}
+:where(.device-shell,.tracks-shell,#geocaching-app) :is(input,select,textarea):not([class]):focus-visible {
+  outline:3px solid var(--animal-warning-color,#f5c31c);
+  outline-offset:2px;
+  border-color:var(--animal-primary-color);
+}
+:where(.device-shell,.tracks-shell,#geocaching-app) :is(input,select,textarea):not([class]):disabled {
+  color:var(--animal-text-color-disabled);
+  cursor:not-allowed;
+  opacity:.65;
+}
+:where(.device-shell,.tracks-shell,#geocaching-app) :is(input,select,textarea):not([class])[aria-invalid=true] {
+  border-color:var(--animal-error-color,#e05a5a);
+}
+:where(.device-shell,.tracks-shell,#geocaching-app) input:is([type=checkbox],[type=radio],[type=range]):not([class]) {
+  accent-color:var(--animal-primary-color);
+}
+:where(.device-shell,.tracks-shell,#geocaching-app) input[type=file]:not([class]) {
+  width:100%;
+  min-width:0;
+  color:var(--animal-text-color);
+  font:inherit;
+  padding:8px 0;
+}
+:where(.device-shell,.tracks-shell,#geocaching-app) input[type=file]::file-selector-button {
+  font:inherit;
+  color:var(--animal-text-color);
+  background:var(--animal-bg-color);
+  border:2px solid var(--animal-border-color);
+  border-radius:50px;
+  padding:8px 14px;
+  margin-inline-end:10px;
+  cursor:pointer;
+}
+@media(prefers-reduced-motion:reduce) {
+  :where(.device-shell,.tracks-shell,#geocaching-app) :is(input,select,textarea):not([class]) { transition:none; }
+}

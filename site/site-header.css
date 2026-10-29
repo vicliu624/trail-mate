@@ -1,0 +1,72 @@
+/* Shared shell: page-specific forms and map styles must not size the navigation. */
+.site-header.topbar{display:block;position:sticky;top:10px;z-index:1000;padding:12px 16px;border:2px solid #c4b89e;border-radius:24px;background:#fffcf4f5;box-shadow:0 5px 0 #bdaea0cc;color:#725d42;backdrop-filter:blur(14px);font-family:Nunito,'Noto Sans SC','Segoe UI',sans-serif}
+.site-header-main{display:flex;align-items:center;gap:20px;min-width:0}
+.site-header .site-brand{display:inline-flex;align-items:center;justify-content:start;flex-shrink:0;gap:10px;min-width:0;color:#794f27;font-size:16px;font-weight:900;text-decoration:none;white-space:nowrap;letter-spacing:0}
+.site-header .brand-logo{display:block;width:52px;height:36px;object-fit:contain;filter:drop-shadow(0 4px 0 #bdaea08c)}
+.site-primary{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.site-primary a,.site-flash,.site-resources summary{display:flex;align-items:center;justify-content:center;min-height:40px;padding:8px 12px;border:2px solid transparent;border-radius:14px;font-size:14px;font-weight:800;line-height:1.25;text-decoration:none;color:#725d42;cursor:pointer;text-align:center;overflow-wrap:anywhere}
+.site-primary a:hover,.site-resources summary:hover{background:#e6f9f6;color:#0f655d}
+.site-primary a[aria-current=page]{color:#0f655d;background:#e6f9f6;border-color:#19c8b9}
+.site-utilities{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-inline-start:auto;flex-shrink:0}
+.site-header .site-flash{background:#19c8b9;color:#083d37;border-color:#4de2da;box-shadow:0 3px 0 #0a9189}
+.site-header .site-flash:hover{background:#3dd4c6}
+.site-resources{position:relative}
+.site-resources summary{list-style:none;gap:6px}
+.site-resources summary::-webkit-details-marker{display:none}
+.site-resources summary::after{content:'⌄';font-size:14px}
+.site-resources[open] summary{background:#f7f3df}
+.site-resources>div{position:absolute;inset-inline-end:0;top:calc(100% + 8px);min-width:150px;padding:6px;border:2px solid #c4b89e;border-radius:14px;background:#fffaf0;box-shadow:0 5px 0 #bdaea080}
+.site-resources a{display:block;padding:10px 14px;border-radius:8px;color:#794f27;font-size:14px;text-decoration:none}
+.site-resources a:hover{background:#e6f9f6}
+.site-header :is(a,summary,select):focus-visible,.web-tool-card:focus-visible{outline:3px solid #0a9189;outline-offset:3px}
+.site-header .management-language{padding:0;margin:0;max-width:160px;min-width:0}
+.site-header .management-language label{font-size:0;display:block}
+.site-header :is(.management-language select,#site-language){font:500 14px 'Segoe UI',sans-serif;color:#725d42;width:140px;max-width:100%;min-height:40px;padding:7px 10px;border:2px solid #e6dac4;border-radius:12px;background:#fff}
+.site-header .language-toggle{display:flex;width:auto;min-width:0}
+.site-header .language-toggle .animal-select{min-width:140px;max-width:160px}
+.site-page-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:12px;margin-top:10px;padding-top:10px;border-top:1px dashed #d4c9b4;font-size:13px}
+.site-page-actions .status{margin:0}
+#geocaching-app>.site-header{margin:16px 18px 12px;position:relative;top:auto}
+#geocaching-app{display:flex;flex-direction:column;height:100dvh;min-height:640px}
+#geocaching-app>.site-header{flex-shrink:0}
+#geocaching-app>.workspace{height:auto;flex:1;min-height:460px}
+.web-tools{scroll-margin-top:110px;margin:26px 0 36px}
+.web-tools>h2{margin-bottom:16px}
+.web-tool-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.web-tool-card{display:flex;flex-direction:column;gap:10px;padding:22px;border:2px solid #c4b89e;border-radius:20px;background:#fffaf0;box-shadow:0 4px 0 #d4c9b4;text-decoration:none;transition:transform .16s}
+.web-tool-card:hover{transform:translateY(-3px);border-color:#11a89b}
+.web-tool-card strong{font-size:19px;color:#794f27}
+.web-tool-card p{margin:0;font-size:14px;line-height:1.6}
+.web-tool-card>span:last-child{margin-top:auto;padding-top:10px;color:#0b756a;font-weight:800;font-size:13px}
+.sidebar .side-nav>a{min-width:0;overflow-wrap:anywhere;white-space:normal}
+@media(max-width:1100px){
+ .site-header-main{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px}
+ .site-primary{grid-row:2;grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px dashed #d4c9b4;padding-top:10px}
+ .site-utilities{grid-column:2;grid-row:1;min-width:0}
+}
+@media(max-width:760px){
+ .site-header.topbar{position:relative;top:auto;padding:10px 12px}
+ .site-header .site-brand{font-size:15px;gap:7px}
+ .site-header .brand-logo{width:40px;height:30px}
+ .site-header-main{gap:8px}
+ .site-primary a{font-size:13px;padding:8px 5px}
+ .site-utilities{gap:4px;flex-wrap:wrap}
+ .site-utilities .site-flash,.site-resources summary{font-size:12px;padding:7px 8px;min-height:36px}
+ .site-header .management-language,.site-header .language-toggle .animal-select{max-width:130px}
+ .site-header :is(.management-language select,#site-language){width:120px;font-size:12px;min-height:36px;padding:6px}
+ .site-header .language-toggle .animal-select{min-width:110px}
+ .web-tool-grid{grid-template-columns:1fr}
+ .web-tool-card{padding:18px}
+ .site-page-actions{justify-content:space-between}
+ #geocaching-app>.site-header{margin:10px 10px 12px}
+ #geocaching-app{height:auto;min-height:100dvh}
+ #geocaching-app>.workspace{height:auto;grid-template-rows:360px minmax(360px,auto);min-height:0;flex:auto}
+}
+@media(max-width:1000px){
+ .page-shell>.content-shell>.sidebar:has(.side-nav){padding:12px;max-height:none}
+ .sidebar:has(.side-nav)>.sidebar-label{display:none}
+ .sidebar .side-nav{display:flex;flex-wrap:wrap;gap:4px}
+ .sidebar .side-nav>.navigation-icon{display:none}
+ .sidebar .side-nav>a{width:auto;flex:0 1 auto;min-height:32px;padding:6px 9px;font-size:12px;line-height:1.3}
+}
+@media(prefers-reduced-motion:reduce){.web-tool-card{transition:none}}

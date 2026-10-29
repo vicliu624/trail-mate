@@ -2,11 +2,11 @@ import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {Background,Button,Card,Title} from 'animal-island-ui';
 import L from 'leaflet';
+import {createTrackMap} from './leaflet-map.js';
 import 'animal-island-ui/style';
 import 'leaflet/dist/leaflet.css';
 import '../../styles.css';
 import './tracks.css';
-import logo from '../../../docs/images/logo_big.png';
 import {parseKml,descriptionContent,KML_LIMIT} from './kml.js';
 import {summarizeKml} from './kml-summary.js';
 import {editKmlMetadata,editKmlFeature,addKmlWaypoint,removeKmlFeature,editKmlCoordinates,kmlGeometryEditors} from './kml-edit.js';
@@ -28,7 +28,8 @@ import {originalFormat} from './original-format.js';
 import {convertRecording} from './recording-convert.js';
 import {convertGpx} from './gpx-convert.js';
 import {DeviceRecords} from './device-records.jsx';
-import {ManagementLanguage,ManagementPageProvider,initializeManagementPage,useManagementLanguage} from '../../i18n/management-language.jsx';
+import {ManagementPageProvider,initializeManagementPage,useManagementLanguage} from '../../i18n/management-language.jsx';
+import {SiteHeader} from '../../site-header.jsx';
 import {useKmlWorkspaceText,useKmlActionText} from '../../i18n/management-copy.jsx';
 import {trackDraftLockText} from '../../i18n/track-draft-lock-labels.js';
 import {KmlElevationProfile} from './kml-elevation-profile.jsx';
@@ -61,7 +62,6 @@ import {KmlTimeEditor} from './kml-time-editor.jsx';
 import {KmlRegionEditor} from './kml-region-editor.jsx';
 import {KmlRegionPreview,useKmlRegionPreview,fitKmlRegionSource} from './kml-region-preview.jsx';import {kmlRegionAppearance,kmlRegionProfileOpacity,kmlRegionGeometryVisible} from './kml-region.js';
 const actionError=error=>({key:({KML_COORDINATE_LINE:'coordinateLine',KML_COORDINATE_RANGE:'coordinateRange',KML_FILE_TOO_LARGE:'fileTooLarge',KML_FILE_TYPE:'fileType',DRAFT_CONFLICT:'conflict',DRAFT_CORRUPT:'corrupt',DRAFT_FULL:'full',DRAFT_NAME_INVALID:'nameInvalid',RECORDING_BINARY_TRUNCATED:'binaryTruncated'}[error.code]??'error'),code:error.code});
-const logoUrl=new URL(logo,import.meta.url).href;
 function coordinates(points,reference){let previous=reference??points[0]?.longitude??0;return points.map(point=>{let x=point.longitude;while(x-previous>180)x-=360;while(x-previous< -180)x+=360;previous=x;return [point.latitude,x];});}
 function Preview({model,draft,selected,onSelect,onPoint,picking,coordinateBounds,profilePoint,operationPreview,styleState='highlight'}){
  const {locale,text}=useKmlWorkspaceText(),unnamed=useRef([]);
@@ -78,7 +78,7 @@ function Preview({model,draft,selected,onSelect,onPoint,picking,coordinateBounds
  const operationDrawing=useRef();
  point.current=onPoint;pick.current=picking;select.current=onSelect;
  useEffect(()=>{
-  const view=L.map(host.current,{preferCanvas:true}).setView([25,110],3);map.current=view;
+  const view=createTrackMap(host.current);map.current=view;
   view.createPane('land');view.getPane('land').style.zIndex=200;
   const land=L.geoJSON(null,{pane:'land',renderer:L.canvas({pane:'land'}),interactive:false,style:{color:'#c5d4cb',weight:1,fillColor:'#f4efd8',fillOpacity:.85}}).addTo(view);
   drawing.current=L.featureGroup().addTo(view);operationDrawing.current=L.featureGroup().addTo(view);let countries,cancelled=false;
@@ -168,7 +168,7 @@ function App(){
  async function downloadArchiveOriginal(){try{const saved=await readTrackDraft(current.id);if(!saved.originalSource)throw Error('Original missing');const url=URL.createObjectURL(new Blob([saved.originalSource],{type:originalFormat(saved.originalFormat).mime})),anchor=window.document.createElement('a');anchor.href=url;anchor.download='original-'+saved.archiveMember.split(/[\\/]/).at(-1);anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(error){setMessage(actionError(error));}}
  function applyCoordinates(){mutate(source=>editKmlCoordinates(source,selected,editors[geometry].path,pointsFromText()));}
  return <><Background type="sprinkles" aria-hidden="true"/><div className="page-shell tracks-shell">
-  <header className="topbar"><a className="brand" href={language.href('../')}><img className="brand-logo" src={logoUrl} alt=""/><span className="brand-text">Trail Mate</span></a><div className="top-actions"><a className="top-link" href={language.href('../geocaching/')}>Geocaching</a><a className="top-link" href={language.href('../device/')}>{language.deviceTitle}</a><span>{language.tracksTitle}</span></div></header>
+  <SiteHeader page="tracks"/>
   <div className="content-shell"><aside className="sidebar"><Title color="app-teal" size="middle">{text.mine}</Title><p>{format('drafts',{count:number.format(rows.length)})}</p><Button disabled={busy} onClick={()=>{file.current.value='';file.current.click();}}>{text.import}</Button><input ref={file} hidden type="file" accept=".zip,.kml,.gpx,.csv,.bin,application/vnd.google-earth.kml+xml" onChange={event=>importFile(event.target.files[0])}/><p className="tracks-help">{text.importHelp}</p><p className="tracks-help">{trackArchiveText(locale).importHint}</p>
     <div className="tracks-actions"><KmlArchiveImport disabled={busy||dirty||pending||attachmentDirty||attachmentBusy||Boolean(operationPreview)} onSaved={async saved=>{const loaded=await readTrackDraft(saved.id);load(loaded,loaded.source);await refresh();setMessage({key:'imported'});}}/></div>
     <DraftBackupControls draft={current} disabled={busy||dirty||pending||attachmentDirty||attachmentBusy||Boolean(operationPreview)} onBusy={setBusy} onRestored={async saved=>{const loaded=await readTrackDraft(saved.id);load(loaded,loaded.source);await refresh();setMessage({key:'imported'});}}/>
@@ -204,5 +204,5 @@ function App(){
     </>}
    </main></div></div></>;
 }
-const initialLanguage=await initializeManagementPage();
-createRoot(window.document.getElementById('tracks-app')).render(<ManagementPageProvider><ManagementLanguage page="tracks" initial={initialLanguage}/><App/></ManagementPageProvider>);
+await initializeManagementPage();
+createRoot(window.document.getElementById('tracks-app')).render(<ManagementPageProvider><App/></ManagementPageProvider>);

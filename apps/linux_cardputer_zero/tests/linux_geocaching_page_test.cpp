@@ -6,6 +6,7 @@
 #include <cassert>
 #include <chrono>
 #include <cstdlib>
+#include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <thread>
@@ -67,6 +68,13 @@ int main()
     const auto click = [&](const char* text)
     {
         auto* text_object = label(lv_screen_active(), text);
+        const auto ready = std::chrono::steady_clock::now() + 5s;
+        while (!text_object && std::chrono::steady_clock::now() < ready)
+        {
+            tick(20ms);
+            text_object = label(lv_screen_active(), text);
+        }
+        if (!text_object) std::fprintf(stderr, "Missing Geocaching control: %s\n", text);
         assert(text_object);
         auto* button = lv_obj_get_parent(text_object);
         assert(lv_obj_check_type(button, &lv_button_class) && !lv_obj_has_state(button, LV_STATE_DISABLED));

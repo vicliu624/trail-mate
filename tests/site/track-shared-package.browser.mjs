@@ -14,6 +14,8 @@ import {trackSourceChangeConfirmation} from '../../site/i18n/track-source-labels
 import {trackArchiveText} from '../../site/i18n/track-archive-labels.js';
 import {readTrackPackageArchive} from '../../site/tracks/src/package-archive.js';
 const contents=`import React,{useState} from 'react';import {createRoot} from 'react-dom/client';
+import L from 'leaflet';
+L.Map.addInitHook(function(){if(this.getContainer().classList.contains('shared-track-map'))globalThis.previewMap=this;});
 import 'animal-island-ui/style';import './site/styles.css';import './site/tracks/src/tracks.css';
 import {SharedTrackPackagePanel} from './site/tracks/src/shared-track-package-panel.jsx';import {ManagementCopyProvider} from './site/i18n/management-copy.jsx';
 import {TrackSharedRead} from './site/tracks/src/track-shared-read.jsx';
@@ -42,6 +44,14 @@ globalThis.connectUSB=async(own=false)=>{
 };
 globalThis.importSharedCopy=async(file,{packageSource})=>{const row=await saveTrackDraft(new Uint8Array(await file.arrayBuffer()),{name:'Shared copy',filename:file.name,packageSource});globalThis.copiedDraft=row;return true;};
 globalThis.inspectCopy=async()=>{globalThis.inspecting=await readTrackDraft(copiedDraft.id);rerender();};
+globalThis.inspectCopyDuringZoom=async()=>{
+ const view=globalThis.previewMap;if(!view)throw Error('Shared preview map missing');
+ await new Promise(resolve=>{view.once('zoomanim',resolve);view.setZoom(view.getZoom()+1,{animate:true});requestAnimationFrame(()=>requestAnimationFrame(resolve));});
+ await globalThis.inspectCopy();
+ // Leaflet 1.9 completes zoom using a 250-ms fallback timer. Let it run after
+ // React removes the preview so this checks disposal rather than hiding it.
+ await new Promise(resolve=>setTimeout(resolve,350));
+};
 globalThis.copyState=async()=>{const row=await readTrackDraft(copiedDraft.id),options=await draftPackageCreationOptions(row);return {version:row.version,template:Boolean(row.attachmentTemplate),proof:Boolean(row.sourceProof),count:options.assets[2],source:options.metadata[7].map(hex)};};
 globalThis.editCopy=async()=>{const old=await readTrackDraft(copiedDraft.id),changed=new Uint8Array(old.source.length+1);changed.set(old.source);changed[changed.length-1]=10;const saved=await saveTrackDraft(changed,{id:old.id,expectedVersion:old.version,name:old.name,filename:old.filename}),row=await readTrackDraft(saved.id),options=await draftPackageCreationOptions(row),actor=await Identity.generate(),plan=await createTrackPublicationPlan(row.source,{verified:true,publicKey:await actor.getPublicKey(),generation:1},{...options,title:row.name}),packet=await draftPackageInputs(row,plan,{persist:false});return {templatePreserved:hex(new Uint8Array(row.attachmentTemplate))===hex(index),rebound:hex(packet.attachmentIndex)!==hex(index),declared:options.assets[2],files:packet.attachmentFiles.length,proofPreserved:hex(new Uint8Array(row.sourceProof))===hex(new Uint8Array(old.sourceProof))};};
 globalThis.badCopy=async()=>{const before=(await listTrackDrafts()).length,bad=photo.slice();bad[0]^=1;let rejected=false;try{await saveTrackDraft(source,{name:'Bad copy',packageSource:{signed,kml:source,attachmentIndex:index,attachmentFiles:[{id:'photo',content:bad}]}});}catch{rejected=true;}return {rejected,unchanged:(await listTrackDrafts()).length===before};};
@@ -57,7 +67,7 @@ const js=bundle.outputFiles.find(file=>file.path.endsWith('.js')).text,css=bundl
 const server=http.createServer((req,res)=>{res.setHeader('Content-Type','text/html');res.end('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><div id="root"></div>');});await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const browser=await chromium.launch({channel:process.env.TRAIL_MATE_TEST_BROWSER_CHANNEL,headless:true});
 try{
- const page=await browser.newPage({viewport:{width:1200,height:1000}}),origin=`http://127.0.0.1:${server.address().port}`,requests=[],errors=[];page.on('request',req=>requests.push(req.url()));page.on('pageerror',error=>errors.push(String(error)));
+ const page=await browser.newPage({viewport:{width:1200,height:1000}}),origin=`http://127.0.0.1:${server.address().port}`,requests=[],errors=[];page.on('request',req=>requests.push(req.url()));page.on('pageerror',error=>{errors.push(String(error));console.error(error.stack);});
  await page.goto(origin);await page.addStyleTag({content:css});await page.addScriptTag({content:js});const photo=await readFile('tests/hostlink/fixtures/png-cache/red-16x8.jpg');await page.evaluate(bytes=>start(bytes),Array.from(photo));
  await page.getByRole('button',{name:'下载并校验附件',exact:true}).click();await page.getByText('文件校验通过',{exact:false}).waitFor();await page.getByText(/可选文件不可用/).waitFor();assert.equal(await page.locator('.shared-track-resource').count(),2);assert.equal(await page.evaluate(()=>currentPacket.ready),true);
  const first=page.locator('.shared-track-resource').first();await first.getByRole('button',{name:'预览图片',exact:true}).click();await page.waitForFunction(()=>document.querySelector('.shared-resource-preview img')?.naturalWidth===16);const previewURL=await page.locator('.shared-resource-preview img').getAttribute('src');
@@ -79,7 +89,7 @@ try{
  await page.screenshot({path:'.codex-build/ui-check/package-install-in-detail.png',fullPage:true});await page.setViewportSize({width:390,height:844});await page.screenshot({path:'.codex-build/ui-check/package-install-in-detail-mobile.png',fullPage:true});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);
  await page.evaluate(()=>connectUSB(true));const maintenance=trackMaintenanceText('zh-Hans');await page.getByRole('button',{name:maintenance.archive,exact:true}).click();await page.getByText(maintenance.saved,{exact:true}).waitFor();assert.deepEqual(await page.evaluate(()=>checkArchive()),{rows:1,declared:2,sameIndex:true,samePhoto:true,archive:true});
  assert.deepEqual(await page.evaluate(()=>editCopy()),{templatePreserved:true,rebound:true,declared:2,files:1,proofPreserved:true});assert.deepEqual(await page.evaluate(()=>badCopy()),{rejected:true,unchanged:true});
- await page.evaluate(()=>inspectCopy());await page.locator('.tracks-attachments').getByText('notes.txt',{exact:true}).waitFor();
+ await page.evaluate(()=>inspectCopyDuringZoom());await page.locator('.tracks-attachments').getByText('notes.txt',{exact:true}).waitFor();
  for(const {id} of locales){assert.ok(trackSourceChangeConfirmation(id));await page.evaluate(id=>setLocale(id),id);await page.getByText(trackPackageText(id).optionalMissing,{exact:false}).waitFor();}
  await page.evaluate(()=>setLocale('zh-Hans'));await page.screenshot({path:'.codex-build/ui-check/shared-draft-resources-mobile.png',fullPage:true});
  const attachmentText=trackAttachmentsText('zh-Hans'),before=await page.evaluate(()=>copyState());await page.getByLabel(attachmentText.required,{exact:true}).uncheck();page.removeAllListeners('dialog');page.once('dialog',dialog=>dialog.dismiss());await page.getByRole('button',{name:attachmentText.save,exact:true}).click();assert.deepEqual(await page.evaluate(()=>copyState()),before);

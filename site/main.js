@@ -1,6 +1,7 @@
 import {setLocale, getLocale, translate} from './i18n/runtime.js';
 import {applyTranslations} from './i18n/dom.js';
 import {locales} from './i18n/registry.js';
+import {applySiteNavigation,installNavigationDismissal} from './navigation.js';
 import {languageName,packName,packDescription,packCount,packStatus,memoryProfile} from './i18n/pack-presentation.js';
 
 const releaseVersionEls = document.querySelectorAll("[data-release-version]");
@@ -51,6 +52,7 @@ function setReleaseLinks(url) {
 
 function applyStaticTranslations() {
   applyTranslations();
+  applySiteNavigation(document,getLocale(),new URL('./',location.href));
   document.title = t('document.title');
 }
 
@@ -295,6 +297,7 @@ async function loadPackCatalog() {
 }
 
 const urlParams = new URLSearchParams(window.location.search);
+installNavigationDismissal(document);
 document.querySelector('#site-language').replaceChildren(...locales.map(locale=>{
   const option=document.createElement('option');
   option.value=locale.id;option.textContent=locale.name;

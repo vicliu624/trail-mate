@@ -6,7 +6,7 @@
     <title>Trail Mate</title>
     <meta
       name="description"
-      content="Trail Mate is an offline-first handheld firmware project for navigation, LoRa messaging, and field communication on ESP32 hardware."
+      content="Trail Mate puts privacy first: device-held keys, local records, decentralized communication and offline maps, without a personal website account."
     >
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -18,6 +18,7 @@
     <link rel="stylesheet" href="./components-dist/components.css">
     <link rel="stylesheet" href="./styles.css?v=language-picker-2">
     <link rel="stylesheet" href="./explorer.css?v=reading-surfaces-5">
+    <link rel="stylesheet" href="./site-header.css">
     <script
       type="module"
       src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"
@@ -28,8 +29,9 @@
   </head>
   <body>
     <div class="page-shell">
-      <header class="topbar">
-        <a class="brand" href="./" data-i18n-aria="document.title" aria-label="Trail Mate">
+      <header class="topbar site-header">
+       <div class="site-header-main">
+        <a class="brand site-brand" href="./" data-site-link="home" aria-label="Trail Mate">
           <img
             class="brand-logo"
             src="./assets/showcase/brand-logo.png"
@@ -40,17 +42,17 @@
           <span class="brand-text">Trail Mate</span>
         </a>
 
-        <div class="top-actions">
-          <a class="top-link" href="./geocaching/">Geocaching</a>
-          <a class="top-link" href="https://github.com/vicliu624/trail-mate" data-i18n="top.github">
-            GitHub
-          </a>
-          <a class="top-link" href="https://github.com/vicliu624/trail-mate/wiki" data-i18n="top.wiki">
-            Wiki
-          </a>
-          <a class="top-link top-link-strong" href="#webflasher" data-i18n="top.flash">
-            Flash
-          </a>
+        <nav class="site-primary" aria-label="Web tools" data-site-nav>
+          <a href="./device/" data-site-link="device" data-site-text="device">Device management</a>
+          <a href="./tracks/" data-site-link="tracks" data-site-text="tracks">Tracks</a>
+          <a href="./geocaching/" data-site-link="geocaching" data-site-text="geocaching">Geocaching</a>
+        </nav>
+        <div class="site-utilities">
+          <a class="site-flash" href="#webflasher" data-site-link="flash" data-site-text="flash">Flash</a>
+          <details class="site-resources"><summary data-site-text="resources">Resources</summary><div>
+            <a href="https://github.com/vicliu624/trail-mate">GitHub</a>
+            <a href="https://github.com/vicliu624/trail-mate/wiki">Wiki</a>
+          </div></details>
           <div class="language-toggle" role="group" data-i18n-aria="common.language" aria-label="Language">
             <select id="site-language" data-i18n-aria="common.language" aria-label="Language">
               <option value="en">English</option>
@@ -67,6 +69,7 @@
             </select>
           </div>
         </div>
+       </div>
       </header>
 
       <div class="content-shell">
@@ -77,7 +80,7 @@
             <a href="#explorer" data-i18n="side.explorer">Interactive guide</a>
             <a href="#capabilities" data-i18n="side.capabilities">Capabilities</a>
             <a href="#features" data-i18n="side.features">Feature Walkthrough</a>
-            <a href="./geocaching/">Geocaching</a>
+            <a href="#web-tools" data-site-text="tools">Web tools</a>
             <a href="#languages" data-i18n="side.languages">Language Packs</a>
             <a href="#webflasher" data-i18n="side.flasher">Web Flasher</a>
             <a href="#docs" data-i18n="side.docs">Docs</a>
@@ -87,14 +90,10 @@
         <main class="main-content">
           <section class="hero" id="overview">
             <div class="hero-copy">
-              <p class="eyebrow" data-i18n="intro.eyebrow">TOOLS FOR THE FIELD</p>
+<p class="eyebrow" data-i18n="intro.eyebrow">PRIVACY · DECENTRALIZATION · OFFLINE</p>
               <h1>Trail Mate</h1>
-              <p class="hero-tagline" data-i18n="intro.tagline">
-                Maps, communication and coordination for the outdoors.
-              </p>
-              <p class="lede" data-i18n="intro.text">
-                Carry maps, record your route and coordinate with your group. Basic Meshtastic and MeshCore support lets you contact compatible terminals nearby; protocol coverage follows practical outdoor needs.
-              </p>
+<p class="hero-tagline" data-i18n="intro.tagline">Your identity and records belong with you.</p>
+<p class="lede" data-i18n="intro.text">Communicate and navigate with less personal information in platform databases. Your device holds the keys and local records; you choose the network and what to share.</p>
               <div class="hero-actions">
                 <a class="button button-primary" href="#explorer" data-i18n="intro.try">
                   Try the device ↓
@@ -112,12 +111,22 @@
             <div class="hero-visual">
               <span class="hero-compass" aria-hidden="true">⌖</span>
               <p class="eyebrow" data-i18n="intro.cardLabel">ON YOUR DEVICE</p>
-              <h3 data-i18n="intro.cardTitle">Prepare for your next trip.</h3>
-              <p data-i18n="intro.cardText">Load maps and routes, check positioning and test communication with your group before departure.</p>
+<h3 data-i18n="intro.cardTitle">Identity without personal registration.</h3>
+<p data-i18n="intro.cardText">The Web tools need no real-name, phone or email account profile. Your device proves authorship with a signature.</p>
               <div class="hero-note hero-note-release">
                 <p class="feature-kicker" data-i18n="hero.releaseKicker">Latest Release</p>
                 <p class="hero-note-value" data-release-version>Waiting for first tagged release</p>
               </div>
+            </div>
+          </section>
+
+          <section class="web-tools" id="web-tools">
+            <p class="eyebrow" data-site-text="open">Open in your browser</p>
+            <h2 data-site-text="tools">Web tools</h2>
+            <div class="web-tool-grid">
+              <a class="web-tool-card" href="./device/" data-site-link="device"><strong data-site-text="deviceHeading">Manage your device</strong><p data-site-text="deviceHelp">Connect over USB to review settings, manage files and back up your device identity.</p><span><span data-site-text="device">Device management</span> →</span></a>
+              <a class="web-tool-card" href="./tracks/" data-site-link="tracks"><strong data-site-text="tracksHeading">Prepare a route</strong><p data-site-text="tracksHelp">Import and edit routes, review elevation and timing, or browse shared tracks.</p><span><span data-site-text="tracks">Tracks</span> →</span></a>
+              <a class="web-tool-card" href="./geocaching/" data-site-link="geocaching"><strong data-site-text="geocachingHeading">Find geocaches</strong><p data-site-text="geocachingHelp">Explore geocaches by region and manage your own signed listings.</p><span><span data-site-text="geocaching">Geocaching</span> →</span></a>
             </div>
           </section>
 
@@ -127,9 +136,10 @@
           </section>
 
           <section class="story-section" id="design-purpose">
-            <h2 data-i18n="purpose.title">Built for outdoor use.</h2>
-            <p data-i18n="purpose.communication">Trail Mate implements basic Meshtastic and MeshCore communication so you can contact nearby compatible terminals to exchange information, ask for help, or coordinate outdoors.</p>
-            <p data-i18n="purpose.scope">This is selective protocol support, not a complete implementation or feature parity with either ecosystem's native firmware. Advanced radio features unrelated to outdoor use are outside Trail Mate's scope. Protocol work is guided by practical field needs.</p>
+<h2 data-i18n="purpose.title">Less personal information in platform databases.</h2>
+<p data-i18n="purpose.communication">No website account means no required real name, phone number or email profile. Device-held keys prove who signed a publication.</p>
+            <p data-i18n="purpose.scope">Keep contacts, conversations and unshared tracks locally. Use independent services so one platform does not have to hold your identity and entire private history. A reused public key can still link your publications.</p>
+            <p><a href="https://github.com/vicliu624/trail-mate/wiki/23.-Device-Identity-and-Sharing-Privacy" data-i18n="privacy.guide">Understand identity, keys and sharing privacy ↗</a></p>
           </section>
           <section class="product-principles" data-i18n-aria="purpose.title" aria-label="Why Trail Mate exists">
             <article><span class="principle-no" data-i18n="principle.identity.number">01 / IDENTITY</span><h3 data-i18n="principle.identity.title">Identity in your hands.</h3><p data-i18n="principle.identity.body">Device identity can exist independently of cloud accounts and phone numbers. Keep your contacts and conversations on personally controlled hardware.</p></article>

@@ -1,6 +1,7 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {Button} from 'animal-island-ui';
 import L from 'leaflet';
+import {createTrackMap} from './leaflet-map.js';
 import {useManagementLocale} from '../../i18n/management-copy.jsx';
 import {trackBrowseText} from '../../i18n/track-browse-labels.js';
 import {regionDisplayGeometry} from '../../geocaching/src/country-boundaries.js';
@@ -30,7 +31,7 @@ export function SharedTrackBrowse({onQuery,onRegion,onOpen,disabled=false,canUse
  const [bounds,setBounds]=useState(null),[automatic,setAutomatic]=useState(false),[items,setItems]=useState([]),[loading,setLoading]=useState(false),[notice,setNotice]=useState({key:'intro'});
  const epoch=useRef(0),controller=useRef(),last=useRef('');
  useEffect(()=>{
-  const view=L.map(host.current,{preferCanvas:true}).setView([25,110],3);map.current=view;
+  const view=createTrackMap(host.current);map.current=view;
   view.createPane('land');view.getPane('land').style.zIndex=200;
   const land=L.geoJSON(null,{pane:'land',renderer:L.canvas({pane:'land'}),interactive:false,style:{color:'#c5d4cb',weight:1,fillColor:'#f4efd8',fillOpacity:.85}}).addTo(view);drawing.current=L.featureGroup().addTo(view);
   let countries,cancelled=false;

@@ -38,7 +38,7 @@ export function Maintenance(){
   const transport=useRef(),session=useRef(),reader=useRef(),epoch=useRef(0),transaction=useRef(),baseline=useRef(),dirtyRef=useRef(false),sessionId=useRef(),editorOwner=useRef();
   if(!sessionId.current)sessionId.current=crypto.getRandomValues(new Uint8Array(16));dirtyRef.current=dirty;
   useEffect(()=>{const protect=event=>{if(dirty||pending){event.preventDefault();event.returnValue='';}};window.addEventListener('beforeunload',protect);return()=>window.removeEventListener('beforeunload',protect);},[dirty,pending]);
-  useEffect(()=>{setTargets({header:document.querySelector('.header'),map:document.querySelector('.map-panel')});return()=>{epoch.current++;reader.current?.cancel();session.current?.close();transport.current?.close();};},[]);
+  useEffect(()=>{setTargets({header:document.getElementById('geocaching-connection-controls'),map:document.querySelector('.map-panel')});return()=>{epoch.current++;reader.current?.cancel();session.current?.close();transport.current?.close();};},[]);
   useEffect(()=>{document.body.dataset.geoMode=mode;return()=>{delete document.body.dataset.geoMode;};},[mode]);
   useEffect(()=>{
     const active=picking&&detail?.editable&&!busy&&!pending&&mode!=='browse';

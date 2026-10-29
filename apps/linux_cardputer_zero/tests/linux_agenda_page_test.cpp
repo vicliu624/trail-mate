@@ -7,6 +7,7 @@
 #include <cassert>
 #include <chrono>
 #include <cstring>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <thread>
@@ -70,23 +71,33 @@ int main(int argc, char** argv)
         };
         const auto click = [&](const char* text)
         {
-            auto* object = label(page::state()->root, text);
-            assert(object);
-            auto* caption = object;
-            while (object && !lv_obj_check_type(object, &lv_button_class)) object = lv_obj_get_parent(object);
-            if (!object)
+            const auto target = [&]() -> lv_obj_t*
             {
-                auto* parent = lv_obj_get_parent(caption);
-                const auto next = lv_obj_get_index(caption) + 1;
-                if (parent && next < static_cast<int>(lv_obj_get_child_count(parent)))
+                auto* object = label(page::state()->root, text);
+                assert(object);
+                auto* caption = object;
+                while (object && !lv_obj_check_type(object, &lv_button_class)) object = lv_obj_get_parent(object);
+                if (!object)
                 {
-                    auto* sibling = lv_obj_get_child(parent, next);
-                    if (lv_obj_check_type(sibling, &lv_button_class)) object = sibling;
+                    auto* parent = lv_obj_get_parent(caption);
+                    const auto next = lv_obj_get_index(caption) + 1;
+                    if (parent && next < static_cast<int>(lv_obj_get_child_count(parent)))
+                    {
+                        auto* sibling = lv_obj_get_child(parent, next);
+                        if (lv_obj_check_type(sibling, &lv_button_class)) object = sibling;
+                    }
                 }
-            }
-            assert(object);
+                assert(object);
+                return object;
+            };
+            auto* object = target();
             lv_obj_scroll_to_view(object, LV_ANIM_OFF);
-            for (unsigned i = 0; i < 40 && lv_group_get_focused(lv_group_get_default()) != object; ++i) key(Key::Tab);
+            for (unsigned i = 0; i < 40 && lv_group_get_focused(lv_group_get_default()) != object; ++i)
+            {
+                key(Key::Tab);
+                object = target();
+            }
+            if (lv_group_get_focused(lv_group_get_default()) != object) std::fprintf(stderr, "Unreachable Agenda control: %s\n", text);
             assert(lv_group_get_focused(lv_group_get_default()) == object);
             key(Key::Enter);
         };

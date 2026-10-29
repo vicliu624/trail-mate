@@ -13,21 +13,26 @@
 
 ![trail mate page](docs/images/ChatGPTImage.png)
 
-> Offline maps, routes you can carry, and networks you choose.
+> Your identity belongs to you. Keep private records local. Choose what to share.
 
-**Trail Mate puts offline navigation, maps and field messaging on a handheld you can use without a phone.** Plan a walking route from installed map data, follow it with GNSS, record your journey, and stay in touch over Meshtastic, MeshCore or Reticulum/LXMF. When you want to share a trail or a Geocache, the device signs it under your own identity. Browser tools make editing and publishing easier, without asking you to create a website account. Features depend on the board; the project includes ESP32, nRF52 and Linux implementations.
+**Trail Mate is a privacy-focused handheld for decentralized communication and offline navigation.** It reduces the personal information a platform needs to hold: no real-name, phone or email account is required for the Web tools, and device-held keys prove authorship. Contacts, conversations and unshared tracks remain on hardware and storage you control.
+
+Communicate over compatible Meshtastic, MeshCore or Reticulum/LXMF networks, carry offline maps and record your journey locally. Choose independent gateways and directories, and publish only the trails or Geocaches you select. A service can help you communicate without becoming the owner of your identity and complete private history. Features depend on the board; the project includes ESP32, nRF52 and Linux implementations.
 
 [English](README.md) | [Documentation](https://github.com/vicliu624/trail-mate/wiki) | [Releases](https://github.com/vicliu624/trail-mate/releases) | [Join Discord](https://discord.gg/shkueG4zfc)
 
-**1.0.0 is the first stable firmware release.** Get the board-specific files and
-[release notes](https://github.com/vicliu624/trail-mate/releases/tag/v1.0.0), or
+**1.0.1 fixes USB browser management for Pager and T-Deck.** Install the matching
+new firmware; a website update cannot add the missing USB service to 1.0.0.
+Get the board-specific files and
+[release notes](https://github.com/vicliu624/trail-mate/releases/tag/v1.0.1), or
 use the [browser installer](https://vicliu624.github.io/trail-mate/). Check the
 device support table below before choosing an image.
 
 ## The device is your account
 
 Connect a supported Trail Mate device over USB to prove your author identity in
-the browser. There is no website account or password to register. The device
+the browser. There is no website account or password to register. This avoids
+requiring a platform profile with your real name, phone number or email. The device
 holds its identity and signs publications; the browser provides convenient
 editing, maps, file handling, and access to Reticulum through the computer's
 network. These author operations do not require changing the device's selected
@@ -64,7 +69,7 @@ copies already received by others. Decentralization gives users choices and
 reduces dependence on one operator; it does not make published location data
 secret or prevent every form of behavioural analysis.
 
-The [1.0.0 delivery record](docs/releases/1.0.0.md) keeps the build and acceptance
+The [1.0.1 delivery record](docs/releases/1.0.1.md) keeps the build and acceptance
 evidence separate from device-support claims. Use [Releases](https://github.com/vicliu624/trail-mate/releases)
 for installable images and check the board table before choosing a target.
 
@@ -152,6 +157,19 @@ includes file placement and keyboard controls.*
 
 ### Browser device configuration
 
+The [website](https://vicliu624.github.io/trail-mate/?lang=en) provides direct
+**Device management**, **Tracks** and **Geocaching** links on every page. The
+highlighted link identifies the current tool. Tool links and the home logo keep
+your selected interface language; **Flash** opens firmware installation.
+GitHub and Wiki are in **Resources**. The same tool links remain visible on
+narrow screens, with task cards on the homepage.
+
+![English website navigation and browser tools](docs/images/release-1.0.1/web-home-tools.png)
+
+*Current homepage and tool navigation, captured in English from the rebuilt
+Web sources. Device connection and publication still require the appropriate
+hardware, permissions and reachable directory.*
+
 Open the [Device page](https://vicliu624.github.io/trail-mate/device/), connect
 the device and choose its USB port. The page verifies the author and configuration
 snapshot before allowing edits. Settings are grouped by purpose and searchable;
@@ -167,9 +185,11 @@ Keep the device's SD card installed for configuration exchange and stored-conten
 maintenance. Device author proof itself is independent of the card; a successful
 identity check does not imply that its file storage is available.
 
-![Web configuration percentage control](docs/images/release-1.0.0/web-config-percent.png)
+![Web configuration percentage control](docs/images/release-1.0.1/web-config-percent.png)
 
-*Actual browser configuration control with simulated-device data. The screenshot
+![English device management workspace](docs/images/release-1.0.1/web-device-management.png)
+
+*Current English browser configuration controls with simulated-device data. The screenshot
 illustrates readable percentage input, not a physical-device acceptance result.*
 
 ### Decentralized Geocaching
@@ -183,7 +203,7 @@ receipt and confirms the result on the device. Updates keep the cache identity;
 archive operations publish a new state. Pending confirmation remains visible
 and can be continued instead of silently starting a second publication.
 
-![Web Geocaching maintenance](docs/images/release-1.0.0/web-geocaching-maintenance.png)
+![Web Geocaching maintenance](docs/images/release-1.0.1/web-geocaching-maintenance.png)
 
 *Actual Web maintenance page from a native Reticulum directory check with a
 simulated USB author. Sample cache data is shown; this is not a real-Wio result.*
@@ -251,24 +271,26 @@ browser, and use the connected device as the publication author.
   a connected device. Hardware storage and the supported package capabilities
   determine which resources can be used on that device.
 
-![Shared-trail country search through the public Reticulum directory](docs/images/release-1.0.0/web-track-country-search.png)
+![Shared-trail country search through the public Reticulum directory](docs/images/release-1.0.1/web-track-country-search.png)
 
-*Actual candidate Web page querying the public WSS/Reticulum track directory.
+*Current English Web page querying the public WSS/Reticulum track directory.
 The selected Austria boundary is verified; this query returned no shared trails.
 This capture uses no USB author and does not claim a completed publication test.*
 
-![Shared-trail first-level administrative search](docs/images/release-1.0.0/web-track-administrative-search.png)
+![Shared-trail first-level administrative search](docs/images/release-1.0.1/web-track-administrative-search.png)
 
 *The same built Web page selects Austria and then Vorarlberg through the public
 directory, verifies the supplied boundary and queries that administrative area.
 The global catalog stops after two levels. This capture uses no USB author;
 the capture itself does not establish firmware or publication acceptance.*
 
-![Trail elevation and timed-record maintenance](docs/images/release-1.0.0/web-track-elevation.png)
+![Trail elevation and timed-record maintenance](docs/images/release-1.0.1/web-track-elevation.png)
 
-*Actual browser workspace with sample KML data, showing elevation inspection and
-time replay. A simple example does not imply automatic terrain data or invented
-recording timestamps.*
+![English track workspace with a sample recorded route](docs/images/release-1.0.1/web-track-workspace.png)
+
+*Current English browser workspace with sample KML data, showing elevation
+inspection and the time filter for recorded points. The example supplies its
+own elevations and timestamps; it does not imply automatic terrain data.*
 
 The [release record](docs/releases/1.0.0.md) records deployment and acceptance
 separately from these browser captures.

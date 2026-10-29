@@ -101,20 +101,30 @@ export class HostlinkConnection {
   async open({baudRate = 115200} = {}) {
     if (this.#state !== 'disconnected') throw new HostlinkError('Serial connection is already open', 'BUSY');
     this.#state = 'connecting'; this.#emit({type: 'state', state: this.#state});
+    let stage = 'Opening serial port';
     try {
       await this.#port.open({baudRate, bufferSize: 2048});
       // Arduino TinyUSB reports CONNECTED only when both DTR and RTS are set.
+      stage = 'Enabling USB serial';
       await this.#port.setSignals({dataTerminalReady: true, requestToSend: true});
       if (!this.#port.readable || !this.#port.writable) throw new HostlinkError('Serial streams unavailable', 'DISCONNECTED');
       this.#reader = this.#port.readable.getReader(); this.#writer = this.#port.writable.getWriter();
       this.#readTask = this.#read();
+      stage = 'HostLink handshake';
       const frame = await this.request(FRAME.HELLO, new Uint8Array(), {responseType: FRAME.HELLO_ACK});
       this.#hello = decodeHello(frame.payload);
       this.#state = 'ready'; this.#emit({type: 'state', state: 'ready', hello: this.#hello});
       return this.#hello;
-    } catch (error) { await this.close(); throw error; }
+    } catch (error) {
+      await this.close();
+      const failure = new HostlinkError(`${stage}: ${error.message}`, error.code ?? 'SERIAL');
+      failure.cause = error;
+      failure.stage = stage;
+      throw failure;
+    }
   }
   async #read() {
+    let failure;
     try {
       while (this.#reader) {
         const {value, done} = await this.#reader.read();
@@ -130,9 +140,10 @@ export class HostlinkConnection {
         }
       }
     } catch (error) {
+      failure = error;
       if (this.#state !== 'closing') this.#emit({type: 'error', error});
     } finally {
-      this.#fail(new HostlinkError('Serial connection ended', 'DISCONNECTED'));
+      this.#fail(failure ?? new HostlinkError('Serial connection ended', 'DISCONNECTED'));
       if (this.#state !== 'closing') {
         // Start cleanup without awaiting our own read task. The public
         // disconnected event is emitted only after both stream locks release.

@@ -14,6 +14,10 @@ import {geocachingDeviceSyncText} from '../../site/i18n/geocaching-device-sync-l
 import {GeocachingHardwareExchange} from '../../tools/hostlink/geocaching_hardware_exchange.mjs';
 import {saveIPPublication} from '../../site/geocaching/src/ip-publication-journal.js';
 const args=process.argv.slice(2),option=name=>args[args.indexOf(name)+1],hardwarePort=args.includes('--hardware-port')?option('--hardware-port'):null;
+const releaseDocs=args.includes('--release-docs');
+const releaseOutput=process.env.TRAIL_MATE_DOCS_OUTPUT??'docs/images/release-1.0.0';
+await fs.mkdir(releaseOutput,{recursive:true});
+if(releaseDocs&&hardwarePort)throw Error('Documentation captures require the isolated synthetic author, never a physical device');
 if(hardwarePort&&(!/^COM\d+$/.test(hardwarePort)||!args.includes('--serial-python')||!args.includes('--expected-author')||!/^[a-f0-9]{64}$/.test(option('--expected-author'))))throw Error('Hardware mode requires --hardware-port COMxx --serial-python <pyserial Python> --expected-author <fingerprint>');
 const resumeDraftId=args.includes('--resume-draft')?option('--resume-draft'):null;
 const resumeConfirmed=args.includes('--resume-confirmed-record');
@@ -21,7 +25,7 @@ const signatureCheckpoint=args.includes('--resume-signature-checkpoint')?option(
 if(signatureCheckpoint&&!resumeConfirmed)throw Error('Signature resume requires the original verified v1 record and receipt');
 if(resumeConfirmed&&(!resumeDraftId||!args.includes('--resume-confirmed-receipt')))throw Error('Confirmed resume requires the exact draft, signed v1 record and directory receipt');
 if(resumeDraftId&&(!hardwarePort||!args.includes('--resume-name')||!/^Wio网页验收-[a-z0-9]+$/.test(option('--resume-name'))||!/^[a-f0-9]{32}$/.test(resumeDraftId)))throw Error('Resume requires explicit hardware, isolated acceptance name and ID');
-const testName=hardwarePort?(resumeDraftId?option('--resume-name'):'Wio网页验收-'+Date.now().toString(36)):'真实网络网页藏宝点',updatedName=hardwarePort?testName+'-v2':'第二版网络藏宝点';
+const testName=hardwarePort?(resumeDraftId?option('--resume-name'):'Wio网页验收-'+Date.now().toString(36)):releaseDocs?'Riverside trail cache':'真实网络网页藏宝点',updatedName=hardwarePort?testName+'-v2':releaseDocs?'Riverside trail cache · updated':'第二版网络藏宝点';
 const python=process.env.TRAIL_MATE_TRACK_PYTHON??path.resolve('.codex-build/reticulum-directory/venv/'+(process.platform==='win32'?'Scripts/python.exe':'bin/python'));
 const work=path.resolve(hardwarePort?'.codex-build/hostlink-wio-l2/geocaching-network-page':'.codex-build/hostlink-codec/geocaching-network-page'),state=path.join(work,'state'),root=path.resolve('site');await fs.mkdir(work,{recursive:true});assert.equal(path.dirname(state),work);await fs.mkdir(state,{recursive:true});await fs.writeFile(path.join(work,'NOTES.txt'),hardwarePort?'Explicit real Wio L2 USB frames through a test browser API bridge, actual page/Worker/native loopback directory. Creates one isolated test geocache and three versions; no public Internet/RF/config/key operation. Created2026-10-13. Retain compact acceptance logs/public signed records; existing device records must remain intact.':'Actual built Geocaching maintenance page/Worker and native loopback service. Synthetic USB identity only, never physical device/RF/public directory. Created2026-10-13, current working branch. Retain compact logs/results until acceptance; synthetic state reused for debugging, cleanup after verification.');
 const children=[],sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));let endpoint,seeds,browser,service,bridge,hardware;
@@ -91,7 +95,23 @@ try{
  let page=await context.newPage();const errors=[];page.on('pageerror',error=>errors.push(String(error)));await page.goto(origin+'/trail-mate/geocaching/?lang=zh-Hans');await page.waitForFunction(()=>document.querySelector('#search')&&!document.querySelector('#search').disabled,{},{timeout:60000});await page.getByRole('button',{name:'草稿',exact:true}).click();await page.getByRole('button',{name:'连接设备',exact:true}).click();await page.getByText('USB 作者已验证',{exact:true}).waitFor();
  if(resumeDraftId){if(resumeConfirmed)await page.getByRole('button',{name:'我的藏宝点',exact:true}).click();await page.getByRole('button',{name:'刷新设备列表',exact:true}).click();await openTestDraft(resumeSignature?updatedName:testName);assert.ok(hardware.drafts.has(resumeDraftId));}
  else{await page.getByRole('button',{name:'新建草稿',exact:true}).click();await page.getByLabel('名称',{exact:true}).fill(testName);await page.getByLabel('正文',{exact:true}).fill('网页中文正文 <script>window.__geoNetworkInjection=true</script>\n'.repeat(25));await page.getByLabel('提示',{exact:true}).fill('&< >'.repeat(80));await page.getByLabel('纬度',{exact:true}).fill('31');await page.getByLabel('经度',{exact:true}).fill('121');await page.getByRole('button',{name:'保存草稿到设备',exact:true}).click();await page.getByText('草稿已保存到设备。刷新列表可更新发布状态。',{exact:true}).waitFor({timeout:45000});}
- async function publishAndSync(){await page.getByRole('button',{name:'刷新 IP 目录',exact:true}).click();await page.getByRole('button',{name:'检查并确认发布',exact:true}).click();assert.equal(await page.locator('dialog[open] script').count(),0);await page.locator('dialog[open]').getByRole('button',{name:'通过 IP 网络发布',exact:true}).click();await page.locator('.geo-publication-task').getByText('发布内容与目录签名证明已归档到设备。',{exact:true}).waitFor({timeout:60000});}
+ async function publishAndSync(){
+  try{
+   await page.getByRole('button',{name:'刷新 IP 目录',exact:true}).click();
+   await page.getByRole('button',{name:'检查并确认发布',exact:true}).click();
+   assert.equal(await page.locator('dialog[open] script').count(),0);
+   await page.locator('dialog[open]').getByRole('button',{name:'通过 IP 网络发布',exact:true}).click();
+   await page.locator('.geo-publication-task').getByText('发布内容与目录签名证明已归档到设备。',{exact:true}).waitFor({timeout:60000});
+  }catch(error){
+   console.error('Publication workflow diagnostic',JSON.stringify({
+    signatures:countSignatures(),confirmations:countConfirmations(),pageErrors:errors,
+    status:await page.locator('.geo-publication-panel > p[role=status]').allTextContents(),
+    task:await page.locator('.geo-publication-task > p[role=status]').allTextContents(),
+    openDialogs:await page.locator('dialog[open]').count(),
+   }));
+   throw error;
+  }
+ }
  async function openTestDraft(name){for(let index=0;index<128;index++){await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent==='刷新设备列表'&&!button.disabled),{},{timeout:45000});const row=page.locator('.geo-draft-row').filter({hasText:name});if(await row.count()){await row.click();await page.getByLabel('名称',{exact:true}).waitFor();return;}const more=page.getByRole('button',{name:'加载更多设备草稿',exact:true});if(!await more.count())throw Error('Isolated acceptance draft not present in current device catalogue');await more.click();}throw Error('Device catalogue acceptance search exceeded bounded page count');}
  if(resumeSignature){
   await page.locator('.geo-publication-task').getByRole('button',{name:geocachingIpPublicationText('zh-Hans').resume,exact:true}).click();
@@ -107,7 +127,12 @@ try{
  await publishAndSync();assert.equal(countSignatures(),resumeConfirmed?2:3);assert.equal(countConfirmations(),resumeConfirmed?2:3);
  assert.equal((await verifySigned(signedVersions[2])).record[5],2);
  if(hardware)await page.locator('.geo-publication-panel').screenshot({path:'docs/locales/zh-Hans/web-outdoor-management/images/geocaching-wio-network-archive.png'});
- else await page.screenshot({path:'docs/locales/zh-Hans/web-outdoor-management/images/geocaching-real-network-archive.png',fullPage:true});
+ else if(releaseDocs){
+  await page.locator('.management-language select').selectOption('en');
+  await page.locator('.geo-publication-task').getByText(geocachingIpPublicationText('en').confirmed,{exact:true}).waitFor();
+  await page.locator('.geo-publication-task').screenshot({path:`${releaseOutput}/web-geocaching-maintenance.png`});
+  await page.locator('.management-language select').selectOption('zh-Hans');
+ }else await page.screenshot({path:'docs/locales/zh-Hans/web-outdoor-management/images/geocaching-real-network-archive.png',fullPage:true});
  await context.grantPermissions(['clipboard-read','clipboard-write'],{origin});const expectedId=(await verifySigned(signedVersions[2])).cacheId;await page.getByRole('button',{name:'复制藏宝点 ID',exact:true}).click();assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),expectedId);
  const priorCalls=calls.length;for(const {id} of locales){await page.locator('.management-language select').selectOption(id);await page.locator('.geo-publication-task').getByText(geocachingIpPublicationText(id).confirmed,{exact:true}).waitFor();await page.locator('.geo-publication-task').getByText(geocachingDeviceSyncText(id).confirmed,{exact:true}).waitFor();await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);assert.equal(calls.length,priorCalls);}await page.locator('.management-language select').selectOption('zh-Hans');await page.setViewportSize({width:1440,height:960});
  const native=spawnSync(python,['tools/geocaching/verify_browser_publication.py','--database',path.join(state,'service','directory.sqlite')],{input:JSON.stringify(signedVersions.map(item=>item.map(part=>[...part]))),windowsHide:true,maxBuffer:1048576});assert.equal(native.status,0,String(native.stderr));const nativeCheck=JSON.parse(native.stdout);assert.equal(nativeCheck.transportDiffersFromAuthor,true);

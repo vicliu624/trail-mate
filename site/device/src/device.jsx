@@ -1,10 +1,10 @@
 import React,{useState,useRef,useEffect} from 'react';
 import {createRoot} from 'react-dom/client';
-import {Background,Button,Card,Title} from 'animal-island-ui';
+import {Background,Button,Card,Title,Input} from 'animal-island-ui';
 import 'animal-island-ui/style';
 import '../../styles.css';
 import './device.css';
-import brand from '../../../docs/images/logo_big.png';
+import {SiteHeader} from '../../site-header.jsx';
 import {HostlinkConnection} from './hostlink.js';
 import {canEditInterfaceAccess} from './config-interface-capabilities.js';
 import {ManagementSession,OPERATION} from './management-protocol.js';
@@ -25,7 +25,7 @@ import {CONFIG_COLLECTIONS,readConfigCollection,changeConfigCollection,configCol
 import {proveDeviceAuthor} from './author-identity.js';
 import {BackupDialog} from './backup-dialog.jsx';
 import {isEncryptedConfigBackup,ENCRYPTED_BACKUP_MAX_BYTES} from './config-backup.js';
-import {ManagementLanguage,ManagementPageProvider,initializeManagementPage,useManagementLanguage} from '../../i18n/management-language.jsx';
+import {ManagementPageProvider,initializeManagementPage,useManagementLanguage} from '../../i18n/management-language.jsx';
 import {useManagementText} from '../../i18n/management-copy.jsx';
 import {configInputText} from '../../i18n/config-input-labels.js';
 import {configCollectionText} from '../../i18n/config-collection-labels.js';
@@ -69,7 +69,6 @@ import {createConfigurationReadback,checkConfigurationReadback} from './config-r
 import {configReadbackText} from '../../i18n/config-readback-labels.js';
 import {configMqttRuntimeText} from '../../i18n/config-mqtt-runtime-labels.js';
 import {saveConfigurationReadbackCheckpoint,loadConfigurationReadbackCheckpoint,confirmConfigurationReadbackCheckpoint} from './config-readback-checkpoint.js';
-const brandUrl=new URL(brand,import.meta.url).href;
 
 const groups=['设备与身份','无线与协议','Reticulum','频道与消息','GPS 与定位','轨迹与地图','显示与交互','网络与外设','其他设置'];
 function group(key){
@@ -100,7 +99,7 @@ function Field({record,document,onEdit,onValidity,errorData,disabled,preferredFr
  if(blobText!==undefined)control=<textarea id={id} {...accessibility} rows={4} defaultValue={errorData?.raw??blobText} disabled={locked} onChange={e=>{try{edit(encodeConfigurationTextBlob(e.target.value),e.target.value);}catch(failure){invalid(failure,e.target.value);}}}/>;
  else if(record.type==='bool')control=<label className="device-toggle"><input id={id} {...accessibility} type="checkbox" defaultChecked={record.value} disabled={locked} onChange={e=>edit(e.target.checked)}/>{text.enabled}</label>;
  else if(schema.options)control=<select id={id} {...accessibility} value={record.value} disabled={locked} onChange={e=>edit(Number(e.target.value))}>{!schema.options.some(option=>option.value===record.value)&&<option value={record.value} disabled>{inputText.unknownOption.replace('{value}',numbers.format(record.value))}</option>}{schema.options.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select>;
- else control=<input id={id} {...accessibility} dir={/^(u8|u16|u32|i8|i32|f32|b64)$/.test(record.type)?'ltr':undefined} type={schema.secret?(revealed?'text':'password'):/^(u8|u16|u32|i8|i32|f32)$/.test(record.type)?'number':'text'} autoComplete={schema.secret?'new-password':undefined} spellCheck={schema.secret?false:undefined} min={schema.range?.[0]} max={schema.range?.[1]} step={record.type==='f32'?'any':'1'} value={schema.readOnly?display(record):undefined} defaultValue={schema.readOnly?undefined:errorData?.raw??display(record)} disabled={locked} onChange={e=>{
+ else control=<Input id={id} {...accessibility} status={error?'error':undefined} dir={/^(u8|u16|u32|i8|i32|f32|b64)$/.test(record.type)?'ltr':undefined} type={schema.secret?(revealed?'text':'password'):/^(u8|u16|u32|i8|i32|f32)$/.test(record.type)?'number':'text'} autoComplete={schema.secret?'new-password':undefined} spellCheck={schema.secret?false:undefined} min={schema.range?.[0]} max={schema.range?.[1]} step={record.type==='f32'?'any':'1'} value={schema.readOnly?display(record):undefined} defaultValue={schema.readOnly?undefined:errorData?.raw??display(record)} disabled={locked} onChange={e=>{
    let value=e.target.value;
    if(/^(u8|u16|u32|i8|i32|f32)$/.test(record.type)){if(!value.trim()){invalid({code:'numberRequired',message:text.numberRequired},value);return;}value=Number(value);}
    if(record.type==='b64'){try{value=decodeConfigurationBinary(record.key,value);}catch{invalid({code:'base64Required',message:text.base64Required},value);return;}}
@@ -264,12 +263,10 @@ function App(){
  const searchChanges=new Set([...changes,...invalidFields.keys(),...moduleSearchRows.filter(row=>row.changed).map(row=>row.key)]);
  return <><Background type="sprinkles" aria-hidden="true"/>
  <div className="page-shell device-shell">
-   <header className="topbar" data-author-verified={author?.verified===true&&authorStatus.key==='verified'?'true':'false'}><a className="brand" href={language.href('../')}><img className="brand-logo" src={brandUrl} alt=""/><span className="brand-text">Trail Mate</span></a>
-     <div className="top-actions"><a className="top-link" href={language.href('../geocaching/')}>Geocaching</a><a className="top-link" href={language.href('../tracks/')}>{language.tracksTitle}</a><a className="top-link" href={language.href('../#webflasher')}>Web Flasher</a>
-       <span className="device-status">{state==='ready'?<><bdi>{info?.model}</bdi> · {language.text.connected}</>:language.text.disconnected}</span>
-       <Button onClick={state==='ready'?disconnect:connect} disabled={busy||!support} type="primary">{state==='ready'?language.text.disconnect:language.text.connect}</Button>
-     </div>
-   </header>
+   <SiteHeader page="device" data-author-verified={author?.verified===true&&authorStatus.key==='verified'?'true':'false'}>
+       <span className="device-status" role="status">{state==='ready'?<><bdi>{info?.model}</bdi> · {language.text.connected}</>:state==='connecting'?language.text.connecting:state==='closing'?language.text.disconnecting:language.text.disconnected}</span>
+       <Button onClick={state==='ready'?disconnect:connect} loading={state==='connecting'} disabled={busy||!support} type="primary">{state==='ready'?language.text.disconnect:language.text.connect}</Button>
+   </SiteHeader>
    <div className="content-shell">
      <aside className="sidebar"><p className="sidebar-label">{language.deviceTitle}</p><nav className="device-nav">{groups.map((name,index)=><button key={name} className={selected===name?'selected':''} onClick={()=>setSelected(name)}>{translatedGroups[index]}</button>)}</nav><p className="device-footnote" role="status">{authorStatusMessage}</p>{author&&<div className="device-author"><span>{authorText.fingerprint}</span><code dir="ltr">{author.fingerprint}</code><span>{authorText.generation.replace('{generation}',numbers.format(author.generation))}</span></div>}{operations.includes(OPERATION.AUTHOR_INFO)&&operations.includes(OPERATION.AUTHOR_PROVE)&&<Button disabled={busy||state!=='ready'} onClick={async()=>{const token=generation.current;setBusy(true);try{await verifyAuthor();}finally{if(token===generation.current)setBusy(false);}}}>{authorText.reverify}</Button>}<p className="device-footnote">{authorText.usbNotProof}</p></aside>
      <main className="main-content"><Title color="app-teal" size="middle">{translatedGroups[groups.indexOf(selected)]}</Title><p role="status" className="device-notice">{notice}</p>
@@ -325,5 +322,5 @@ function App(){
    }}/>}
  </div></>;
 }
-const initialLanguage=await initializeManagementPage();
-createRoot(document.getElementById('device-app')).render(<ManagementPageProvider><ManagementLanguage page="device" initial={initialLanguage}/><App/></ManagementPageProvider>);
+await initializeManagementPage();
+createRoot(document.getElementById('device-app')).render(<ManagementPageProvider><App/></ManagementPageProvider>);

@@ -1,5 +1,6 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import L from 'leaflet';
+import {createTrackMap} from './leaflet-map.js';
 import {parseKml} from './kml.js';
 import {summarizeKml} from './kml-summary.js';
 import {KmlContentDetails} from './kml-content-details.jsx';
@@ -40,7 +41,7 @@ export function SharedTrackPreview({detail,packet}){
  const number=new Intl.NumberFormat(locale),fixed=(value,digits)=>new Intl.NumberFormat(locale,{maximumFractionDigits:digits}).format(value);
  const format=(key,values)=>text[key].replace(/\{(\w+)\}/g,(_,name)=>values[name]);
  useEffect(()=>{
-  const view=L.map(host.current,{preferCanvas:true}).setView([25,110],3);map.current=view;
+  const view=createTrackMap(host.current);map.current=view;
   view.createPane('land');view.getPane('land').style.zIndex=200;
   const land=L.geoJSON(null,{pane:'land',renderer:L.canvas({pane:'land'}),interactive:false,style:{color:'#c5d4cb',weight:1,fillColor:'#f4efd8',fillOpacity:.85}}).addTo(view);
   drawing.current=L.featureGroup().addTo(view);let countries,cancelled=false;

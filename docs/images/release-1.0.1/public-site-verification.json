@@ -1,0 +1,142 @@
+{
+  "checkedAt": "2026-10-17T02:30:06.647Z",
+  "sourceRevision": "c63ea60d33439a0d1862f524504f01d3f661b884",
+  "release": "1.0.1",
+  "assets": [
+    {
+      "file": "site-header.css",
+      "sha256": "1e26f443d7249496872d1e838d73a072006a20e8e304b51c00fe6462ca11b6da",
+      "equivalentImageUrls": []
+    },
+    {
+      "file": "island-controls.css",
+      "sha256": "bca73934ebe727a50d0633c73eb22e3ddf497c0cd9fff9ad3c6dda961f13d993",
+      "equivalentImageUrls": []
+    },
+    {
+      "file": "components-dist/components.css",
+      "sha256": "98933ea8e5fe16ab5d2f4918c298b3e3f18d7ba2c014716286bfd6b7c575181f",
+      "equivalentImageUrls": []
+    },
+    {
+      "file": "components-dist/components.js",
+      "sha256": "168c21e0158e77203ce6e8e09fee361c8b5cd411f9e5582f40056fa7c80c153a",
+      "equivalentImageUrls": []
+    },
+    {
+      "file": "device/dist/device.js",
+      "sha256": "b72d839b5ed4cc1e3c160b050882b17ae9c54ec9a07ba75f8ff02469798b9c05",
+      "equivalentImageUrls": []
+    },
+    {
+      "file": "device/dist/device.css",
+      "sha256": "68c290a82b3d9e815b786ccf5d5e491cc734b66372bb6d05499f17bf416871f2",
+      "equivalentImageUrls": [
+        "./icon-map-SGBLR3QK.svg",
+        "./location-ANHOLMPF.svg",
+        "./icon-design-LLCRJXDK.svg",
+        "./icon-helicopter-NWH6SJXE.svg",
+        "./icon-camera-KH6XCJ55.svg",
+        "./icon-chat-PTOHWHY5.svg",
+        "./icon-miles-336XLPQ5.svg",
+        "./icon-shopping-5CFP7OKC.svg",
+        "./wifi-PPG2K2IO.svg",
+        "./icon-map-SGBLR3QK.svg",
+        "./icon-helicopter-NWH6SJXE.svg",
+        "./icon-map-SGBLR3QK.svg",
+        "./icon-chat-PTOHWHY5.svg",
+        "./icon-shopping-5CFP7OKC.svg",
+        "./icon-design-LLCRJXDK.svg",
+        "./icon-diy-4ZVDIFE2.svg",
+        "./icon-camera-KH6XCJ55.svg",
+        "./icon-chat-PTOHWHY5.svg",
+        "./wifi-PPG2K2IO.svg",
+        "./icon-map-SGBLR3QK.svg",
+        "./icon-miles-336XLPQ5.svg",
+        "./wifi-PPG2K2IO.svg"
+      ]
+    },
+    {
+      "file": "tracks/dist/tracks.js",
+      "sha256": "0bdb4c78ea3d3d8eeeb7fc0adf6ad51582b71f463750db7f5deeef0d05d15d44",
+      "equivalentImageUrls": []
+    },
+    {
+      "file": "tracks/dist/tracks.css",
+      "sha256": "472c7d732c4bdf50bc02f37c575da0b361728a180b18d437d40d67e5b6266cbb",
+      "equivalentImageUrls": [
+        "./icon-map-SGBLR3QK.svg",
+        "./location-ANHOLMPF.svg",
+        "./icon-design-LLCRJXDK.svg",
+        "./icon-helicopter-NWH6SJXE.svg",
+        "./icon-camera-KH6XCJ55.svg",
+        "./icon-chat-PTOHWHY5.svg",
+        "./icon-miles-336XLPQ5.svg",
+        "./icon-shopping-5CFP7OKC.svg",
+        "./wifi-PPG2K2IO.svg",
+        "./icon-map-SGBLR3QK.svg",
+        "./icon-helicopter-NWH6SJXE.svg",
+        "./icon-map-SGBLR3QK.svg",
+        "./icon-chat-PTOHWHY5.svg",
+        "./icon-shopping-5CFP7OKC.svg",
+        "./icon-design-LLCRJXDK.svg",
+        "./icon-diy-4ZVDIFE2.svg",
+        "./icon-camera-KH6XCJ55.svg",
+        "./icon-chat-PTOHWHY5.svg",
+        "./wifi-PPG2K2IO.svg",
+        "./icon-map-SGBLR3QK.svg",
+        "./icon-miles-336XLPQ5.svg",
+        "./wifi-PPG2K2IO.svg"
+      ]
+    },
+    {
+      "file": "geocaching/dist/page.js",
+      "sha256": "a53699fb1bc1880a001362c3dec8da0c0b003b185f7f953a35d643e4ed4f466e",
+      "equivalentImageUrls": []
+    },
+    {
+      "file": "geocaching/dist/page.css",
+      "sha256": "e23ca3cd6d5d014ed90d2416a9e79e5b25ef13b4cd977aad3b56d7b891ff7db9",
+      "equivalentImageUrls": []
+    }
+  ],
+  "checks": [
+    {
+      "page": "device",
+      "url": "https://vicliu624.github.io/trail-mate/device/?lang=en",
+      "active": "Device management",
+      "languageReadable": true,
+      "mobileFit": true
+    },
+    {
+      "page": "tracks",
+      "url": "https://vicliu624.github.io/trail-mate/tracks/?lang=en",
+      "active": "Tracks",
+      "languageReadable": true,
+      "mobileFit": true
+    },
+    {
+      "page": "geocaching",
+      "url": "https://vicliu624.github.io/trail-mate/geocaching/?lang=en",
+      "active": "Geocaching",
+      "languageReadable": true,
+      "mobileFit": true
+    },
+    {
+      "page": "home",
+      "locale": "zh-Hans",
+      "languageKept": true
+    }
+  ],
+  "pageErrors": [],
+  "homeCapture": {
+    "file": "web-home-tools.png",
+    "url": "https://vicliu624.github.io/trail-mate/?lang=en&feature=home&demo-device=pager",
+    "locale": "en",
+    "viewport": {
+      "width": 1440,
+      "height": 1080
+    },
+    "capturedAt": "2026-10-17T02:29:53.618Z"
+  }
+}

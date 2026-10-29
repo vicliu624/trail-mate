@@ -4,16 +4,11 @@ import {flushSync} from 'react-dom';
 import {Background, Button, Card, Divider, Title} from 'animal-island-ui';
 import {Icon} from '../../island-icon.jsx';
 import 'animal-island-ui/style';
-import brandLogo from '../../../docs/images/logo_big.png';
+import {SiteHeader} from '../../site-header.jsx';
 import {Maintenance} from './maintenance.jsx';
-import {ManagementLanguage,ManagementPageProvider,useManagementLanguage} from '../../i18n/management-language.jsx';
+import {ManagementPageProvider} from '../../i18n/management-language.jsx';
 
 const Label = ({name}) => <span data-label={name}/>;
-function GeocachingNavigation(){
-  const language=useManagementLanguage();
-  return <><a className="brand" href={language.href('../')}><img className="brand-logo" src={new URL(brandLogo,import.meta.url).href} alt=""/>Trail Mate</a>
-    <a className="source-link" href={language.href('../tracks/')}>{language.tracksTitle}</a></>;
-}
 
 export function mountIslandShell() {
   const host = document.createElement('div');
@@ -21,13 +16,10 @@ export function mountIslandShell() {
   document.body.replaceChildren(host);
   flushSync(() => createRoot(host).render(<ManagementPageProvider>
     <Background type="sprinkles" className="island-wallpaper" aria-hidden="true"/>
-    <header className="header">
-      <GeocachingNavigation/>
-      <span className="section-name"><Label name="title"/></span>
+    <SiteHeader page="geocaching">
       <span id="connection-state" className="status" role="status" data-label="offline"/>
-      <ManagementLanguage page="geocaching"/>
-      <a className="source-link" href="https://github.com/vicliu624/trail-mate/tree/main/site/geocaching">GitHub</a>
-    </header>
+      <div id="geocaching-connection-controls"/>
+    </SiteHeader>
     <main className="workspace">
       <aside className="sidebar">
         <Title color="app-teal" size="middle"><Icon name="icon-map" size={24}/> <Label name="title"/></Title>

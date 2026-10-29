@@ -169,10 +169,19 @@ void prepare_group(lv_group_t* group)
     // when its group has navigable objects. Repair that before dispatch.
     auto* focused = lv_group_get_focused(group);
     if (ui::widgets::ime_owns_text_focus(focused)) return;
-    if (!focused || !lv_obj_is_visible(focused) || lv_obj_has_state(focused, LV_STATE_DISABLED))
+    bool hidden = false;
+    for (auto* object = focused; object; object = lv_obj_get_parent(object))
+        if (lv_obj_has_flag(object, LV_OBJ_FLAG_HIDDEN)) hidden = true;
+    if (!focused || hidden || lv_obj_has_state(focused, LV_STATE_DISABLED))
     {
         lv_group_set_editing(group, false);
         lv_group_focus_next(group);
+    }
+    else
+    {
+        // A clipped focus is still valid. Complete its scroll before routing
+        // the next key instead of silently skipping that control.
+        lv_obj_scroll_to_view(focused, LV_ANIM_OFF);
     }
     platform::ui::PsramUiLease memory;
     for (unsigned i = 0; i < lv_group_get_obj_count(group); ++i)

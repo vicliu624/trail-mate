@@ -93,6 +93,13 @@ board runtime unless real hardware verification proves otherwise.
 
 ## Build Environments
 
+The SX1262 and LR1121 release environments on current `main` expose USB CDC for
+HostLink browser management. The service starts when the host opens CDC and
+releases its queues/task when disconnected. Full DFU and DFU Runtime remain
+disabled; firmware flashing uses the ROM downloader with BOOT + RESET.
+The original v1.0.0 Pager release images predate this integration. A website
+update alone cannot add management support to an already installed image.
+
 Defined in [tlora_pager.ini](../../variants/lilygo_tlora_pager/envs/tlora_pager.ini):
 
 - `tlora_pager_sx1262`
