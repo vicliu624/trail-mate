@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <limits>
+#include <mutex>
 
 #include "app/app_facade_access.h"
 #include "boards/t_display_p4/board_profile.h"
@@ -9,7 +10,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "platform/esp/arduino_common/app_tasks.h"
-#include "platform/esp/idf_common/sx126x_radio.h"
+#include "platform/esp/idf_common/selected_radio.h"
 #include "sys/clock.h"
 
 namespace
@@ -26,6 +27,8 @@ constexpr uint32_t kIrqReceiveTerminal =
     kIrqRxDone | kIrqHeaderError | kIrqCrcError | kIrqTimeout;
 
 bool s_radio_tasks_paused_by_probe = false;
+std::mutex s_foreground_mutex;
+bool s_foreground_acquired = false;
 
 static_assert((kIrqReceiveTerminal &
                (kIrqPreambleDetected | kIrqSyncWordValid | kIrqHeaderValid)) == 0u,
@@ -43,9 +46,9 @@ bool board_has_lora_capability()
 #endif
 }
 
-platform::esp::idf_common::Sx126xRadio& radio()
+platform::esp::idf_common::SelectedRadio& radio()
 {
-    return platform::esp::idf_common::Sx126xRadio::instance();
+    return platform::esp::idf_common::SelectedRadio::instance();
 }
 
 } // namespace
@@ -60,6 +63,8 @@ bool is_supported()
 
 bool acquire()
 {
+    std::unique_lock<std::mutex> lock(s_foreground_mutex, std::try_to_lock);
+    if (!lock.owns_lock() || s_foreground_acquired) return false;
     if (!is_supported())
     {
         return false;
@@ -76,6 +81,7 @@ bool acquire()
 
     if (radio().acquire())
     {
+        s_foreground_acquired = true;
         return true;
     }
 
@@ -121,8 +127,8 @@ bool transmit_packet(const uint8_t* data, std::size_t size)
         {
             radio().clearIrqFlags(irq);
             const bool complete = (irq & kIrqTxDone) != 0u;
-            (void)radio().startReceive();
-            return complete;
+            const bool receiving = radio().startReceive();
+            return complete && receiving;
         }
         vTaskDelay(pdMS_TO_TICKS(1));
     }
@@ -146,7 +152,8 @@ bool poll_received_packet(uint8_t* buffer, std::size_t capacity, ReceivedPacket*
     }
 
     const uint32_t irq = radio().getIrqFlags();
-    if ((irq & kIrqRxDone) == 0u)
+    if ((irq & kIrqRxDone) == 0u ||
+        (irq & (kIrqHeaderError | kIrqCrcError | kIrqTimeout)) != 0u)
     {
         if (irq != 0u)
         {
@@ -170,9 +177,9 @@ bool poll_received_packet(uint8_t* buffer, std::size_t capacity, ReceivedPacket*
     const float rssi_dbm = packet_fits ? radio().readRssi() : 0.0f;
 
     radio().clearIrqFlags(irq);
-    (void)radio().startReceive();
+    const bool receiving = radio().startReceive();
 
-    if (!packet_fits || read_state != 0)
+    if (!packet_fits || read_state != 0 || !receiving)
     {
         return false;
     }
@@ -185,6 +192,8 @@ bool poll_received_packet(uint8_t* buffer, std::size_t capacity, ReceivedPacket*
 
 void release()
 {
+    std::lock_guard<std::mutex> lock(s_foreground_mutex);
+    if (!s_foreground_acquired) return;
     // Restore the configured protocol PHY before the background adapter owns
     // the SX126x again. The probe may have left it on any candidate profile.
     ::app::configFacade().applyMeshConfig();
@@ -194,6 +203,7 @@ void release()
         ::app::AppTasks::resumeRadioTasks();
         s_radio_tasks_paused_by_probe = false;
     }
+    s_foreground_acquired = false;
 }
 
 } // namespace platform::ui::lora

@@ -7,6 +7,9 @@
 namespace ui
 {
 
+// Shared by catalog construction and launcher storage, including optional apps.
+inline constexpr size_t kAppCatalogCapacity = 32;
+
 struct AppCatalog
 {
     void* user_data = nullptr;

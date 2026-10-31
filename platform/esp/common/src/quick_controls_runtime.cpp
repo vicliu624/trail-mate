@@ -15,7 +15,7 @@
 #include "platform/ui/wifi_access_runtime.h"
 #include "platform/ui/wifi_runtime.h"
 #if defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)
-#include "platform/esp/idf_common/sx126x_radio.h"
+#include "platform/esp/idf_common/selected_radio.h"
 #endif
 #include <algorithm>
 #include <atomic>
@@ -42,7 +42,7 @@ std::atomic<Error> errors[5]{};
 bool radio_online()
 {
 #if defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)
-    return ::platform::esp::idf_common::Sx126xRadio::instance().isOnline();
+    return ::platform::esp::idf_common::SelectedRadio::instance().isOnline();
 #else
     ::platform::esp::boards::AppContextInitHandles handles;
     return ::platform::esp::boards::tryResolveAppContextInitHandles(&handles) && handles.lora_board && handles.lora_board->isRadioOnline();

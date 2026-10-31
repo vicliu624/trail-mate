@@ -5,10 +5,14 @@ set_property(CACHE TRAIL_MATE_IDF_TARGET PROPERTY STRINGS
     tab5
     t_display_p4_tft
     t_display_p4_amoled
+    t_display_p4_tft_lr2021
+    t_display_p4_amoled_lr2021
 )
 
+include("${CMAKE_SOURCE_DIR}/builds/esp_idf/target_profiles.cmake")
 set(TRAIL_MATE_IDF_TARGET_DIR "${CMAKE_SOURCE_DIR}/builds/esp_idf/targets/${TRAIL_MATE_IDF_TARGET}")
-if(NOT EXISTS "${TRAIL_MATE_IDF_TARGET_DIR}/sdkconfig.defaults")
+set(SDKCONFIG_DEFAULTS "${TRAILMATE_ESP_IDF_TARGET_DEFAULTS_${TRAIL_MATE_IDF_TARGET}}")
+if(NOT EXISTS "${SDKCONFIG_DEFAULTS}")
     message(FATAL_ERROR "Missing sdkconfig.defaults for TRAIL_MATE_IDF_TARGET='${TRAIL_MATE_IDF_TARGET}' at ${TRAIL_MATE_IDF_TARGET_DIR}")
 endif()
 
@@ -16,7 +20,6 @@ endif()
 # different IDF targets/build trees do not fight over stale source-root
 # sdkconfig.<target> artifacts.
 set(SDKCONFIG "${CMAKE_BINARY_DIR}/sdkconfig.${TRAIL_MATE_IDF_TARGET}")
-set(SDKCONFIG_DEFAULTS "${TRAIL_MATE_IDF_TARGET_DIR}/sdkconfig.defaults")
 
 # `builds/esp_idf` owns ESP-IDF target defaults after root legacy removal.
 # Board choice stays explicit via `TRAIL_MATE_IDF_TARGET`, while board-specific

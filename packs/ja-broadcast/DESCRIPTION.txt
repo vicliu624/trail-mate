@@ -1,0 +1,5 @@
+Content-only Japanese broadcast font for devices with an extended memory
+profile. It provides a JIS X 0208 baseline plus kana and fullwidth alphanumeric
+forms used by the ARIB decoder. It does not change the UI language or provide
+Japanese input. ARIB additional symbols and downloadable characters are not
+completely covered. Source provenance and font licenses accompany the payload.

@@ -232,8 +232,11 @@ bool transmit_packet(const uint8_t* data, std::size_t size)
 
     auto& radio = ::platform::linux_runtime::foreground_packet_radio();
     const bool sent = radio.transmit(data, size);
-    (void)radio.startReceive();
-    return sent;
+    const bool receiving = radio.startReceive();
+    // A successful send does not establish that the receive context survived.
+    // Quarantine old RSSI/packets until an explicit reconfiguration succeeds.
+    if (!receiving) s_configured = false;
+    return sent && receiving;
 }
 
 float read_instant_rssi()

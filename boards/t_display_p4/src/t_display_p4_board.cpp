@@ -15,11 +15,13 @@
 #include "esp_ldo_regulator.h"
 #include "esp_log.h"
 #include "esp_sleep.h"
+#include "esp_timer.h"
+#include "platform/shared/radio/board_radio_lease.h"
 #include "platform/esp/idf_common/bsp_runtime.h"
 #include "platform/esp/idf_common/gps_runtime.h"
 #include "platform/esp/idf_common/sd_card_runtime_sdfat_adapter.h"
 #include "platform/esp/idf_common/sdmmc_host_runtime.h"
-#include "platform/esp/idf_common/sx126x_radio.h"
+#include "platform/esp/idf_common/selected_radio.h"
 #include "platform/esp/idf_common/wireless_companion/c6_companion.h"
 #include "platform/ui/device_runtime.h"
 
@@ -97,9 +99,9 @@ ExpanderPinLocation locate_expander_pin(int pin)
     return {};
 }
 
-platform::esp::idf_common::Sx126xRadio& radio()
+platform::esp::idf_common::SelectedRadio& radio()
 {
-    return platform::esp::idf_common::Sx126xRadio::instance();
+    return platform::esp::idf_common::SelectedRadio::instance();
 }
 
 TickType_t radio_tx_timeout_ticks(size_t len)
@@ -1514,7 +1516,8 @@ int TDisplayP4Board::transmitRadio(const uint8_t* data, size_t len)
         if ((irq_flags & kRadioIrqTimeout) != 0 || elapsed > timeout)
         {
             ESP_LOGW(kTag,
-                     "SX1262 transmit timeout len=%u elapsed_ms=%lu irq=0x%04lX chip_timeout=%d",
+                     "%s transmit timeout len=%u elapsed_ms=%lu irq=0x%04lX chip_timeout=%d",
+                     platform::esp::idf_common::kSelectedRadioName,
                      static_cast<unsigned>(len),
                      static_cast<unsigned long>(elapsed * portTICK_PERIOD_MS),
                      static_cast<unsigned long>(irq_flags),
@@ -1583,7 +1586,11 @@ float TDisplayP4Board::getRadioRSSI()
 
 float TDisplayP4Board::getRadioSNR()
 {
+#if defined(TRAIL_MATE_IDF_RADIO_LR2021)
+    return radio().readSnr();
+#else
     return 0.0f;
+#endif
 }
 
 int TDisplayP4Board::configureLoraRadio(float freq_mhz,
@@ -1597,7 +1604,7 @@ int TDisplayP4Board::configureLoraRadio(float freq_mhz,
 {
     if (!ensureRadioReady())
     {
-        ESP_LOGE(kTag, "SX1262 LoRa configuration skipped: radio is not ready");
+        ESP_LOGE(kTag, "%s LoRa configuration skipped: radio is not ready", platform::esp::idf_common::kSelectedRadioName);
         return -1;
     }
 
@@ -1612,7 +1619,8 @@ int TDisplayP4Board::configureLoraRadio(float freq_mhz,
     if (!configured)
     {
         ESP_LOGE(kTag,
-                 "SX1262 LoRa configuration failed: freq=%.3f bw=%.1f sf=%u cr=4/%u sync=0x%02X err=%s",
+                 "%s LoRa configuration failed: freq=%.3f bw=%.1f sf=%u cr=4/%u sync=0x%02X err=%s",
+                 platform::esp::idf_common::kSelectedRadioName,
                  freq_mhz,
                  bw_khz,
                  static_cast<unsigned>(sf),
@@ -1890,13 +1898,10 @@ bool TDisplayP4Board::loraReady() const
 
 bool TDisplayP4Board::ensureRadioReady() const
 {
-    static bool acquired = false;
-    if (!acquired)
-    {
-        acquired = radio().acquire();
-        ESP_LOGI(kTag, "SX1262 radio acquire=%d", acquired ? 1 : 0);
-    }
-    return acquired;
+    static std::mutex mutex;
+    static platform::shared::radio::BoardRadioLease lease;
+    const std::lock_guard<std::mutex> lock(mutex);
+    return lease.ensure(radio(), [] { return static_cast<uint32_t>(esp_timer_get_time() / 1000); });
 }
 
 void TDisplayP4Board::copyOwnerTag(const char* src, char* dst, size_t dst_len)

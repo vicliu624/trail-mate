@@ -27,6 +27,14 @@ ReceiveSessionSnapshot receive_session_snapshot();
 bool poll_receive_session(uint32_t generation, uint8_t* buffer, size_t capacity, ReceivedPacket* packet);
 bool transmit_receive_session(uint32_t generation, const uint8_t* bytes, size_t size);
 void release_receive_session(uint32_t generation);
+// Worker-side handoff barrier. Idle UI state alone does not attest that an
+// in-flight operation and checked mesh restoration have finished. Returns
+// false if another active session supersedes the release. Never call on UI.
+bool wait_receive_session_released();
+namespace detail
+{
+void prepare_receive_session_worker();
+}
 #else
 namespace detail
 {
@@ -67,5 +75,13 @@ inline void release_receive_session(uint32_t generation)
     state.state = ReceiveSessionState::Idle;
     state.transmit_pending = false;
 }
+inline bool wait_receive_session_released()
+{
+    return receive_session_snapshot().state == ReceiveSessionState::Idle;
+}
+namespace detail
+{
+inline void prepare_receive_session_worker() {}
+} // namespace detail
 #endif
 } // namespace platform::ui::lora

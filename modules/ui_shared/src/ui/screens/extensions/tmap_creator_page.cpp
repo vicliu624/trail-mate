@@ -135,7 +135,8 @@ lv_obj_t* field(const char* title, const std::string& value, unsigned index, siz
     lv_obj_add_event_cb(
         object, [](lv_event_t* event)
         {
-        if (!page) return; const auto index = reinterpret_cast<uintptr_t>(lv_event_get_user_data(event));
+        if (!page) return;
+        const auto index = reinterpret_cast<uintptr_t>(lv_event_get_user_data(event));
         const std::string text = lv_textarea_get_text(lv_event_get_target_obj(event));
         if (page->step == 1 && index < 4) coordinates[index] = text;
         if (page->step == 3) { if (index == 0) draft.name = text; else draft.package_key = text; }

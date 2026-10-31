@@ -67,6 +67,10 @@ void validateDeviceOptions(const DeviceOptions& options)
     if (options.ux_pack.empty()) throw std::runtime_error("Device ux_pack is required");
     if (options.radio.driver != "none" && options.radio.driver != "sx126x" && options.radio.driver != "lr2021")
         throw std::runtime_error("Unknown packet radio driver");
+    using RfProfile = platform::linux_runtime::Lr2021RfSwitchProfile;
+    if ((options.radio.rf_switch_profile != RfProfile::None && options.radio.rf_switch_profile != RfProfile::Cm0_16E8) ||
+        (options.radio.rf_switch_profile != RfProfile::None && options.radio.driver != "lr2021"))
+        throw std::runtime_error("RF switch profile requires the matching LR2021 backend");
     if (options.radio.driver != "none" &&
         (options.radio.bus.reset_gpio < 0 || options.radio.bus.busy_gpio < 0 ||
          options.radio.bus.reset_gpio == options.radio.bus.busy_gpio ||
@@ -176,6 +180,11 @@ DeviceOptions loadDeviceOptions(const std::string& path)
             else options.gnss.gnss_only_setup = value == "true";
         }
         else if (key == "radio_driver") options.radio.driver = value;
+        else if (key == "radio_rf_switch_profile")
+        {
+            if (!platform::linux_runtime::parse_lr2021_rf_switch_profile(value, options.radio.rf_switch_profile))
+                throw std::runtime_error("Unknown LR2021 RF switch profile");
+        }
         else if (key == "radio_spi") options.radio.bus.spi_device = value;
         else if (key == "radio_gpiochip") options.radio.bus.gpiochip = value;
         else if (key == "radio_reset") options.radio.bus.reset_gpio = integer(value);

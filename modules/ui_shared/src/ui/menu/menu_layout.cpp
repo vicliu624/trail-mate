@@ -47,7 +47,7 @@ constexpr const char* kTag = "ui-menu-layout";
 #define MENU_LAYOUT_DIAG(...)
 #endif
 
-constexpr size_t kMaxMenuApps = 18;
+constexpr size_t kMaxMenuApps = ui::kAppCatalogCapacity;
 constexpr const char* kBottomHelpPlainPrefix = "H Help";
 constexpr const char* kBottomHelpRichPrefix = "#D6403A H# Help";
 

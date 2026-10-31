@@ -2,10 +2,32 @@
 
 Board-owned runtime and hardware truth for `LILYGO T-Display-P4`.
 
-This board family now maps to two explicit ESP-IDF target environments:
+This board family maps to explicit display/radio ESP-IDF targets:
 
 - `t_display_p4_tft`
 - `t_display_p4_amoled`
+- `t_display_p4_tft_lr2021`
+- `t_display_p4_amoled_lr2021`
+
+The original targets select SX1262. The `_lr2021` targets select the native
+RadioLib LR2021 packet backend. Display defaults are shared by display type;
+the target descriptor selects the radio at compile time. The user-confirmed
+TFT + LR2021 device uses `t_display_p4_tft_lr2021`.
+
+Mesh, Protocol Probe, Walkie and quick controls share the selected radio's
+singleton, mutex and reference count. The LR2021 backend translates physical
+IRQ bits to the existing IDF packet contract, uses XL9535 reset and the board
+antenna path, configures 3.0 V TCXO and DIO6/7/8/10 RF switching, and polls IRQ
+status with DIO11 configured. BUSY/transport failures make it offline and hold
+reset. Raw-IQ streaming and broadcast FM are separate pending capabilities.
+
+On `_lr2021` targets, Protocol Probe includes **IQ Snapshot** (`I` on a keyboard).
+It stops probing, captures 256 IQ pairs on the current mesh PHY in a worker,
+restores the radio and displays finite diagnostic statistics. It does not
+identify a protocol or provide continuous audio. Scan/apply actions wait for
+capture/recovery to finish, and exiting joins the worker before another page
+can own the radio. An unknown sample rate remains explicitly unqualified.
+The TFT firmware compiles and links this path; physical IQ acceptance is pending.
 
 The family-level code here stays shared. Variant selection belongs to the target descriptor layer, not to ad-hoc build commands or undocumented menuconfig toggles.
 
@@ -15,9 +37,9 @@ Primary source reference:
 
 ## Extracted Board Facts
 
-- System I2C: `port=0`, `SDA=7`, `SCL=8`
+- System I2C: `LP_I2C_NUM_0=2`, `SDA=7`, `SCL=8`
 - External I2C: `port=1`, `SDA=20`, `SCL=21`
-- GPS UART: `UART1`, `TX=22`, `RX=23`
+- GPS UART: `UART1`, host `TX=23`, host `RX=22`
 - SDMMC: `D0=39`, `D1=40`, `D2=41`, `D3=42`, `CMD=44`, `CLK=43`
 - C6 SDIO link: `CLK=18`, `CMD=19`, `D0=14`, `D1=15`, `D2=16`, `D3=17`
 - C6 companion module: present, ESP32-C6, P4-C6 transport target is SDIO
@@ -26,6 +48,8 @@ Primary source reference:
 - IMU: `ICM20948`, I2C address `0x68`
 - Audio I2S: `BCLK=12`, `MCLK=13`, `WS=9`, `DOUT=10`, `DIN=11`
 - SX1262 SPI: `host=SPI2`, `SCK=2`, `MISO=4`, `MOSI=3`, `CS=24`, `BUSY=6`
+- LR2021 uses the same V1 SPI pins; its command protocol and chip RF-switch
+  configuration belong to its own backend.
 - XL9535 expander:
   - `IO1` = `SKY13453_VCTL`
   - `IO11` = GPS wake

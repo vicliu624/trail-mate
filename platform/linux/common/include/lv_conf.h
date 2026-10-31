@@ -28,7 +28,9 @@
 #define LV_USE_FS_POSIX 1
 #define LV_FS_POSIX_LETTER 'A'
 #define LV_FS_POSIX_PATH ""
-#define LV_FS_POSIX_CACHE_SIZE 0
+// Binary fonts contain many small reads. Buffer them so loading a content font
+// does not stall the UI on SD storage or a host-mounted development filesystem.
+#define LV_FS_POSIX_CACHE_SIZE 4096
 #endif
 
 #define LV_USE_LODEPNG 1

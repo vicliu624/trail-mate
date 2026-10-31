@@ -15,6 +15,13 @@ set(TRAIL_MATE_DEVICE_DEBIAN_DEPENDS
 if(TRAIL_MATE_TMAP_PRODUCER_DIR)
     string(APPEND TRAIL_MATE_DEVICE_DEBIAN_DEPENDS ", libicu76")
 endif()
+if(TRAIL_MATE_LINUX_ENABLE_ONESEG_MEDIA)
+    if(NOT TARGET trailmate_linux_oneseg_media)
+        message(FATAL_ERROR "CM0 1seg package requires the native television media target")
+    endif()
+    trailmate_oneseg_debian_dependencies(oneseg_dependencies)
+    string(APPEND TRAIL_MATE_DEVICE_DEBIAN_DEPENDS ", ${oneseg_dependencies}")
+endif()
 install(PROGRAMS "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/tools/register_i2c_peripheral.py"
     DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/trailmate" RENAME register-i2c-peripheral COMPONENT Runtime)
 configure_file("${CMAKE_CURRENT_LIST_DIR}/trailmate-cm0-rtc.service.in"
@@ -22,10 +29,14 @@ configure_file("${CMAKE_CURRENT_LIST_DIR}/trailmate-cm0-rtc.service.in"
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/trailmate-cm0-rtc.service"
     DESTINATION "lib/systemd/system" PERMISSIONS ${TRAIL_MATE_DATA_PERMISSIONS} COMPONENT Runtime)
 set(CPACK_DEBIAN_PACKAGE_CONTROL_STRICT_PERMISSION TRUE)
-set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
-    "${CMAKE_CURRENT_LIST_DIR}/packaging/postinst"
-    "${CMAKE_CURRENT_LIST_DIR}/packaging/prerm"
-    "${CMAKE_CURRENT_LIST_DIR}/packaging/postrm")
+set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "")
+foreach(control_script IN ITEMS postinst prerm postrm)
+    # Extensionless scripts can otherwise retain Windows checkout line endings.
+    configure_file("${CMAKE_CURRENT_LIST_DIR}/packaging/${control_script}"
+        "${CMAKE_CURRENT_BINARY_DIR}/packaging/${control_script}" @ONLY NEWLINE_STYLE UNIX)
+    list(APPEND CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
+        "${CMAKE_CURRENT_BINARY_DIR}/packaging/${control_script}")
+endforeach()
 if(TARGET trailmate_linux_radiolib)
     get_target_property(radio_license trailmate_linux_radiolib TRAIL_MATE_LICENSE_FILE)
     install(FILES "${radio_license}" DESTINATION "${CMAKE_INSTALL_DATADIR}/doc/trailmate-cm0"

@@ -1,5 +1,7 @@
 #include "ui/input/pager_navigation.h"
+#include "platform/ui/radio_iq_runtime.h"
 #include "platform/ui/tmap_creation_runtime.h"
+#include "platform/ui/walkie_runtime.h"
 #if defined(ARDUINO_T_LORA_PAGER) || defined(__linux__)
 #include "platform/memory/psram_ptr.h"
 #include "platform/ui/psram_ui_lease.h"
@@ -90,7 +92,7 @@ bool simple_navigation(const char* id)
 }
 void show_help(PageHelp& page, lv_group_t* group)
 {
-    help::Row rows[16] = {
+    help::Row rows[32] = {
 #if defined(__linux__)
         {"Tab", nullptr, "Select next control"},
         {"Enter", nullptr, "Activate / enter editing"},
@@ -106,10 +108,36 @@ void show_help(PageHelp& page, lv_group_t* group)
     unsigned count = 5;
     const auto* app = ui_get_active_app();
     const char* id = app ? app->stable_id() : "";
-    if (simple_navigation(id)) rows[count++] = {"W/S", nullptr, "Previous / next control"};
+    if (id && !std::strcmp(id, "walkie_talkie")) platform::ui::walkie::set_ptt(false);
+    if (simple_navigation(id)) rows[count++] = {"Up/Down", "W/S", "Previous / next control"};
     const char* title = page.title ? lv_label_get_text(page.title) : "";
     const bool creator = std::strncmp(title, ui::i18n::tr("Make TMAP"), std::strlen(ui::i18n::tr("Make TMAP"))) == 0;
-    if (creator)
+    if (id && !std::strcmp(id, "oneseg_tv"))
+    {
+        rows[count++] = {"Space", nullptr, "Start / stop onboard receiver"};
+        rows[count++] = {"R / Retry", nullptr, "Release and reacquire selected channel"};
+        rows[count++] = {"P", nullptr, "Select next received service in this channel"};
+        rows[count++] = {"F", nullptr, "Toggle fullscreen video"};
+        rows[count++] = {"CH -/+", nullptr, "Tune channel / retune receiver"};
+        rows[count++] = {"Station -/+", nullptr, "Previous / next saved station"};
+        rows[count++] = {"M / Menu", nullptr, "Saved channels and automatic scan"};
+        rows[count++] = {"Menu > Programme info", nullptr, "Received titles, descriptions and JST schedule"};
+        rows[count++] = {"Swipe / Up/Down", nullptr, "Scroll programme information"};
+        rows[count++] = {"Close info / Esc", nullptr, "Return to television view"};
+        rows[count++] = {"Scan channels", nullptr, "Search UHF 13-62; audio muted"};
+        rows[count++] = {"Cancel / Esc", nullptr, "Cancel scan; retain previous channels"};
+        rows[count++] = {"Vol -/+", nullptr, "Change television volume"};
+    }
+    else if (id && !std::strcmp(id, "fm_radio"))
+    {
+        rows[count++] = {"Space", nullptr, "Start / stop independent FM receiver"};
+        rows[count++] = {"Stop", nullptr, "Stop / retry cleanup when offered"};
+        rows[count++] = {"[ / ]", nullptr, "Tune -/+ 0.1 MHz (100-108 MHz)"};
+        rows[count++] = {"- / +", nullptr, "Change FM volume by 5 percent"};
+        rows[count++] = {"IMG_CAL", nullptr, "Explicit exception; toggle only while stopped"};
+        rows[count++] = {"Back", nullptr, "Cancel receiver and return to Menu"};
+    }
+    else if (creator)
         rows[count++] = {"Enter", nullptr, "Activate Next / Back / Create"};
     else if (id && std::strcmp(id, "music") == 0)
     {
@@ -120,30 +148,100 @@ void show_help(PageHelp& page, lv_group_t* group)
     }
     else if (id && std::strcmp(id, "calculator") == 0)
     {
+        rows[1] = {"Enter", "=", "Calculate expression"};
+        rows[3] = {"Backspace", nullptr, "Delete preceding character"};
         rows[count++] = {"0-9", "+ - * /", "Enter expression"};
+        rows[count++] = {"Left/Right", nullptr, "Move expression cursor"};
+        rows[count++] = {"( )", ". %", "Parentheses / decimal / percent"};
+        rows[count++] = {"s/c/t", nullptr, "sin / cos / tan"};
+        rows[count++] = {"S/C/T", nullptr, "asin / acos / atan (Shift)"};
+        rows[count++] = {"l", "G", "Natural / common logarithm"};
+        rows[count++] = {"I", nullptr, "Reciprocal"};
         rows[count++] = {"F", "M", "Second functions / DEG-RAD"};
         rows[count++] = {"P", "A", "Pi / previous answer"};
         rows[count++] = {"Q", "R", "Square / square root"};
     }
     else if (id && std::strcmp(id, "energy_sweep") == 0)
+    {
+        rows[count++] = {"Up/Down", nullptr, platform::ui::radio_iq::is_supported() ? "Select profile / scroll IQ" : "Select observed profile"};
+        rows[count++] = {"Enter", nullptr, "Confirm selected profile"};
         rows[count++] = {"S", nullptr, "Start / stop protocol probe"};
+        if (platform::ui::radio_iq::is_supported()) rows[count++] = {"I", nullptr, "Finite IQ snapshot"};
+    }
+    else if (id && std::strcmp(id, "chat") == 0)
+    {
+        rows[count++] = {"M", "F", "Open / close conversation filter"};
+        rows[count++] = {"/", "S", "Search conversations"};
+        rows[count++] = {"Enter", "Space", "Selected conversation actions"};
+        rows[count++] = {"C", "I", "Open conversation / information"};
+        rows[count++] = {"P", nullptr, "Ping selected Reticulum destination"};
+        rows[count++] = {"D", nullptr, "Confirm conversation deletion"};
+    }
     else if (id && (std::strcmp(id, "contacts") == 0 || std::strcmp(id, "settings") == 0 ||
                     std::strcmp(id, "tracker") == 0 || std::strcmp(id, "extensions") == 0 || std::strcmp(id, "network") == 0))
         rows[count++] = {"M", nullptr, "Open / close page menu"};
+    if (!creator && id && (std::strcmp(id, "chat") == 0 || std::strcmp(id, "settings") == 0 || std::strcmp(id, "tracker") == 0 || std::strcmp(id, "extensions") == 0))
+        rows[count++] = {"Up/Down", "Enter", "Choose / activate an open menu item"};
+    if (id && std::strcmp(id, "walkie_talkie") == 0)
+    {
+#if defined(TRAIL_MATE_UI_P4_TOUCH)
+        rows[count++] = {"Enter", nullptr, "Toggle focused monitor control"};
+        rows[count++] = {"Space", nullptr, "Hold to talk; release to listen"};
+#else
+        rows[count++] = {"Enter", "Space", "Toggle focused monitor control"};
+#endif
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+        rows[count++] = {"T", nullptr, "Talk / listen; Help and Back stop TX"};
+#endif
+    }
+    if (id && std::strcmp(id, "sky_plot") == 0)
+        rows[count++] = {"Tab", "Enter", "Select and toggle satellite status"};
+    if (id && std::strcmp(id, "calendar") == 0)
+        rows[count++] = {"Tab", "Enter", "Choose New / Today / Date / More"};
+    if (id && std::strcmp(id, "geocaching") == 0)
+        rows[count++] = {"Tab", "Enter", "Choose tab, cache or available action"};
     if (!creator && id && std::strcmp(id, "extensions") == 0 && platform::ui::tmap_creation::supported())
         rows[count++] = {"T", nullptr, "Make TMAP"};
-    rows[count++] = {"H", "Enter", "Close help; restore focus"};
+    rows[count++] = {"Up/Down", "W/S", "Scroll help"};
+    rows[count++] = {"H", "Esc", "Close help; restore focus"};
     platform::ui::PsramUiLease memory;
     help::Config config;
     config.title = page.title ? lv_label_get_text(page.title) : "Page Help";
     config.rows = rows;
     config.row_count = count;
     config.width = 360;
-    config.height = 192;
+    // Fit the rows on larger screens; the modal clamps to the host on small ones.
+    config.height = static_cast<lv_coord_t>(44 + count * 20);
     config.restore_group = group;
     help::open(page.modal, page.root, config);
 }
 } // namespace
+
+bool help_open()
+{
+    for (auto* page = pages; page; page = page->next)
+        if (help::is_open(page->modal)) return true;
+    return false;
+}
+
+bool open_help(lv_obj_t* root, lv_group_t* group)
+{
+    auto* page = page_for(root);
+    if (!page || ui_is_overlay_active()) return false;
+    if (help::is_open(page->modal)) close_help(*page);
+    else
+    {
+        auto* app = ui_get_active_app();
+        const char* id = app ? app->stable_id() : nullptr;
+        if (native_help(*page, id))
+        {
+            uint32_t key = 'h';
+            lv_obj_send_event(page->root, LV_EVENT_KEY, &key);
+        }
+        else show_help(*page, group);
+    }
+    return true;
+}
 
 void install_help(lv_obj_t* root, lv_obj_t* title)
 {
@@ -215,11 +313,13 @@ bool handle_key(uint32_t key, bool pressed, lv_group_t* group)
     auto* app = ui_get_active_app();
     const char* id = app ? app->stable_id() : nullptr;
     if (!help::is_open(page->modal) && simple_navigation(id) &&
-        (key == 'w' || key == 'W' || key == 's' || key == 'S'))
+        !lv_group_get_editing(group) &&
+        (key == 'w' || key == 'W' || key == 's' || key == 'S' || key == LV_KEY_UP || key == LV_KEY_DOWN))
     {
         lv_group_set_editing(group, false);
-        if (key == 'w' || key == 'W') lv_group_focus_prev(group);
+        if (key == 'w' || key == 'W' || key == LV_KEY_UP) lv_group_focus_prev(group);
         else lv_group_focus_next(group);
+        if (auto* next = lv_group_get_focused(group)) lv_obj_scroll_to_view(next, LV_ANIM_OFF);
         consumed_key = key;
         return true;
     }

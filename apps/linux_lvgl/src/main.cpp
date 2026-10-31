@@ -37,11 +37,19 @@
 #include "ui/localization.h"
 #include "ui/lvgl_text_input.h"
 #include "ui/runtime/memory_profile.h"
+#include "ui/screens/energy_sweep/energy_sweep_page_runtime.h"
 #include "ui/screens/geocaching/geocaching_page_shell.h"
 #include "ui/screens/team/team_page_shell.h"
 #include "ui/startup_ui_shell.h"
 #include "ui/voice_runtime_binding.h"
+#if defined(TRAIL_MATE_ONESEG_MEDIA)
+#include "ui/assets/fonts/bundled_font_root.h"
+#include "ui/oneseg_tv_app.h"
+#endif
 #include "ui/widgets/reticulum_call_overlay.h"
+#if defined(TRAIL_MATE_FM_RADIO)
+#include "ui/fm_radio_app.h"
+#endif
 
 namespace
 {
@@ -60,16 +68,47 @@ bool dispatchTeam(sys::Event* event)
     return team::ui::shell::handle_event(nullptr, event);
 }
 
-ui::startup_ui_shell::Hooks compose(const platform::desktop::DeviceOptions& options, ::trailmate::linux_ui::AgendaRuntimeBinding& agenda)
+lv_obj_t* findHelpEntry(lv_obj_t* root)
+{
+    if (lv_obj_check_type(root, &lv_label_class))
+    {
+        const auto* text = lv_label_get_text(root);
+        if (!std::strcmp(text, "H Help") || !std::strcmp(text, "H ?")) return root;
+    }
+    for (uint32_t i = 0; i < lv_obj_get_child_count(root); ++i)
+        if (auto* found = findHelpEntry(lv_obj_get_child(root, i))) return found;
+    return nullptr;
+}
+
+bool hasHelpTitle(lv_obj_t* root, const char* title)
+{
+    if (lv_obj_check_type(root, &lv_label_class) && !std::strcmp(lv_label_get_text(root), title)) return true;
+    for (uint32_t i = 0; i < lv_obj_get_child_count(root); ++i)
+        if (hasHelpTitle(lv_obj_get_child(root, i), title)) return true;
+    return false;
+}
+
+bool hasDisabledTalkButton(lv_obj_t* root)
+{
+    if (lv_obj_check_type(root, &lv_label_class) && !std::strcmp(lv_label_get_text(root), "Hold to talk"))
+        return lv_obj_has_state(lv_obj_get_parent(root), LV_STATE_DISABLED);
+    for (uint32_t i = 0; i < lv_obj_get_child_count(root); ++i)
+        if (hasDisabledTalkButton(lv_obj_get_child(root, i))) return true;
+    return false;
+}
+
+ui::startup_ui_shell::Hooks compose(const platform::desktop::DeviceOptions& options, ::trailmate::linux_ui::AgendaRuntimeBinding& agenda, AppScreen* television = nullptr, AppScreen* fm_radio = nullptr)
 {
     // Use the same catalog and shared page implementations as ESP-IDF/P4.
     // Live Linux capabilities filter unavailable peripheral actions.
     ui::app_catalog_builder::FeatureFlags flags;
     flags.profile = ui::app_catalog_builder::CatalogProfile::IdfDefault;
-    flags.include_energy_sweep = platform::ui::lora::is_supported();
+    flags.include_energy_sweep = energy_sweep::ui::runtime::is_available();
     flags.include_sstv = platform::ui::sstv::is_supported();
     flags.include_walkie_talkie = platform::ui::walkie::is_supported();
     flags.calendar_app = agenda.application();
+    flags.television_app = television;
+    flags.fm_radio_app = fm_radio;
     flags.map_markers = agenda.markers();
     ui::startup_ui_shell::Hooks hooks;
     hooks.apps = ui::app_catalog_builder::build(flags);
@@ -132,13 +171,22 @@ struct AppKeyRouter
             return consumed;
         }
         auto* app = ui_get_active_app();
-        if (key == ' ' && pressed && app && std::strcmp(app->stable_id(), "walkie_talkie") == 0)
+        if (key == ' ' && pressed && app && std::strcmp(app->stable_id(), "walkie_talkie") == 0 &&
+            !::ui::input::pager::help_open() && !ui_is_overlay_active())
         {
             self.space_held = true;
             platform::ui::walkie::set_ptt(true);
             return true;
         }
         auto* group = lv_group_get_default();
+        // Pages may clear the allocation-time default while keeping their
+        // actual input group bound to the keypad.
+        for (auto* device = lv_indev_get_next(nullptr); device; device = lv_indev_get_next(device))
+            if (lv_indev_get_type(device) == LV_INDEV_TYPE_KEYPAD && lv_indev_get_group(device))
+            {
+                group = lv_indev_get_group(device);
+                break;
+            }
         if (pressed) ::ui::input::pager::prepare_group(group);
         return ::ui::input::pager::handle_key(key, pressed, group);
     }
@@ -179,6 +227,9 @@ int main(int argc, char** argv)
     {
         std::string profile;
         std::string screenshot;
+        std::string open_app;
+        bool page_help = false;
+        bool page_help_touch = false;
         bool windowed = false;
         unsigned long quit_after_ms = 0;
         for (int i = 1; i < argc; ++i)
@@ -187,11 +238,14 @@ int main(int argc, char** argv)
             if (argument == "--windowed") windowed = true;
             else if (argument == "--help")
             {
-                std::puts("trailmate-linux --profile FILE [--windowed] [--quit-after-ms N] [--screenshot FILE.bmp]");
+                std::puts("trailmate-linux --profile FILE [--windowed] [--quit-after-ms N] [--screenshot FILE.bmp] [--open-app ID] [--page-help | --page-help-touch]");
                 return 0;
             }
             else if (i + 1 < argc && argument == "--profile") profile = argv[++i];
             else if (i + 1 < argc && argument == "--screenshot") screenshot = argv[++i];
+            else if (i + 1 < argc && argument == "--open-app") open_app = argv[++i];
+            else if (argument == "--page-help") page_help = true;
+            else if (argument == "--page-help-touch") page_help = page_help_touch = true;
             else if (i + 1 < argc && argument == "--quit-after-ms") quit_after_ms = std::stoul(argv[++i]);
             else throw std::runtime_error("Unknown or incomplete argument: " + argument);
         }
@@ -207,9 +261,14 @@ int main(int argc, char** argv)
             throw std::runtime_error("Invalid or already initialized application directories");
         if (!::ui::i18n::configure_external_pack_root(platform::linux_runtime::resource_pack_root().string()))
             throw std::runtime_error("Language resources were initialized before application directories");
+#ifdef TRAIL_MATE_BUNDLED_FONT_ROOT
+        if (!::ui::i18n::configure_bundled_font_root(TRAIL_MATE_BUNDLED_FONT_ROOT))
+            throw std::runtime_error("Bundled fonts were initialized before application directories");
+#endif
         if (!platform::linux_runtime::configure_resource_pack_policy({platform::ui::device::firmware_version(), ::ui::runtime::current_memory_profile().name}))
             throw std::runtime_error("Resource package policy was initialized with different application facts");
         if (options.auto_keyboard) options.hardware_keyboard = platform::desktop::hardwareKeyboardPresent();
+        if (page_help) options.hardware_keyboard = !page_help_touch;
         if (options.ux_pack != TRAIL_MATE_LINUX_UX_PACK)
             throw std::runtime_error("Device UX pack does not match this executable's composition");
         if (windowed) options.fullscreen = false;
@@ -267,7 +326,23 @@ int main(int argc, char** argv)
             ~GeocachingBinding() { ::geocaching::ui::shell::bind(nullptr); }
         } geocaching_binding(facade.geocachingSource());
         trailmate::cardputer_zero::linux_ui::setTeamUiEventDispatcher(dispatchTeam);
-        const auto hooks = compose(options, *agenda);
+        std::unique_ptr<AppScreen> television;
+        std::unique_ptr<AppScreen> fm_radio;
+#if defined(TRAIL_MATE_FM_RADIO)
+        if (options.radio.driver == "lr2021" && options.radio.rf_switch_profile == platform::linux_runtime::Lr2021RfSwitchProfile::Cm0_16E8)
+            fm_radio = std::make_unique<platform::linux_runtime::FmRadioApp>(platform::linux_runtime::make_fm_session());
+#endif
+#if defined(TRAIL_MATE_ONESEG_MEDIA)
+        if (options.radio.driver == "lr2021" && options.radio.rf_switch_profile == platform::linux_runtime::Lr2021RfSwitchProfile::Cm0_16E8)
+        {
+            platform::linux_runtime::OneSegTvSession::Config config;
+            const char* decoder = std::getenv("TRAIL_MATE_ONESEG_DECODER");
+            config.decoder = decoder && *decoder ? decoder : TRAIL_MATE_ONESEG_DECODER_PATH;
+            television = std::make_unique<platform::linux_runtime::OneSegTvApp>(
+                platform::linux_runtime::make_oneseg_tv_session(std::move(config)));
+        }
+#endif
+        const auto hooks = compose(options, *agenda, television.get(), fm_radio.get());
         if (!ui::startup_ui_shell::beginBootUi(hooks, false, "Loading Trail Mate..."))
             throw std::runtime_error("Cannot initialize boot UI");
         host.present();
@@ -283,6 +358,8 @@ int main(int argc, char** argv)
         const auto loop_started = tick();
         CallUiLifetime call_ui;
         bool presenting = true;
+        bool app_opened = false;
+        bool help_opened = false;
         while ((presenting = host.pump()) && !platform::linux_runtime::application_restart_requested())
         {
             const auto imu = platform::linux_runtime::linux_imu_snapshot();
@@ -294,6 +371,53 @@ int main(int argc, char** argv)
             platform::ui::service_quick_controls();
             ::ui::widgets::reticulum_call_overlay::tick();
             agenda->tick();
+            if (!open_app.empty() && !app_opened && tick() - loop_started >= 3500)
+            {
+                AppScreen* selected = nullptr;
+                for (size_t index = 0; index < ui::catalogCount(hooks.apps); ++index)
+                {
+                    auto* candidate = ui::catalogAt(hooks.apps, index);
+                    if (candidate && candidate->stable_id() && open_app == candidate->stable_id()) selected = candidate;
+                }
+                if (!selected || !ui_open_app(selected)) throw std::runtime_error("Application is not available in this device catalog: " + open_app);
+                app_opened = true;
+            }
+            if (app_opened && page_help && !help_opened && tick() - loop_started >= 4000)
+            {
+                if (open_app == "walkie_talkie" && !platform::ui::walkie::get_status().active &&
+                    !hasDisabledTalkButton(lv_screen_active()))
+                    throw std::runtime_error("Walkie transmit button is enabled while the backend is unavailable");
+                lv_indev_t* keypad = lv_indev_get_next(nullptr);
+                while (keypad && lv_indev_get_type(keypad) != LV_INDEV_TYPE_KEYPAD) keypad = lv_indev_get_next(keypad);
+                auto* previous = keypad ? lv_indev_get_group(keypad) : app_g;
+                auto* previous_focus = previous ? lv_group_get_focused(previous) : nullptr;
+                if (page_help_touch)
+                {
+                    auto* hint = findHelpEntry(lv_screen_active());
+                    if (!hint) throw std::runtime_error("Page Help touch entry is missing: " + open_app);
+                    lv_obj_send_event(hint, LV_EVENT_CLICKED, nullptr);
+                }
+                else
+                {
+                    (void)AppKeyRouter::observe(&key_router, 'h', true);
+                    (void)AppKeyRouter::observe(&key_router, 'h', false);
+                }
+                // Native Map opens its dialog on the following LVGL event turn.
+                lv_timer_handler();
+                const bool opened = ::ui::input::pager::help_open() || ui_is_overlay_active() ||
+                    hasHelpTitle(lv_screen_active(), "Map Help") || hasHelpTitle(lv_screen_active(), "Contacts Help") ||
+                    (previous && lv_group_get_focused(previous) != previous_focus) ||
+                    (keypad && lv_indev_get_group(keypad) != previous);
+                if (!opened)
+                    throw std::runtime_error("Page Help did not receive keyboard input: " + open_app);
+                if (open_app == "walkie_talkie")
+                {
+                    if (AppKeyRouter::observe(&key_router, ' ', true))
+                        throw std::runtime_error("Walkie PTT intercepted Space inside Help");
+                    (void)AppKeyRouter::observe(&key_router, ' ', false);
+                }
+                help_opened = true;
+            }
             platform::linux_runtime::service_screen_runtime();
             lv_timer_handler();
             ::ui::i18n::on_lvgl_frame_completed();
@@ -313,6 +437,8 @@ int main(int argc, char** argv)
         ::geocaching::ui::shell::bind(nullptr);
         voice_binding.release();
         agenda->releaseUi();
+        television.reset();
+        fm_radio.reset();
         facade.shutdown();
         return 0;
     }

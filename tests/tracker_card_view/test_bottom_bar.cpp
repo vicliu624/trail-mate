@@ -45,7 +45,7 @@ int main()
     lv_init();
     for (const auto width : {320, 480, 240})
     {
-        auto* display = lv_display_create(width, width == 480 ? 222 : 240);
+        auto* display = lv_display_create(width, width == 320 ? 170 : (width == 480 ? 222 : 240));
         std::vector<uint16_t> pixels(width * 240);
         lv_display_set_color_format(display, LV_COLOR_FORMAT_RGB565);
         lv_display_set_buffers(display, pixels.data(), nullptr, pixels.size() * 2, LV_DISPLAY_RENDER_MODE_FULL);
@@ -116,6 +116,12 @@ int main()
         lv_obj_get_coords(menu.button(), &bar);
         assert(area.x1 >= 0 && area.x2 < width && area.y2 < bar.y1);
         assert(page.activations == 0);
+        uint32_t down = LV_KEY_DOWN;
+        lv_obj_send_event(page.filters[0], LV_EVENT_KEY, &down);
+        assert(lv_group_get_focused(controller.group()) == page.filters[1]);
+        uint32_t up = LV_KEY_UP;
+        lv_obj_send_event(page.filters[1], LV_EVENT_KEY, &up);
+        assert(lv_group_get_focused(controller.group()) == page.filters[0]);
         lv_obj_send_event(page.filters[1], LV_EVENT_CLICKED, nullptr);
         assert(page.activations == 1 && page.selected == 1 && !menu.is_open());
         assert(lv_obj_get_width(main) == width);

@@ -2,6 +2,8 @@ set(TRAILMATE_ESP_IDF_TARGETS
     tab5
     t_display_p4_tft
     t_display_p4_amoled
+    t_display_p4_tft_lr2021
+    t_display_p4_amoled_lr2021
     tdeck
     tlora_pager
     twatch)
@@ -11,6 +13,10 @@ set(TRAILMATE_ESP_IDF_TARGET_DEFAULTS_tab5
 set(TRAILMATE_ESP_IDF_TARGET_DEFAULTS_t_display_p4_tft
     "${CMAKE_CURRENT_LIST_DIR}/targets/t_display_p4_tft/sdkconfig.defaults")
 set(TRAILMATE_ESP_IDF_TARGET_DEFAULTS_t_display_p4_amoled
+    "${CMAKE_CURRENT_LIST_DIR}/targets/t_display_p4_amoled/sdkconfig.defaults")
+set(TRAILMATE_ESP_IDF_TARGET_DEFAULTS_t_display_p4_tft_lr2021
+    "${CMAKE_CURRENT_LIST_DIR}/targets/t_display_p4_tft/sdkconfig.defaults")
+set(TRAILMATE_ESP_IDF_TARGET_DEFAULTS_t_display_p4_amoled_lr2021
     "${CMAKE_CURRENT_LIST_DIR}/targets/t_display_p4_amoled/sdkconfig.defaults")
 set(TRAILMATE_ESP_IDF_TARGET_DEFAULTS_tdeck
     "${CMAKE_CURRENT_LIST_DIR}/targets/tdeck/sdkconfig.defaults")

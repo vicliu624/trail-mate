@@ -2,7 +2,7 @@
 #include "board/LoraBoard.h"
 #include "music/service.h"
 #include "platform/esp/boards/board_runtime.h"
-#include "platform/esp/idf_common/sx126x_radio.h"
+#include "platform/esp/idf_common/selected_radio.h"
 #include "platform/radio/radio_power.h"
 #include "platform/ui/gps_runtime.h"
 #include "platform/ui/quick_controls_runtime.h"
@@ -155,7 +155,7 @@ int main()
     radio.acknowledge(false);
     // A disabled radio may be uninitialized after reboot. Enabling uses capability,
     // rather than requiring the very hardware initialization it is meant to start.
-    platform::esp::idf_common::Sx126xRadio::instance().online = false;
+    platform::esp::idf_common::SelectedRadio::instance().online = false;
     source->snapshot(out);
     assert(out.lora == SwitchState::Off);
     source->set(Control::Lora, 1);

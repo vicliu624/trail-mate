@@ -59,6 +59,73 @@ int main()
     trail_mate_t_display_p4_audio_end(call);
     assert(trail_mate_t_display_p4_audio_begin(walkie, 16000) && fake::output_volume == 23);
     trail_mate_t_display_p4_audio_end(walkie);
+    constexpr auto fm = TRAIL_MATE_T_DISPLAY_P4_AUDIO_OWNER_FM;
+    struct MusicWakeups
+    {
+        int suspended = 0;
+        int resumed = 0;
+    } wakeups;
+    platform::audio::register_music_focus_client(
+        {&wakeups,
+         [](void* context)
+         { ++static_cast<MusicWakeups*>(context)->suspended; return true; },
+         [](void* context)
+         { ++static_cast<MusicWakeups*>(context)->resumed; }});
+    assert(trail_mate_t_display_p4_audio_begin(fm, 48000));
+    assert(wakeups.suspended == 1 && wakeups.resumed == 0);
+    assert(s_audio.sample_rate_hz == 48000 && fake::output_volume == 100);
+    assert(platform::audio::music_blocked());
+    assert(!trail_mate_t_display_p4_audio_begin(walkie, 16000));
+    assert(!trail_mate_t_display_p4_audio_begin(music, 44100));
+    assert(!trail_mate_t_display_p4_audio_write_mono(walkie, pcm.data(), pcm.size()));
+    trail_mate_t_display_p4_audio_end(walkie);
+    assert(s_audio.owner == fm); // Other pages cannot close FM's session.
+    trail_mate_t_display_p4_audio_set_volume_percent(19);
+    assert(fake::output_volume == 100 && s_audio.volume_percent == 19);
+    fake::written.clear();
+    pcm.fill(-1234);
+    assert(trail_mate_t_display_p4_audio_write_mono(fm, pcm.data(), pcm.size()));
+    assert(fake::written.size() == pcm.size() * 2);
+    for (auto sample : fake::written) assert(sample == -1234);
+    trail_mate_t_display_p4_audio_end(fm);
+    assert(wakeups.resumed == 1);
+    assert(trail_mate_t_display_p4_audio_end_checked(fm));
+    assert(trail_mate_t_display_p4_audio_begin(fm, 48000));
+    fake::mutex_ok = false;
+    assert(!trail_mate_t_display_p4_audio_end_checked(fm));
+    fake::mutex_ok = true;
+    assert(s_audio.owner == fm && platform::audio::music_blocked());
+    fake::codec_close_result = -7;
+    assert(!trail_mate_t_display_p4_audio_end_checked(fm));
+    assert(s_audio.owner == fm && s_audio.cleanup_required && wakeups.resumed == 1);
+    assert(!trail_mate_t_display_p4_audio_begin(fm, 48000));
+    assert(!trail_mate_t_display_p4_audio_begin(walkie, 16000));
+    assert(!trail_mate_t_display_p4_audio_write_mono(fm, pcm.data(), pcm.size()));
+    assert(trail_mate_t_display_p4_audio_end_checked(walkie));
+    assert(s_audio.owner == fm && wakeups.resumed == 1);
+    fake::codec_close_result = 0;
+    assert(trail_mate_t_display_p4_audio_end_checked(fm));
+    assert(wakeups.resumed == 2 && !platform::audio::music_blocked());
+    for (const bool failed_open : {false, true})
+    {
+        fake::codec_open_result = failed_open ? -8 : 0;
+        fake::gain_ok = failed_open;
+        fake::codec_close_result = -9;
+        assert(!trail_mate_t_display_p4_audio_begin(fm, 48000));
+        assert(s_audio.owner == fm && s_audio.cleanup_required && platform::audio::music_blocked());
+        assert(!trail_mate_t_display_p4_audio_begin(fm, 48000));
+        fake::codec_close_result = 0;
+        assert(trail_mate_t_display_p4_audio_end_checked(fm));
+        assert(!platform::audio::music_blocked());
+    }
+    fake::codec_open_result = 0;
+    fake::gain_ok = true;
+    platform::audio::register_music_focus_client({});
+    assert(!platform::audio::music_blocked());
+    assert(!trail_mate_t_display_p4_audio_write_mono(fm, pcm.data(), pcm.size()));
+    assert(trail_mate_t_display_p4_audio_begin(walkie, 16000));
+    assert(fake::output_volume == 19);
+    trail_mate_t_display_p4_audio_end(walkie);
     fake::gain_ok = false;
     assert(!trail_mate_t_display_p4_audio_begin(walkie, 16000));
     assert(s_audio.owner == TRAIL_MATE_T_DISPLAY_P4_AUDIO_OWNER_NONE);

@@ -6,6 +6,38 @@ product truth.
 
 ## Product Boundary
 
+### Feature and navigation audit (2026-10-29)
+
+The initial audit used commit `d3e6919b`. The subsequent upstream sync to
+`fee017b3` adds the actual CM0 environment: `boards/t_display_cm0/device.conf`
+selects `t_display_p4_touch` on the `apps/linux_lvgl` Linux shell at 1232 x 568.
+The previous missing-target blocker is resolved. The table below is historical
+evidence from the initial revision, not a feature assessment of the new shared
+Linux services. Re-audit runtime support and page sets on the new revision before
+using any of these older differences as a remediation requirement.
+
+| Surface | Cardputer Zero evidence | Difference from P4 |
+| --- | --- | --- |
+| Top-level pages | Ten routes in `cardputer_compact_manifest` and `CardputerCompactUxPack::buildScreens()` | P4 additionally declares GPS, Protocol Probe and SSTV. Cardputer tests explicitly exclude those three routes; this is an existing product restriction, not a missing menu widget. |
+| Chat, Contacts, Settings, Tracker | Shared bottom-bar menu navigation; current captures show full-width content and expandable menus | The legacy `two_pane_nav` identifier remains in source, but its menu initialization parks the former side panel. The identifier does not prove visible two-column navigation. |
+| Keyboard menu selection | Shared menu now handles Up/Down and scrolls focused entries into view | Linux keypad events previously did not move between menu entries. Settings Radio and Extensions Uninstalled selection were reproduced after the fix. |
+| Extensions shortcut | `M` toggles the existing menu | Previously absent from the page key handler. |
+| Walkie Talkie | Reachable shared page, but `platform/linux/common/src/platform/ui/walkie_runtime.cpp` reports `CapabilityState::Simulated` and synthesizes levels | A rendered page does not establish a real audio/radio path. Product functionality remains incomplete. |
+| Wi-Fi management | `platform/linux/common/src/platform/ui/wifi_runtime.cpp` reports unsupported; scan and connect return false | Linux network management is not implemented by this port. This does not imply the operating system lacks networking. |
+| Firmware update | `platform/linux/common/src/platform/ui/firmware_update_runtime.cpp` reports unsupported | Linux package installation and embedded firmware OTA are different runtime operations. |
+
+The host build and six smoke checks establish compilation and selected wiring
+contracts. They do not establish full feature parity or hardware functionality.
+The navigation regression additionally exercises the actual shared menu at
+320 x 170. Current screenshots and menu interaction evidence are recorded in
+`docs/targets/cardputerzero-screenshots.md`.
+
+Remaining acceptance work includes comparing the current CM0 and Cardputer Zero
+page sets, resolving product-route restrictions, and validating the local UI
+changes against the updated shared Linux services. The earlier six smoke checks
+and screenshot captures predate this sync and do not validate the new revision.
+No feature-parity completion is claimed by this audit.
+
 | Layer | Cardputer Zero owner |
 | --- | --- |
 | Target id | `cardputerzero` |

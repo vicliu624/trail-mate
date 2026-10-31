@@ -2,6 +2,18 @@
 
 This directory stores source fonts used to generate Trail Mate font assets.
 
+## Japanese broadcast content sources
+
+`NotoSansCJKjp-Regular.otf` supplies the Japanese broadcast content font's primary
+glyphs. `NotoSansMath-Regular.ttf` supplies missing mathematical symbols only,
+including the JIS X 0208 character U+2252. Neither source enlarges the compiled
+Japanese UI font.
+
+Pinned upstream URLs, source revisions, SHA256 checksums and SIL Open Font
+License 1.1 notices are recorded under
+`packs/ja-broadcast/fonts/ja-broadcast-cjk/`. The generation recipe and native
+coverage validation instructions are in `packs/ja-broadcast/README.md`.
+
 ## GNU Unifont for T-Deck Pro
 
 - Pixel source: `unifont-17.0.05.bdf.gz`

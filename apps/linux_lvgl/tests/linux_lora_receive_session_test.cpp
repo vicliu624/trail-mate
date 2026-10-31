@@ -4,6 +4,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstring>
+#include <future>
 #include <mutex>
 #include <stdexcept>
 #include <thread>
@@ -20,6 +21,7 @@ struct FakeIo
     bool block_acquire = true, block_poll = false, block_tx = false, block_config = false;
     bool acquire_entered = false, poll_entered = false, tx_entered = false, config_entered = false;
     bool fail_config = false, fail_tx = false;
+    bool block_release = false, release_entered = false;
     unsigned releases = 0, remaining = 0, emitted = 0, empty_polls = 0, next_count = 1;
     uint8_t marker = 0;
     std::vector<float> configurations;
@@ -91,7 +93,10 @@ bool acquire()
 void release()
 {
     offUi();
-    std::lock_guard<std::mutex> lock(io.mutex);
+    std::unique_lock<std::mutex> lock(io.mutex);
+    io.release_entered = true;
+    io.wake.wait(lock, []
+                 { return !io.block_release; });
     ++io.releases;
 }
 bool configure_receive(float frequency, const ReceiveConfig&)
@@ -169,6 +174,10 @@ int main()
         io.wake.notify_all();
     }
     ready(second);
+    require(!std::async(std::launch::async, []
+                        { return lora::wait_receive_session_released(); })
+                 .get(),
+            "handoff stole an active receive session");
     {
         std::lock_guard<std::mutex> lock(io.mutex);
         require(io.configurations.back() == 42, "old configuration was published as new");
@@ -264,12 +273,18 @@ int main()
           { return lora::receive_session_snapshot().state == lora::ReceiveSessionState::Failed; },
           "runtime radio loss not published");
     require(!lora::poll_receive_session(disconnected, bytes, sizeof(bytes), &packet), "lost radio retained buffered RX");
+    require(std::async(std::launch::async, []
+                       { return lora::wait_receive_session_released(); })
+                .get(),
+            "lost-radio cleanup did not finish");
     owner.online = true;
     {
         std::lock_guard<std::mutex> lock(io.mutex);
         io.fail_tx = false;
         io.block_config = true;
         io.config_entered = false;
+        io.block_release = true;
+        io.release_entered = false;
     }
     const auto cancelled = lora::request_receive_session(47, config);
     await([]
@@ -280,6 +295,9 @@ int main()
     lora::release_receive_session(cancelled);
     require(std::chrono::steady_clock::now() - stop < std::chrono::milliseconds(100), "UI release waited for hardware");
     require(lora::receive_session_snapshot().state == lora::ReceiveSessionState::Idle, "cancelled task remained visible");
+    auto handoff = std::async(std::launch::async, []
+                              { return lora::wait_receive_session_released(); });
+    const bool waited_for_config = handoff.wait_for(std::chrono::milliseconds(50)) == std::future_status::timeout;
     const auto released = inspect([]
                                   { return io.releases; });
     {
@@ -287,8 +305,65 @@ int main()
         io.block_config = false;
         io.wake.notify_all();
     }
+    await([]
+          { return inspect([]
+                           { return io.release_entered; }); },
+          "hardware release not dispatched");
+    const bool waited_for_restore = handoff.wait_for(std::chrono::milliseconds(50)) == std::future_status::timeout;
+    {
+        std::lock_guard<std::mutex> lock(io.mutex);
+        io.block_release = false;
+        io.wake.notify_all();
+    }
+    require(handoff.get() && waited_for_config && waited_for_restore, "Idle state bypassed hardware/configuration restoration");
     await([&]
           { return inspect([&]
                            { return io.releases > released; }); },
           "cancelled acquisition did not release lease");
+    for (unsigned n = 0; n < 32; ++n)
+    {
+        const auto generation = lora::request_receive_session(49, config);
+        lora::release_receive_session(generation);
+        require(std::async(std::launch::async, []
+                           { return lora::wait_receive_session_released(); })
+                    .get(),
+                "immediate request/release lost its handoff wakeup");
+    }
+    const auto prior = lora::request_receive_session(50, config);
+    ready(prior);
+    {
+        std::lock_guard<std::mutex> lock(io.mutex);
+        io.block_release = true;
+        io.release_entered = false;
+    }
+    lora::release_receive_session(prior);
+    await([]
+          { return inspect([]
+                           { return io.release_entered; }); },
+          "prior release did not block");
+    {
+        std::lock_guard<std::mutex> lock(io.mutex);
+        io.block_config = true;
+        io.config_entered = false;
+    }
+    const auto replacement = lora::request_receive_session(51, config);
+    {
+        std::lock_guard<std::mutex> lock(io.mutex);
+        io.block_release = false;
+        io.wake.notify_all();
+    }
+    await([]
+          { return inspect([]
+                           { return io.config_entered; }); },
+          "replacement configuration did not block");
+    lora::release_receive_session(replacement);
+    auto replacement_handoff = std::async(std::launch::async, []
+                                          { return lora::wait_receive_session_released(); });
+    const bool waited_for_replacement = replacement_handoff.wait_for(std::chrono::milliseconds(50)) == std::future_status::timeout;
+    {
+        std::lock_guard<std::mutex> lock(io.mutex);
+        io.block_config = false;
+        io.wake.notify_all();
+    }
+    require(replacement_handoff.get() && waited_for_replacement, "request during prior release published a premature hardware-idle state");
 }

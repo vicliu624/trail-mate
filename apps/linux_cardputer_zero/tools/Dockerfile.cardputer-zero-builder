@@ -48,6 +48,7 @@ RUN if [ -n "${TRAIL_MATE_CARDPUTER_ZERO_APT_MIRROR}" ]; then \
         libarchive-dev \
         libjpeg62-turbo-dev \
         libpng-dev \
+        libsdl2-dev \
         libssl-dev \
         libsqlite3-dev \
         libwayland-bin \

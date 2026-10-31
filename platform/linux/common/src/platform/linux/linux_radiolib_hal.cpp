@@ -70,6 +70,7 @@ void LinuxRadioLibHal::init()
 
 void LinuxRadioLibHal::term()
 {
+    iq_mode_ = false;
     if (pins_.count(hardware_.bus.reset_gpio)) digitalWrite(hardware_.bus.reset_gpio, GpioLevelHigh);
     if (hardware_.bus.power_gpio >= 0 && pins_.count(hardware_.bus.power_gpio))
         digitalWrite(hardware_.bus.power_gpio, GpioLevelLow);
@@ -197,7 +198,7 @@ void LinuxRadioLibHal::spiTransfer(uint8_t* output, size_t size, uint8_t* input)
     transfer.tx_buf = reinterpret_cast<uintptr_t>(output);
     transfer.rx_buf = reinterpret_cast<uintptr_t>(input);
     transfer.len = static_cast<uint32_t>(size);
-    transfer.speed_hz = hardware_.bus.spi_speed_hz;
+    transfer.speed_hz = spiClockHz();
     transfer.bits_per_word = 8;
     if (ioctl(spi_, SPI_IOC_MESSAGE(1), &transfer) != static_cast<int>(size))
     {
@@ -206,11 +207,47 @@ void LinuxRadioLibHal::spiTransfer(uint8_t* output, size_t size, uint8_t* input)
     }
     // BUSY may assert after NSS rises. Do not require observing its high edge;
     // short pulses may already be over when userspace is scheduled again.
-    delayMicroseconds(100);
+    delayMicroseconds(iq_mode_ ? 1 : 100);
+}
+
+bool LinuxRadioLibHal::setIqTransferMode(bool enabled)
+{
+    if (spi_ < 0) return !enabled;
+    if (enabled && !healthy()) return false;
+    uint32_t speed = enabled ? 16000000u : hardware_.bus.spi_speed_hz;
+    // Keep the requested mode for cleanup even if ioctl reports an error.
+    // The checked stream always resets/reopens on setup or bus-restore failure.
+    iq_mode_ = enabled;
+    if (ioctl(spi_, SPI_IOC_WR_MAX_SPEED_HZ, &speed) != 0)
+    {
+        fail(enabled ? "IQ SPI clock" : "restore packet SPI clock");
+        return false;
+    }
+    uint32_t actual = 0;
+    if (ioctl(spi_, SPI_IOC_RD_MAX_SPEED_HZ, &actual) != 0 || actual != speed)
+    {
+        errno = EIO;
+        fail("SPI clock readback");
+        return false;
+    }
+    return true;
 }
 
 void LinuxRadioLibHal::delay(RadioLibTime_t value) { std::this_thread::sleep_for(std::chrono::milliseconds(value)); }
-void LinuxRadioLibHal::delayMicroseconds(RadioLibTime_t value) { std::this_thread::sleep_for(std::chrono::microseconds(value)); }
+void LinuxRadioLibHal::delayMicroseconds(RadioLibTime_t value)
+{
+    // RadioLib also requests 1 us between command/status phases. A userspace
+    // sleep can overshoot that by a scheduler quantum. Bound short IQ waits
+    // with the steady clock; keep packet timing and all longer waits unchanged.
+    if (iq_mode_ && value <= 100)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::microseconds(value);
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+        }
+    }
+    else std::this_thread::sleep_for(std::chrono::microseconds(value));
+}
 RadioLibTime_t LinuxRadioLibHal::millis()
 {
     return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started_).count();

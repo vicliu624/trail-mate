@@ -27,6 +27,8 @@ inline std::array<uint8_t, 9> sample{1, 100, 0, 0, 0, 0, 0, 8, 0};
 inline float gain = 0;
 inline int output_volume = 0;
 inline bool gain_ok = true;
+inline bool mutex_ok = true;
+inline int codec_close_result = 0, codec_open_result = 0;
 inline bool i2c_ok = true;
 inline int resets = 0;
 inline std::vector<int16_t> written;
@@ -58,7 +60,7 @@ struct StaticSemaphore_t
 };
 using SemaphoreHandle_t = StaticSemaphore_t*;
 inline SemaphoreHandle_t xSemaphoreCreateMutexStatic(StaticSemaphore_t* value) { return value; }
-inline int xSemaphoreTake(SemaphoreHandle_t, int) { return pdTRUE; }
+inline int xSemaphoreTake(SemaphoreHandle_t, int) { return fake::mutex_ok ? pdTRUE : 0; }
 inline void xSemaphoreGive(SemaphoreHandle_t) {}
 using i2c_master_bus_handle_t = void*;
 using i2c_master_dev_handle_t = void*;
@@ -207,8 +209,8 @@ inline void esp_codec_dev_delete(codec_device* value) { fake::destroy(value); }
 inline int audio_codec_delete_codec_if(const audio_codec_if_t* value) { return fake::destroy(value); }
 inline int audio_codec_delete_ctrl_if(const audio_codec_ctrl_if_t* value) { return fake::destroy(value); }
 inline int audio_codec_delete_data_if(const audio_codec_data_if_t* value) { return fake::destroy(value); }
-inline int esp_codec_dev_open(codec_device*, esp_codec_dev_sample_info_t*) { return 0; }
-inline int esp_codec_dev_close(codec_device*) { return 0; }
+inline int esp_codec_dev_open(codec_device*, esp_codec_dev_sample_info_t*) { return fake::codec_open_result; }
+inline int esp_codec_dev_close(codec_device*) { return fake::codec_close_result; }
 inline int esp_codec_dev_set_in_gain(codec_device*, float gain)
 {
     fake::gain = gain;

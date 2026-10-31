@@ -10,6 +10,7 @@
 #include "ui/assets/fonts/font_utils.h"
 #include "ui/assets/images.h"
 #include "ui/callback_app_screen.h"
+#include "ui/screens/fm/fm_page.h"
 #include "ui/page/page_host.h"
 #if defined(ARDUINO_T_DECK_PRO) || defined(TRAIL_MATE_MONO_SCREEN_240X320)
 #define TRAIL_MATE_USE_MONO_SCREEN_240X320 1
@@ -90,7 +91,7 @@ extern "C" const lv_image_dsc_t music;
 namespace
 {
 
-constexpr size_t kMaxMenuApps = 18;
+constexpr size_t kMaxMenuApps = ui::kAppCatalogCapacity;
 
 #define APP_CATALOG_LOG(...) std::printf("[UI][Catalog] " __VA_ARGS__)
 
@@ -503,9 +504,11 @@ AppCatalog build(const FeatureFlags& flags)
         }
     };
 
-    // Calendar plus the 15 existing optional entries fits the fixed capacity.
+    // Calendar, TV and FM plus 15 existing optional entries fit the capacity.
     // A null descriptor leaves every other target's catalog unchanged.
     add(flags.calendar_app);
+    add(flags.television_app);
+    add(flags.fm_radio_app ? flags.fm_radio_app : ::ui::fm::application());
 
     const auto add_common_tail = [&]()
     {

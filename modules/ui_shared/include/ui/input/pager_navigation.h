@@ -7,11 +7,15 @@ namespace ui::input::pager
 void install_help(lv_obj_t* root, lv_obj_t* title);
 void prepare_group(lv_group_t* group);
 bool handle_key(uint32_t key, bool pressed, lv_group_t* group);
+bool help_open();
+bool open_help(lv_obj_t* root, lv_group_t* group);
 #else
 inline void install_help(lv_obj_t*, lv_obj_t*)
 {
 }
 inline void prepare_group(lv_group_t*) {}
 inline bool handle_key(uint32_t, bool, lv_group_t*) { return false; }
+inline bool help_open() { return false; }
+inline bool open_help(lv_obj_t*, lv_group_t*) { return false; }
 #endif
 } // namespace ui::input::pager

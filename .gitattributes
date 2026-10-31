@@ -40,6 +40,9 @@ platformio.ini text eol=lf
 # Scripts
 *.sh text eol=lf
 apps/linux_cardputer_zero/packaging/trailmate-cardputer-zero-applaunch text eol=lf
+boards/t_display_cm0/packaging/postinst text eol=lf
+boards/t_display_cm0/packaging/prerm text eol=lf
+boards/t_display_cm0/packaging/postrm text eol=lf
 *.bat text eol=crlf
 *.ps1 text eol=crlf
 *.cmd text eol=crlf

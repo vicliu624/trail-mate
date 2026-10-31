@@ -10,14 +10,15 @@
 #include "boards/t_display_p4/t_display_p4_board.h"
 #include "platform/esp/idf_common/t_display_p4_codec_compat.h"
 #endif
-#include "platform/esp/idf_common/sx126x_radio.h"
+#include "platform/esp/idf_common/selected_radio.h"
+#include "platform/ui/lora_runtime.h"
 
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5) || defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)
 namespace
 {
 constexpr float kFskBitRateKbps = 9.6f;
 constexpr float kFskFreqDevKHz = 5.0f;
-constexpr float kFskRxBwKHz = 156.2f;
+constexpr float kFskRxBwKHz = platform::esp::idf_common::kWalkieRxBandwidthKhz;
 constexpr uint16_t kFskPreambleLen = 16;
 constexpr uint8_t kFskSyncWord[] = {0x2D, 0x01};
 
@@ -45,9 +46,9 @@ bool board_supports_walkie()
 #endif
 }
 
-platform::esp::idf_common::Sx126xRadio& radio()
+platform::esp::idf_common::SelectedRadio& radio()
 {
-    return platform::esp::idf_common::Sx126xRadio::instance();
+    return platform::esp::idf_common::SelectedRadio::instance();
 }
 
 BackendState* resolve_state(const ::platform::esp::common::walkie_runtime::Session* session)
@@ -92,7 +93,7 @@ bool tryAcquire(Session* out_session)
     {
         return false;
     }
-    if (!radio().acquire())
+    if (!::platform::ui::lora::acquire())
     {
         return false;
     }
@@ -300,7 +301,7 @@ void release(Session* session)
     restoreLora(session);
     if (acquired)
     {
-        radio().release();
+        ::platform::ui::lora::release();
     }
     *session = {};
 }

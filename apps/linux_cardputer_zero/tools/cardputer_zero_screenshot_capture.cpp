@@ -51,6 +51,7 @@ constexpr CaptureTarget kTargets[] = {
     {"walkie", "walkie.png", 9},
     {"extensions", "extensions.png", 10},
     {"settings", "settings.png", 11},
+    {"agenda", "agenda.png", 12},
 };
 
 void tick_for(ShellSession& shell,
@@ -103,7 +104,23 @@ void press_action(ShellSession& shell,
                   CanvasLvglHost& host,
                   const std::string& action)
 {
-    if (action == "f1")
+    if (action == "help")
+    {
+        press_char(shell, 'h');
+    }
+    else if (action == "menu")
+    {
+        press_char(shell, 'm');
+    }
+    else if (action == "escape")
+    {
+        press(shell, InputKey::Home);
+    }
+    else if (action == "tab")
+    {
+        press(shell, InputKey::Tab);
+    }
+    else if (action == "f1")
     {
         press(shell, InputKey::F1);
     }

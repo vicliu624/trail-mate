@@ -81,7 +81,7 @@ if(TRAIL_MATE_CARDPUTER_ZERO_BUILD_SCREENSHOT_CAPTURE OR TRAIL_MATE_CARDPUTER_ZE
 
     include("${TRAIL_MATE_REPO_ROOT}/cmake/TrailMateLinuxSources.cmake")
     trailmate_add_linux_common(
-        trailmate_cardputer_zero_linux_common)
+        trailmate_cardputer_zero_linux_common ENABLE_MEDIA)
     trailmate_add_linux_ui_shell(
         trailmate_cardputer_zero_ui_shell
         trailmate_cardputer_zero_linux_common)
@@ -298,7 +298,7 @@ if(TRAIL_MATE_CARDPUTER_ZERO_BUILD_DEVICE AND CMAKE_SYSTEM_NAME STREQUAL "Linux"
         set(CPACK_DEBIAN_PACKAGE_SECTION "utils")
         set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
         set(CPACK_DEBIAN_PACKAGE_DEPENDS
-            "libc6, libstdc++6, libgcc-s1, libsqlite3-0, libcurl4, libssl3, libarchive13, libjpeg62-turbo, libpng16-16, libwayland-client0, libxkbcommon0, libnotify-bin, gdal-bin, unzip, ca-certificates, network-manager")
+            "libc6, libstdc++6, libgcc-s1, libsqlite3-0, libcurl4, libssl3, libarchive13, libjpeg62-turbo, libpng16-16, libsdl2-2.0-0, libwayland-client0, libxkbcommon0, libnotify-bin, gdal-bin, unzip, ca-certificates, network-manager")
         set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS OFF)
         if(TRAIL_MATE_TMAP_PRODUCER_DIR)
             string(APPEND CPACK_DEBIAN_PACKAGE_DEPENDS ", libicu72")
@@ -360,6 +360,13 @@ if(BUILD_TESTING)
     endif()
     add_test(NAME trailmate_linux_lvgl_text_input COMMAND trailmate_linux_lvgl_text_input_test)
     add_executable(trailmate_linux_geocaching_page_test tests/linux_geocaching_page_test.cpp)
+    add_executable(trailmate_cardputer_zero_page_help_test tests/linux_cardputer_zero_page_help_test.cpp)
+    target_link_libraries(trailmate_cardputer_zero_page_help_test PRIVATE trailmate_cardputer_zero_ui_shell)
+    target_compile_options(trailmate_cardputer_zero_page_help_test PRIVATE -UNDEBUG)
+    foreach(page_index RANGE 0 12)
+        add_test(NAME trailmate_cardputer_zero_page_help_${page_index}
+                 COMMAND trailmate_cardputer_zero_page_help_test ${page_index})
+    endforeach()
     add_executable(trailmate_linux_agenda_page_test tests/linux_agenda_page_test.cpp)
     target_link_libraries(trailmate_linux_agenda_page_test PRIVATE trailmate_cardputer_zero_ui_shell)
     target_compile_options(trailmate_linux_agenda_page_test PRIVATE -UNDEBUG)

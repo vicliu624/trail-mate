@@ -1,5 +1,7 @@
 #include "platform/linux/packet_radio.h"
+#include <chrono>
 #include <cstring>
+#include <future>
 #include <memory>
 
 namespace
@@ -10,6 +12,12 @@ struct State
     unsigned acquired = 0, released = 0, configured = 0, transmitted = 0, polled = 0;
     bool online = false, fail_config = false, fail_receive = false, sticky_online = false;
     RadioSettings settings;
+    bool iq_supported = true, iq_ok = true, iq_offline = false;
+    unsigned iq_captured = 0;
+    size_t iq_bytes = 1024;
+    int iq_restore_error = 0;
+    std::promise<void>* iq_entered = nullptr;
+    std::shared_future<void> iq_continue;
 };
 class FakeRadio final : public IPacketRadio
 {
@@ -37,6 +45,24 @@ class FakeRadio final : public IPacketRadio
     }
     bool startReceive() override { return !state_->fail_receive; }
     bool supportsFsk() const override { return true; }
+    bool supportsIqCapture() const override { return state_->iq_supported; }
+    bool captureIq(uint32_t* words, uint32_t*, size_t, RadioIqCaptureResult& result) override
+    {
+        ++state_->iq_captured;
+        if (state_->iq_entered)
+        {
+            state_->iq_entered->set_value();
+            state_->iq_continue.wait();
+        }
+        result = {};
+        result.bytes = state_->iq_bytes;
+        result.nominal_rate_hz = 125000;
+        result.restore_error = state_->iq_restore_error;
+        if (!state_->iq_ok) result.capture_error = static_cast<int>(IqCaptureError::Data);
+        if (state_->iq_offline) state_->online = false;
+        words[0] = 0x40004000;
+        return state_->iq_ok;
+    }
     bool configureFsk(const FskSettings&) override { return !state_->fail_config; }
     bool transmit(const uint8_t*, std::size_t) override
     {
@@ -67,8 +93,103 @@ class FakeRadio final : public IPacketRadio
 };
 } // namespace
 
+int check_iq_lease()
+{
+    using namespace platform::linux_runtime;
+    const auto state = std::make_shared<State>();
+    PacketRadioCoordinator coordinator(std::make_unique<FakeRadio>(state));
+    auto& mesh = coordinator.mesh();
+    auto& tool = coordinator.foreground();
+    uint32_t storage[512]{};
+    auto* words = storage;
+    auto* scratch = storage + 256;
+    RadioIqCaptureResult result;
+    if (mesh.supportsIqCapture() || !tool.supportsIqCapture()) return 100;
+    if (tool.captureIq(words, scratch, 256, result) || state->iq_captured) return 101;
+    RadioSettings settings;
+    if (!mesh.acquire() || !mesh.configureLoRa(settings) || !tool.acquire()) return 102;
+    if (mesh.captureIq(words, scratch, 256, result) || state->iq_captured) return 103;
+    if (tool.captureIq(words, words + 1, 256, result) || result.capture_error != -1 || state->iq_captured) return 104;
+    if (tool.captureIq(nullptr, scratch, 256, result) || result.capture_error != -1 || state->iq_captured) return 105;
+    if (tool.captureIq(words, scratch, 255, result) || result.capture_error != -1 || state->iq_captured) return 106;
+    if (!tool.captureIq(words, scratch, 256, result) || result.bytes != 1024 || words[0] != 0x40004000) return 107;
+    RadioPacket packet;
+    if (mesh.pollReceive(&packet) || state->polled) return 108;
+    settings.freq_mhz = 868;
+    if (!mesh.configureLoRa(settings) || state->settings.freq_mhz == 868) return 109;
+    if (!tool.releaseWithStatus() || state->settings.freq_mhz != 868 || !mesh.pollReceive(&packet)) return 110;
+    if (!coordinator.setEnabled(false)) return 111;
+    if (tool.captureIq(words, scratch, 256, result) || result.bytes) return 112;
+    mesh.release();
+    if (!coordinator.setEnabled(true) || !mesh.acquire() || !mesh.configureLoRa(settings) || !tool.acquire()) return 113;
+    state->iq_supported = false;
+    if (tool.supportsIqCapture() || tool.captureIq(words, scratch, 256, result)) return 114;
+    state->iq_supported = true;
+    state->iq_ok = false; // Backend deliberately leaves a partial byte count.
+    if (tool.captureIq(words, scratch, 256, result) || result.bytes || result.nominal_rate_hz || !tool.isOnline()) return 115;
+    state->iq_ok = true;
+    state->iq_bytes = 512;
+    if (tool.captureIq(words, scratch, 256, result) || result.bytes || result.capture_error != -4) return 116;
+    state->iq_bytes = 1024;
+    state->iq_restore_error = -5; // A sticky backend-online flag cannot override failed recovery.
+    if (tool.captureIq(words, scratch, 256, result) || result.bytes || tool.isOnline() || tool.stats().online) return 117;
+    const uint8_t byte = 1;
+    if (tool.transmit(&byte, 1)) return 118;
+    state->iq_restore_error = 0;
+    if (!tool.configureLoRa(settings) || !tool.startReceive() || !tool.captureIq(words, scratch, 256, result)) return 119;
+    state->iq_offline = true;
+    if (tool.captureIq(words, scratch, 256, result) || result.bytes || tool.isOnline()) return 120;
+    mesh.release();
+    tool.release();
+    const auto unavailable = make_unavailable_packet_radio("no hardware");
+    if (unavailable->supportsIqCapture() || unavailable->captureIq(words, scratch, 256, result) || result.bytes) return 121;
+    return 0;
+}
+
+int check_iq_concurrency()
+{
+    using namespace platform::linux_runtime;
+    const auto state = std::make_shared<State>();
+    PacketRadioCoordinator coordinator(std::make_unique<FakeRadio>(state));
+    auto& mesh = coordinator.mesh();
+    auto& tool = coordinator.foreground();
+    if (!mesh.acquire() || !mesh.configureLoRa(RadioSettings{}) || !tool.acquire() || !tool.isOnline() || !tool.stats().online) return 122;
+    uint32_t storage[512]{};
+    RadioIqCaptureResult result;
+    std::promise<void> entered, proceed;
+    state->iq_entered = &entered;
+    state->iq_continue = proceed.get_future().share();
+    auto captured = std::async(std::launch::async, [&]
+                               { return tool.captureIq(storage, storage + 256, 256, result); });
+    entered.get_future().wait();
+    auto cached = std::async(std::launch::async, [&]
+                             { return tool.isOnline() && tool.stats().online; });
+    const bool nonblocking = cached.wait_for(std::chrono::seconds(1)) == std::future_status::ready;
+    auto polled = std::async(std::launch::async, [&]
+                             { RadioPacket packet; return mesh.pollReceive(&packet); });
+    const uint8_t byte = 1;
+    auto transmitted = std::async(std::launch::async, [&]
+                                  { return tool.transmit(&byte, 1); });
+    const bool deferred = transmitted.wait_for(std::chrono::milliseconds(100)) == std::future_status::timeout;
+    // Always release the producer before inspecting assertions, including on a
+    // failed nonblocking-query check, so no future destructor can deadlock.
+    proceed.set_value();
+    const bool success = captured.get();
+    const bool online = cached.get();
+    const bool delivered = polled.get();
+    const bool sent = transmitted.get();
+    if (!nonblocking || !online || !success || delivered || state->polled || !deferred || !sent || state->transmitted != 1) return 123;
+    state->iq_entered = nullptr;
+    RadioPacket packet;
+    if (!tool.releaseWithStatus() || !mesh.pollReceive(&packet)) return 124;
+    mesh.release();
+    return 0;
+}
+
 int main()
 {
+    if (const int result = check_iq_lease()) return result;
+    if (const int result = check_iq_concurrency()) return result;
     using namespace platform::linux_runtime;
     const auto state = std::make_shared<State>();
     {

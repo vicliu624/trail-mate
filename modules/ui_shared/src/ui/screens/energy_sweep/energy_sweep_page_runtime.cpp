@@ -19,6 +19,7 @@
 #include "pb_decode.h"
 #include "platform/ui/lora_receive_session.h"
 #include "platform/ui/lora_runtime.h"
+#include "platform/ui/radio_iq_runtime.h"
 #include "platform/ui/screen_runtime.h"
 #include "sys/clock.h"
 #include "ui/app_runtime.h"
@@ -179,6 +180,7 @@ struct ProbeObservation
 
 struct ProbeState
 {
+    bool iq_view = false;
     bool scanning = false;
     bool configuring = false;
     bool radio_error = false;
@@ -221,6 +223,10 @@ struct PacketProbeLayout
 
 struct PacketProbeUi
 {
+    lv_obj_t* iq_button = nullptr;
+    lv_obj_t* iq_area = nullptr;
+    lv_obj_t* iq_label = nullptr;
+    char iq_text[320]{};
     lv_obj_t* root = nullptr;
     ::ui::widgets::TopBar top_bar = {};
     lv_obj_t* content_area = nullptr;
@@ -1129,6 +1135,8 @@ bool maybe_start_verification(uint32_t now_ms)
 
 void start_probe()
 {
+    if (platform::ui::radio_iq::snapshot().phase == platform::ui::radio_iq::Phase::Capturing) return;
+    s_state.iq_view = false;
     s_state.applied = false;
     s_state.radio_error = false;
     if (!s_radio.supported_protocol || active_candidate_count() == 0 ||
@@ -1284,6 +1292,38 @@ uint32_t total_protocol_evidence()
 
 void refresh_rows()
 {
+    if (s_state.iq_view)
+    {
+        for (auto* row : s_ui.result_rows)
+            if (row) lv_obj_add_flag(row, LV_OBJ_FLAG_HIDDEN);
+        if (s_ui.empty_label) lv_obj_add_flag(s_ui.empty_label, LV_OBJ_FLAG_HIDDEN);
+        if (s_ui.iq_area) lv_obj_clear_flag(s_ui.iq_area, LV_OBJ_FLAG_HIDDEN);
+        if (s_ui.iq_label)
+        {
+            const auto iq = platform::ui::radio_iq::snapshot();
+            auto& text = s_ui.iq_text;
+            if (iq.phase == platform::ui::radio_iq::Phase::Capturing)
+                snprintf(text, sizeof(text), "Capturing IQ and restoring radio...\nCurrent radio PHY; finite diagnostic");
+            else if (iq.phase == platform::ui::radio_iq::Phase::Ready)
+            {
+                char rate[48];
+                if (iq.nominal_rate_hz) snprintf(rate, sizeof(rate), "Nominal rate: %lu pairs/s", static_cast<unsigned long>(iq.nominal_rate_hz));
+                else snprintf(rate, sizeof(rate), "Sample rate: unqualified");
+                if (s_layout.screen_h <= 200)
+                    snprintf(text, sizeof(text), "%lu IQ pairs; radio restored\n%s | clip %lu\nRMS %.3f DC %.3f/%.3f\nIQ only; no protocol classification",
+                             static_cast<unsigned long>(iq.pairs), rate, static_cast<unsigned long>(iq.clipped_pairs),
+                             static_cast<double>(iq.rms), static_cast<double>(iq.dc_i), static_cast<double>(iq.dc_q));
+                else
+                    snprintf(text, sizeof(text), "%lu IQ pairs; radio restored\n%s\nRMS %.4f   DC I %.4f / Q %.4f\nClipped pairs: %lu\nFinite diagnostic; no protocol classification",
+                             static_cast<unsigned long>(iq.pairs), rate, static_cast<double>(iq.rms),
+                             static_cast<double>(iq.dc_i), static_cast<double>(iq.dc_q), static_cast<unsigned long>(iq.clipped_pairs));
+            }
+            else snprintf(text, sizeof(text), "IQ capture failed: %s\nCapture %d / SRAM %d / recovery %d\nNo valid IQ published", iq.error, iq.capture_error, iq.restore_error, iq.recovery_error);
+            if (std::strcmp(lv_label_get_text(s_ui.iq_label), text)) lv_label_set_text(s_ui.iq_label, text);
+        }
+        return;
+    }
+    if (s_ui.iq_area) lv_obj_add_flag(s_ui.iq_area, LV_OBJ_FLAG_HIDDEN);
     const int visible_rows = visible_result_capacity();
     for (int visual_index = 0; visual_index < kMaxObservations; ++visual_index)
     {
@@ -1348,7 +1388,9 @@ void refresh_rows()
         {
             lv_obj_clear_flag(s_ui.empty_label, LV_OBJ_FLAG_HIDDEN);
             ::ui::i18n::set_label_text(s_ui.empty_label,
-                                       s_state.scanning
+                                       s_state.radio_error
+                                           ? "CHECK RADIO CONNECTION AND SETTINGS"
+                                       : s_state.scanning
                                            ? "NO PROTOCOL EVIDENCE YET"
                                            : (s_state.completed_passes > 0
                                                   ? "NO EVIDENCE IN THIS PASS"
@@ -1445,7 +1487,33 @@ void refresh_status()
 
     if (s_ui.stop_label)
     {
-        ::ui::i18n::set_label_text(s_ui.stop_label, s_state.scanning ? "S  STOP" : "S  START");
+        const bool short_screen = s_layout.screen_w <= 320 && s_layout.screen_h <= 200;
+        ::ui::i18n::set_label_text(s_ui.stop_label, short_screen ? (s_state.scanning ? "Stop" : "Start")
+                                                                 : (s_state.scanning ? "S  STOP" : "S  START"));
+    }
+    if (s_ui.stop_button)
+    {
+        if (!s_radio.supported_protocol || !platform::ui::lora::is_supported())
+            lv_obj_add_state(s_ui.stop_button, LV_STATE_DISABLED);
+        else lv_obj_clear_state(s_ui.stop_button, LV_STATE_DISABLED);
+    }
+    if (s_ui.set_button)
+    {
+        if (!s_state.observation_count || s_state.radio_error || s_state.iq_view)
+            lv_obj_add_state(s_ui.set_button, LV_STATE_DISABLED);
+        else lv_obj_clear_state(s_ui.set_button, LV_STATE_DISABLED);
+    }
+    const bool iq_busy = platform::ui::radio_iq::snapshot().phase == platform::ui::radio_iq::Phase::Capturing;
+    if (iq_busy && s_ui.stop_button) lv_obj_add_state(s_ui.stop_button, LV_STATE_DISABLED);
+    if (s_ui.iq_button)
+    {
+        if (iq_busy) lv_obj_add_state(s_ui.iq_button, LV_STATE_DISABLED);
+        else lv_obj_clear_state(s_ui.iq_button, LV_STATE_DISABLED);
+    }
+    if (s_state.iq_view)
+    {
+        lv_label_set_text(s_ui.state_label, iq_busy ? "IQ CAPTURE / RECOVERY" : "IQ DIAGNOSTIC");
+        if (s_ui.progress_label) lv_label_set_text(s_ui.progress_label, "S: RETURN TO PROBE");
     }
 }
 
@@ -1538,6 +1606,7 @@ void restore_page_focus()
     {
         lv_group_add_obj(::app_g, s_ui.set_button);
     }
+    if (s_ui.iq_button) lv_group_add_obj(::app_g, s_ui.iq_button);
     if (s_ui.top_bar.back_btn)
     {
         lv_group_focus_obj(s_ui.top_bar.back_btn);
@@ -1819,6 +1888,7 @@ void on_result_row_clicked(lv_event_t* event)
 
 void on_stop_clicked(lv_event_t*)
 {
+    if (platform::ui::radio_iq::snapshot().phase == platform::ui::radio_iq::Phase::Capturing) return;
     if (s_state.scanning)
     {
         stop_probe();
@@ -1832,7 +1902,19 @@ void on_stop_clicked(lv_event_t*)
 
 void on_set_clicked(lv_event_t*)
 {
+    if (s_state.iq_view) return;
     open_confirmation();
+}
+
+void on_iq_clicked(lv_event_t*)
+{
+    if (s_state.confirmation_open || !platform::ui::radio_iq::is_supported() ||
+        platform::ui::radio_iq::snapshot().phase == platform::ui::radio_iq::Phase::Capturing) return;
+    stop_probe();
+    s_state.iq_view = true;
+    if (s_ui.iq_area) lv_obj_scroll_to_y(s_ui.iq_area, 0, LV_ANIM_OFF);
+    platform::ui::radio_iq::start();
+    refresh_all_ui();
 }
 
 void on_back_requested(lv_event_t*)
@@ -1865,19 +1947,30 @@ void handle_key_common(uint32_t key)
     }
     if (key == LV_KEY_UP)
     {
+        if (s_state.iq_view && s_ui.iq_area)
+        {
+            lv_obj_scroll_by(s_ui.iq_area, 0, 24, LV_ANIM_OFF);
+            return;
+        }
         select_observation(s_state.selected_observation - 1);
         return;
     }
     if (key == LV_KEY_DOWN)
     {
+        if (s_state.iq_view && s_ui.iq_area)
+        {
+            lv_obj_scroll_by(s_ui.iq_area, 0, -24, LV_ANIM_OFF);
+            return;
+        }
         select_observation(s_state.selected_observation + 1);
         return;
     }
     if (key == LV_KEY_ENTER)
     {
-        open_confirmation();
+        on_set_clicked(nullptr);
         return;
     }
+    if (key == 'i' || key == 'I') on_iq_clicked(nullptr);
     if (key == 's' || key == 'S')
     {
         on_stop_clicked(nullptr);
@@ -1907,6 +2000,7 @@ void control_key_event_cb(lv_event_t* event)
         {
             on_set_clicked(nullptr);
         }
+        else if (target == s_ui.iq_button) on_iq_clicked(nullptr);
         else if (target == s_ui.confirm_cancel)
         {
             on_confirm_cancel_clicked(nullptr);
@@ -2047,6 +2141,18 @@ void build_work_area(lv_obj_t* root)
                                       kColorTextDim,
                                       0,
                                       work_height - (s_layout.compact ? 18 : 26));
+    s_ui.iq_area = lv_obj_create(s_ui.content_area);
+    lv_obj_set_pos(s_ui.iq_area, 0, row_y);
+    lv_obj_set_size(s_ui.iq_area, s_layout.content_w, std::max<lv_coord_t>(16, work_height - row_y - (s_layout.compact ? 22 : 30)));
+    lv_obj_set_style_bg_opa(s_ui.iq_area, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(s_ui.iq_area, 0, 0);
+    lv_obj_set_style_pad_all(s_ui.iq_area, 0, 0);
+    lv_obj_set_scroll_dir(s_ui.iq_area, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(s_ui.iq_area, LV_SCROLLBAR_MODE_AUTO);
+    s_ui.iq_label = create_text(s_ui.iq_area, "", &lv_font_montserrat_12, kColorTextDim, 0, 0);
+    lv_obj_set_width(s_ui.iq_label, s_layout.content_w - 8);
+    lv_label_set_long_mode(s_ui.iq_label, LV_LABEL_LONG_WRAP);
+    lv_obj_add_flag(s_ui.iq_area, LV_OBJ_FLAG_HIDDEN);
 }
 
 lv_obj_t* create_bottom_control(lv_obj_t* parent,
@@ -2085,6 +2191,7 @@ lv_obj_t* create_bottom_control(lv_obj_t* parent,
 
 void build_bottom_bar(lv_obj_t* root)
 {
+    const bool short_screen = s_layout.screen_w <= 320 && s_layout.screen_h <= 200;
     s_ui.bottom_bar = lv_obj_create(root);
     lv_obj_set_pos(s_ui.bottom_bar, 0, s_layout.work_bottom);
     lv_obj_set_size(s_ui.bottom_bar, s_layout.screen_w, s_layout.bottom_bar_h);
@@ -2101,26 +2208,34 @@ void build_bottom_bar(lv_obj_t* root)
     const lv_coord_t first_width = (available * 30) / 100;
     const lv_coord_t action_width = (available - first_width) / 3;
     lv_coord_t x = gap;
-    (void)create_bottom_control(s_ui.bottom_bar, x, first_width, "UP/DN  SELECT", nullptr, nullptr);
+    if (platform::ui::radio_iq::is_supported())
+        s_ui.iq_button = create_bottom_control(s_ui.bottom_bar, x, first_width, short_screen ? "I  IQ" : "I  IQ SNAPSHOT", on_iq_clicked, nullptr);
+    else
+    {
+        auto* navigation_hint = create_bottom_control(s_ui.bottom_bar, x, first_width, short_screen ? "Up/Down" : "UP/DN  SELECT", nullptr, nullptr);
+        lv_obj_clear_flag(navigation_hint, static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_CLICK_FOCUSABLE));
+        lv_obj_set_style_border_width(navigation_hint, 0, 0);
+        lv_obj_set_style_bg_opa(navigation_hint, LV_OPA_TRANSP, 0);
+    }
     x += first_width + gap;
     s_ui.set_button = create_bottom_control(s_ui.bottom_bar,
                                             x,
                                             action_width,
-                                            "ENTER  SET",
+                                            short_screen ? "Set" : "ENTER  SET",
                                             on_set_clicked,
                                             &s_ui.set_label);
     x += action_width + gap;
     s_ui.stop_button = create_bottom_control(s_ui.bottom_bar,
                                              x,
                                              action_width,
-                                             "S  START",
+                                             short_screen ? "Start" : "S  START",
                                              on_stop_clicked,
                                              &s_ui.stop_label);
     x += action_width + gap;
     (void)create_bottom_control(s_ui.bottom_bar,
                                 x,
                                 action_width,
-                                "ESC  BACK",
+                                short_screen ? "Back" : "ESC  BACK",
                                 on_back_requested,
                                 nullptr);
 }
@@ -2175,6 +2290,7 @@ void ui_energy_sweep_enter(lv_obj_t* parent)
 
     s_state = {};
     setup_radio_context();
+    s_state.radio_error = !platform::ui::lora::is_supported();
     ui_energy_sweep_create(parent);
     restore_page_focus();
     if (!::app_g)
@@ -2192,6 +2308,7 @@ void ui_energy_sweep_enter(lv_obj_t* parent)
 
 void ui_energy_sweep_exit(lv_obj_t* parent)
 {
+    platform::ui::radio_iq::wait_until_finished();
     (void)parent;
     if (!s_page_state)
     {
@@ -2224,7 +2341,12 @@ namespace energy_sweep::ui::runtime
 
 bool is_available()
 {
+#if defined(TRAIL_MATE_PLATFORM_LINUX)
+    // Radio readiness belongs to the probe state, not page registration.
+    return true;
+#else
     return platform::ui::lora::is_supported();
+#endif
 }
 
 bool text_start()

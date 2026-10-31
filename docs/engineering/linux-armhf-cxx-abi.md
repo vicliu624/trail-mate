@@ -66,3 +66,35 @@ Rebuild the application and all static C++ dependencies; do not mix objects buil
 under different lock policies. Verify directory copy/iteration, installed-record
 reopen and app resource activation on the actual target before accepting the deb.
 Basic startup or a QEMU run against the generic Debian sysroot is insufficient.
+
+## Native 1seg backend packages
+
+The same boundary applies to the C++ GNU Radio/gr-isdbt backend; an armhf package
+label does not identify its shared-pointer lock policy. The native backend
+builder records the ABI from its real CMake compile command, and the package
+emits `trailmate-oneseg-backend-cm0-abi-v1` only for the known CM0 profile:
+libstdc++ header release 14, mutex default lock policy and C++11 ABI 1 on armhf.
+The CM0 TV application requires that virtual package capability in addition to
+the backend and target FFmpeg dependencies. Its packaging helper rejects an
+unqualified backend before downloading/building the sysroot.
+
+This gate prevents accepting the documented incompatible default configuration;
+it is not full target ABI, RF or media acceptance. A native Raspbian backend and
+the exact installed application still require the target tests above. The
+2026-10-30 host package measured release 13/atomic and correctly emits no CM0
+capability. An explicitly labeled empty armhf metadata fixture without the
+capability was rejected in the package preflight test. No device was accessed.
+
+## Native CM0 compiler target
+
+The isolated Raspbian 13.6 armhf environment was subsequently bootstrapped and
+measured with GCC 14.2.0-19+rpi1. Its default ARMv6 target preserves the mutex
+ABI but reports bool atomics only sometimes lock-free. Selecting
+`-march=armv7-a -mfpu=vfpv3-d16 -mfloat-abi=hard` preserves that same ABI and
+provides always-lock-free bool atomics required by the FIFO cancellation path.
+A compiled ARM contract was executed under QEMU; the same contract fails at
+compile time under the default ARMv6 target. No private library macro was forced.
+
+The native backend builder's `--cm0` option makes this target explicit and
+records it. Full GNU Radio/backend/application builds and physical qualification
+are still separate gates; the compiler probe is not media or RF acceptance.

@@ -30,5 +30,6 @@ int main()
     assert(profile.card_width == 140);
     assert(profile.card_height == 112);
     assert(profile.grid_top_offset == 34);
+    assert(profile.wrap_grid && profile.vertical_scroll && !profile.snap_center);
     return 0;
 }

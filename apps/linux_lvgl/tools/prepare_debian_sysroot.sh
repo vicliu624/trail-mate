@@ -5,6 +5,13 @@ set -euo pipefail
 # packages. This directory must be dedicated to this script (no existing OS).
 work="${1:?usage: prepare_debian_sysroot.sh WORK_DIRECTORY [armhf|arm64]}"
 arch="${2:-armhf}"
+feature="${3:-base}"
+extra_packages=()
+case "$feature" in
+    base) ;;
+    oneseg) extra_packages=(libavformat-dev libavcodec-dev libavutil-dev libswresample-dev libswscale-dev libaribb24-dev) ;;
+    *) echo "Unsupported sysroot feature: $feature" >&2; exit 1 ;;
+esac
 case "$arch" in armhf|arm64) ;; *) echo "Unsupported architecture: $arch" >&2; exit 1 ;; esac
 mkdir -p "$work"
 work="$(cd "$work" && pwd)"
@@ -30,7 +37,7 @@ options=(-o "APT::Architecture=$arch"
     -o "APT::Sandbox::User=$(id -un)")
 apt-get "${options[@]}" update
 apt-get "${options[@]}" --download-only --no-install-recommends --assume-yes install \
-    libc6-dev libstdc++-14-dev libsdl2-dev libcurl4-openssl-dev libsqlite3-dev libssl-dev
+    libc6-dev libstdc++-14-dev libsdl2-dev libcurl4-openssl-dev libsqlite3-dev libssl-dev "${extra_packages[@]}"
 for package in "$work"/apt/archives/*.deb; do
     dpkg-deb --extract "$package" "$work/root"
 done

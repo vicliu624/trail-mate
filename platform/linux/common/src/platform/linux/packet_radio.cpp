@@ -1,4 +1,5 @@
 #include "platform/linux/packet_radio.h"
+#include "platform/shared/radio/fm_iq_stream.h"
 
 #include <atomic>
 #include <cstdlib>
@@ -23,7 +24,14 @@ struct PacketRadioCoordinator::Impl
         }
         bool acquire() override
         {
-            std::lock_guard<std::mutex> lock(owner.mutex);
+            std::unique_lock<std::mutex> lock(owner.mutex, std::defer_lock);
+            // Foreground admission may be called by a page callback. A live IQ
+            // stream holds this mutex until cancellation: never wait on it here.
+            if (kind == 1)
+            {
+                if (!lock.try_lock()) return false;
+            }
+            else lock.lock();
             if (!owner.enabled) return owner.fail(kind, "Radio disabled by user");
             if (kind == 1 && owner.references[1]) return owner.fail(kind, "A foreground radio lease is already active");
             if (!owner.references[0] && !owner.references[1])
@@ -103,6 +111,90 @@ struct PacketRadioCoordinator::Impl
             return owner.driver->startReceive() || owner.failConfiguration(kind);
         }
         bool supportsFsk() const override { return kind == 1 && owner.driver->supportsFsk(); }
+        bool supportsIqCapture() const override { return kind == 1 && owner.driver->supportsIqCapture(); }
+        bool supportsOneSegIq() const override { return kind == 1 && owner.driver->supportsOneSegIq(); }
+        bool supportsFmIq() const override { return kind == 1 && owner.driver->supportsFmIq(); }
+        bool streamFmIq(const FmIqRequest& request, FmIqResult& result) override
+        {
+            std::lock_guard<std::mutex> lock(owner.mutex);
+            result = {};
+            result.capture_error = static_cast<int>(IqCaptureError::State);
+            if (kind != 1) return owner.fail(kind, "FM IQ requires a foreground radio lease");
+            if (!owner.allowed(kind)) return false;
+            if (!owner.driver->supportsFmIq()) return owner.fail(kind, "FM IQ backend is unavailable");
+            if (!platform::shared::radio::FmLr2021Rx::frequencySupported(request.frequency_hz) ||
+                !request.staging || request.staging_bytes < 1280 || !request.accept || !request.cancelled)
+            {
+                result.capture_error = static_cast<int>(IqCaptureError::Argument);
+                return owner.fail(kind, "FM IQ requires a supported frequency, staging and callbacks");
+            }
+            const bool completed = owner.driver->streamFmIq(request, result);
+            if (result.recovery_error || !owner.driver->isOnline()) return owner.failConfiguration(kind);
+            if (!completed || result.capture_error || result.sink_rejected)
+            {
+                const auto* message = owner.driver->lastError();
+                return owner.fail(kind, message && *message ? message : "FM IQ stream failed");
+            }
+            owner.errors[kind].clear();
+            return true;
+        }
+        bool streamOneSegIq(const OneSegIqRequest& request, OneSegIqResult& result) override
+        {
+            std::lock_guard<std::mutex> lock(owner.mutex);
+            result = {};
+            result.capture_error = static_cast<int>(IqCaptureError::State);
+            if (kind != 1) return owner.fail(kind, "TV IQ requires a foreground radio lease");
+            if (!owner.allowed(kind)) return false;
+            if (!owner.driver->supportsOneSegIq()) return owner.fail(kind, "TV IQ backend is unavailable");
+            if (request.channel < 13 || request.channel > 62 || !request.staging ||
+                request.staging_bytes < 1280 || !request.accept || !request.cancelled)
+            {
+                result.capture_error = static_cast<int>(IqCaptureError::Argument);
+                return owner.fail(kind, "TV IQ requires a valid channel, staging and callbacks");
+            }
+            const bool completed = owner.driver->streamOneSegIq(request, result);
+            if (result.recovery_error || !owner.driver->isOnline()) return owner.failConfiguration(kind);
+            if (!completed || result.capture_error || result.sink_rejected)
+            {
+                const auto* message = owner.driver->lastError();
+                return owner.fail(kind, message && *message ? message : "TV IQ stream failed");
+            }
+            owner.errors[kind].clear();
+            return true;
+        }
+        bool captureIq(uint32_t* words, uint32_t* scratch, size_t capacity, RadioIqCaptureResult& result) override
+        {
+            std::lock_guard<std::mutex> lock(owner.mutex);
+            result = {};
+            result.capture_error = static_cast<int>(IqCaptureError::State);
+            if (kind != 1) return owner.fail(kind, "IQ requires a foreground radio lease");
+            if (!owner.allowed(kind)) return false;
+            if (!owner.driver->supportsIqCapture()) return owner.fail(kind, "IQ backend is unavailable");
+            const auto a = reinterpret_cast<std::uintptr_t>(words);
+            const auto b = reinterpret_cast<std::uintptr_t>(scratch);
+            if (!words || !scratch || capacity < 256 || (a > b ? a - b : b - a) < 1024)
+            {
+                result.capture_error = static_cast<int>(IqCaptureError::Argument);
+                return owner.fail(kind, "IQ requires two non-overlapping 256-word buffers");
+            }
+            const bool captured = owner.driver->captureIq(words, scratch, capacity, result);
+            if (result.restore_error || result.recovery_error || !owner.driver->isOnline())
+            {
+                result.bytes = 0;
+                result.nominal_rate_hz = 0;
+                return owner.failConfiguration(kind);
+            }
+            if (!captured || result.capture_error || result.bytes != 1024)
+            {
+                if (!result.capture_error) result.capture_error = static_cast<int>(IqCaptureError::Data);
+                result.bytes = 0;
+                result.nominal_rate_hz = 0;
+                const auto* message = owner.driver->lastError();
+                return owner.fail(kind, message && *message ? message : "IQ capture failed");
+            }
+            owner.errors[kind].clear();
+            return true;
+        }
         bool supportsFskConfiguration(const FskSettings& settings) const override
         {
             return kind == 1 && owner.driver->supportsFskConfiguration(settings);
@@ -257,7 +349,9 @@ IPacketRadio& PacketRadioCoordinator::mesh() { return impl_->mesh_client; }
 IPacketRadio& PacketRadioCoordinator::foreground() { return impl_->foreground_client; }
 bool PacketRadioCoordinator::setEnabled(bool enabled)
 {
-    std::lock_guard<std::mutex> lock(impl_->mutex);
+    // Quick controls must not block the UI behind an open-ended IQ worker.
+    std::unique_lock<std::mutex> lock(impl_->mutex, std::try_to_lock);
+    if (!lock.owns_lock()) return false;
     if (impl_->references[1]) return false;
     if (!enabled && impl_->physical_acquired)
     {

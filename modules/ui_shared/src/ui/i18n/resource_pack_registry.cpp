@@ -13,6 +13,7 @@
 #include "platform/ui/settings_store.h"
 #include "sys/clock.h"
 #include "ui/assets/fonts/font_utils.h"
+#include "ui/assets/fonts/bundled_font_root.h"
 #include "ui/runtime/memory_profile.h"
 #include "ui/support/lvgl_fs_utils.h"
 #include "ui/widgets/foreground_operation_overlay.h"
@@ -74,6 +75,7 @@ constexpr const char* kFontPackRoot = "/trailmate/packs/fonts";
 constexpr const char* kLocalePackRoot = "/trailmate/packs/locales";
 constexpr const char* kImePackRoot = "/trailmate/packs/ime";
 std::string s_external_pack_root;
+std::string s_bundled_font_root;
 constexpr const char* kDisabledImeSentinel = "__none__";
 constexpr std::size_t kFontLoadOverlayThresholdBytes = 64U * 1024U;
 constexpr unsigned kMaxMissingFontDiagnostics = 20;
@@ -3017,6 +3019,13 @@ void catalog_external_packs()
         const auto locales = join_path(s_external_pack_root, "locales");
         catalog_external_packs_from_root(s_external_pack_root.c_str(), fonts.c_str(), ime.c_str(), locales.c_str());
     }
+    if (!s_bundled_font_root.empty())
+    {
+        // Existing IDs win: a user-installed font may override a bundled one.
+        // The system directory is read only and contains fonts, not user IMEs.
+        const auto fonts = join_path(s_bundled_font_root, "fonts");
+        scan_pack_group(fonts.c_str(), "bundled_fonts", catalog_external_font_pack);
+    }
     std::printf("%s external pack scan end fonts=%lu ime=%lu locales=%lu\n",
                 kLogTag,
                 static_cast<unsigned long>(s_font_packs.size()),
@@ -3507,6 +3516,13 @@ bool configure_external_pack_root(const std::string& root)
 {
     if (s_registry_ready) return root == s_external_pack_root;
     s_external_pack_root = root;
+    return true;
+}
+
+bool configure_bundled_font_root(const std::string& root)
+{
+    if (s_registry_ready) return root == s_bundled_font_root;
+    s_bundled_font_root = root;
     return true;
 }
 

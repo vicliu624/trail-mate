@@ -14,7 +14,22 @@ include("${TRAIL_MATE_REPO_ROOT}/cmake/TrailMateProjectVersion.cmake")
 set(TRAIL_MATE_LINUX_UX_PACK "t_display_p4_touch" CACHE STRING "Linux LVGL UX pack")
 option(TRAIL_MATE_LINUX_BUILD_APP "Build the Linux desktop executable" ON)
 option(TRAIL_MATE_LINUX_ENABLE_LR2021 "Build the configurable Linux LR2021 backend" ON)
+option(TRAIL_MATE_LINUX_ENABLE_ONESEG_MEDIA "Build the native 1seg video/PCM engineering composition" OFF)
 option(TRAIL_MATE_LINUX_ENABLE_MEDIA "Build the shared music player with Linux PCM output" ON)
+if(TRAIL_MATE_LINUX_ENABLE_ONESEG_MEDIA)
+    if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        message(FATAL_ERROR "1seg TV requires a Linux target")
+    endif()
+    if(NOT TRAIL_MATE_LINUX_BUILD_APP)
+        message(FATAL_ERROR "1seg TV requires TRAIL_MATE_LINUX_BUILD_APP=ON")
+    endif()
+    if(NOT TRAIL_MATE_LINUX_ENABLE_LR2021)
+        message(FATAL_ERROR "1seg TV requires TRAIL_MATE_LINUX_ENABLE_LR2021=ON")
+    endif()
+    if(NOT TRAIL_MATE_LINUX_ENABLE_MEDIA)
+        message(FATAL_ERROR "1seg TV requires TRAIL_MATE_LINUX_ENABLE_MEDIA=ON")
+    endif()
+endif()
 option(TRAIL_MATE_LINUX_DEB "Enable device-owned Debian packaging" OFF)
 set(TRAIL_MATE_LINUX_DEVICE_CONFIG "" CACHE FILEPATH "Device-owned CMake package description")
 set(TRAIL_MATE_LINUX_PACKAGE_VERSION "${TRAIL_MATE_DEBIAN_PROJECT_VERSION}" CACHE STRING "Debian package version")
@@ -63,6 +78,28 @@ if(TRAIL_MATE_LINUX_BUILD_APP)
         trailmate_add_linux_lr2021(trailmate_linux_lr2021)
         add_executable(trailmate-linux-radio-probe tools/radio_probe.cpp)
         target_link_libraries(trailmate-linux-radio-probe PRIVATE trailmate_linux_lr2021)
+        add_executable(trailmate-linux-oneseg-iq tools/oneseg_iq_probe.cpp)
+        target_link_libraries(trailmate-linux-oneseg-iq PRIVATE
+            trailmate_desktop_linux_common trailmate_linux_device_options)
+        if(TRAIL_MATE_LINUX_ENABLE_ONESEG_MEDIA)
+            include("${TRAIL_MATE_REPO_ROOT}/cmake/TrailMateOneSegMedia.cmake")
+            trailmate_add_oneseg_media(trailmate_linux_oneseg_media)
+            target_sources(trailmate_linux_oneseg_media PRIVATE
+                "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/platform/linux/oneseg_pcm_output.cpp"
+                "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/platform/linux/oneseg_tv_session.cpp"
+                "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/platform/ui/oneseg_tv_runtime.cpp")
+            target_include_directories(trailmate_linux_oneseg_media PRIVATE
+                "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/include"
+                "${TRAIL_MATE_REPO_ROOT}/modules/core_music/include")
+            target_link_libraries(trailmate_linux_oneseg_media PUBLIC trailmate_desktop_linux_common)
+            target_link_libraries(trailmate-linux-oneseg-iq PRIVATE trailmate_linux_oneseg_media)
+            target_compile_definitions(trailmate-linux-oneseg-iq PRIVATE TRAIL_MATE_ONESEG_MEDIA=1)
+        endif()
+        install(TARGETS trailmate-linux-oneseg-iq
+            RUNTIME DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/trailmate" COMPONENT Runtime)
+        install(PROGRAMS tools/oneseg_decode.py
+            DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/trailmate"
+            RENAME trailmate-linux-oneseg-decode COMPONENT Runtime)
     endif()
     trailmate_add_linux_ui_shell(trailmate_desktop_ui trailmate_desktop_linux_common
         UX_PACK "${TRAIL_MATE_LINUX_UX_PACK}")
@@ -72,13 +109,79 @@ if(TRAIL_MATE_LINUX_BUILD_APP)
         trailmate_linux_device_options lvgl SDL2::SDL2)
     target_compile_features(trailmate_linux_sdl_host PUBLIC cxx_std_17)
     add_executable(trailmate-linux src/main.cpp)
+    if(TRAIL_MATE_LINUX_ENABLE_MEDIA AND TRAIL_MATE_LINUX_ENABLE_LR2021)
+        target_sources(trailmate-linux PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/ui/fm_radio_app.cpp"
+            "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/platform/ui/fm_runtime.cpp")
+        target_compile_definitions(trailmate-linux PRIVATE TRAIL_MATE_FM_RADIO=1)
+    endif()
     target_compile_definitions(trailmate-linux PRIVATE
         TRAIL_MATE_LINUX_UX_PACK="${TRAIL_MATE_LINUX_UX_PACK}")
     target_link_libraries(trailmate-linux PRIVATE trailmate_desktop_ui trailmate_linux_sdl_host)
+    if(TARGET trailmate_linux_oneseg_media)
+        include("${TRAIL_MATE_REPO_ROOT}/cmake/TrailMateBroadcastFonts.cmake")
+        trailmate_add_broadcast_font_assets(trailmate-linux)
+        target_sources(trailmate-linux PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/ui/oneseg_tv_app.cpp")
+        target_compile_definitions(trailmate-linux PRIVATE TRAIL_MATE_ONESEG_MEDIA=1
+            TRAIL_MATE_ONESEG_DECODER_PATH="${CMAKE_INSTALL_FULL_LIBEXECDIR}/trailmate/trailmate-linux-oneseg-decode")
+        target_link_libraries(trailmate-linux PRIVATE trailmate_linux_oneseg_media)
+    endif()
     add_executable(trailmate-linux-hardware-probe tools/hardware_probe.cpp)
     target_link_libraries(trailmate-linux-hardware-probe PRIVATE
         trailmate_desktop_ui trailmate_linux_device_options)
     if(BUILD_TESTING)
+        if(TARGET trailmate_linux_oneseg_media)
+            add_executable(trailmate_broadcast_font_test
+                "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/tests/agenda/test_font_binary.cpp")
+            target_compile_options(trailmate_broadcast_font_test PRIVATE -UNDEBUG)
+            target_link_libraries(trailmate_broadcast_font_test PRIVATE lvgl)
+            add_dependencies(trailmate_broadcast_font_test trailmate_oneseg_content_font)
+            add_test(NAME oneseg_broadcast_font COMMAND trailmate_broadcast_font_test
+                "${TRAIL_MATE_ONESEG_BROADCAST_FONT_EFFECTIVE}"
+                "${TRAIL_MATE_REPO_ROOT}/packs/ja-broadcast/fonts/ja-broadcast-cjk/charset.txt")
+            add_executable(trailmate_bundled_font_root_test tests/linux_bundled_font_root_test.cpp)
+            target_link_libraries(trailmate_bundled_font_root_test PRIVATE trailmate_desktop_ui)
+            target_compile_options(trailmate_bundled_font_root_test PRIVATE -UNDEBUG)
+            add_dependencies(trailmate_bundled_font_root_test trailmate_oneseg_content_font)
+            add_test(NAME oneseg_bundled_font_root COMMAND trailmate_bundled_font_root_test
+                "${TRAIL_MATE_ONESEG_BROADCAST_FONT_EFFECTIVE}"
+                "${TRAIL_MATE_REPO_ROOT}/packs/ja-broadcast/fonts/ja-broadcast-cjk")
+            add_test(NAME oneseg_bundled_font_override COMMAND trailmate_bundled_font_root_test
+                "${TRAIL_MATE_ONESEG_BROADCAST_FONT_EFFECTIVE}"
+                "${TRAIL_MATE_REPO_ROOT}/packs/ja-broadcast/fonts/ja-broadcast-cjk" --user-override)
+            if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+                target_sources(trailmate_broadcast_font_test PRIVATE
+                    "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/tests/agenda/font_memory_probe.cpp")
+                target_compile_definitions(trailmate_broadcast_font_test PRIVATE AGENDA_FONT_MEMORY_PROBE=1)
+                target_link_options(trailmate_broadcast_font_test PRIVATE
+                    "-Wl,--wrap=lv_malloc_core" "-Wl,--wrap=lv_realloc_core" "-Wl,--wrap=lv_free_core")
+            endif()
+            add_executable(trailmate_oneseg_tv_page_test tests/oneseg_tv_page_test.cpp
+                "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/ui/oneseg_tv_app.cpp")
+            target_compile_options(trailmate_oneseg_tv_page_test PRIVATE -UNDEBUG)
+            target_link_libraries(trailmate_oneseg_tv_page_test PRIVATE
+                trailmate_desktop_ui trailmate_linux_sdl_host trailmate_linux_oneseg_media)
+        endif()
+        file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/page-review")
+        set(review_pages chat contacts map sky_plot team tracker calculator geocaching energy_sweep extensions settings calendar walkie_talkie)
+        if(TARGET trailmate_linux_oneseg_media)
+            list(APPEND review_pages oneseg_tv)
+        endif()
+        foreach(review_page IN LISTS review_pages)
+          foreach(review_input keyboard touch)
+            set(review_help_argument --page-help)
+            if(review_input STREQUAL "touch")
+                set(review_help_argument --page-help-touch)
+            endif()
+            add_test(NAME linux_device_page_help_${review_page}_${review_input}
+                COMMAND trailmate-linux --profile "${TRAIL_MATE_REPO_ROOT}/boards/t_display_cm0/device.conf"
+                    --windowed --quit-after-ms 4800 --open-app ${review_page} ${review_help_argument}
+                    --screenshot "${CMAKE_CURRENT_BINARY_DIR}/page-review/${review_page}-${review_input}.bmp")
+            set_tests_properties(linux_device_page_help_${review_page}_${review_input} PROPERTIES ENVIRONMENT
+                "SDL_VIDEODRIVER=dummy;SDL_AUDIODRIVER=dummy;TRAIL_MATE_LORA_DISABLE=1;TRAIL_MATE_LORA_SIMULATED=0;TRAIL_MATE_GPS_DEMO_DEFAULTS=0;TRAIL_MATE_DEMO_WORLD=0;TRAIL_MATE_RUNTIME_MODE=local;XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/page-review/state/${review_page}-${review_input}/config;XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/page-review/state/${review_page}-${review_input}/data;XDG_CACHE_HOME=${CMAKE_CURRENT_BINARY_DIR}/page-review/state/${review_page}-${review_input}/cache")
+          endforeach()
+        endforeach()
         find_package(Python3 REQUIRED COMPONENTS Interpreter)
         add_executable(trailmate_tms_settings_records_test "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/tests/test_tms_settings_records.cpp"
             "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/src/app/tms_config_codec.cpp")
@@ -99,6 +202,21 @@ if(TRAIL_MATE_LINUX_BUILD_APP)
         endif()
         add_test(NAME linux_settings_transaction COMMAND trailmate_linux_settings_transaction_test)
         if(TRAIL_MATE_LINUX_ENABLE_MEDIA)
+            add_executable(trailmate_menu_scroll_test tests/menu_scroll_test.cpp)
+            target_link_libraries(trailmate_menu_scroll_test PRIVATE trailmate_desktop_ui trailmate_linux_sdl_host)
+            target_compile_options(trailmate_menu_scroll_test PRIVATE -UNDEBUG)
+            add_test(NAME t_display_menu_scroll COMMAND trailmate_menu_scroll_test "${CMAKE_CURRENT_BINARY_DIR}/menu-scroll-review")
+            set_tests_properties(t_display_menu_scroll PROPERTIES TIMEOUT 30)
+            add_executable(trailmate_p4_fm_page_test tests/p4_fm_page_test.cpp
+                "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/screens/fm/fm_page.cpp")
+            target_link_libraries(trailmate_p4_fm_page_test PRIVATE trailmate_desktop_ui trailmate_linux_sdl_host)
+            target_compile_options(trailmate_p4_fm_page_test PRIVATE -UNDEBUG)
+            target_compile_definitions(trailmate_p4_fm_page_test PRIVATE TRAIL_MATE_EXTERNAL_FM_RUNTIME=1)
+            add_test(NAME p4_fm_page_landscape COMMAND trailmate_p4_fm_page_test 1168 540 "${CMAKE_CURRENT_BINARY_DIR}/p4-fm-page-review/landscape")
+            add_test(NAME p4_fm_page_portrait COMMAND trailmate_p4_fm_page_test 540 1168 "${CMAKE_CURRENT_BINARY_DIR}/p4-fm-page-review/portrait")
+            set_tests_properties(p4_fm_page_landscape p4_fm_page_portrait PROPERTIES TIMEOUT 30)
+            add_custom_target(trailmate_p4_fm_ui_validation DEPENDS trailmate_p4_fm_page_test trailmate-linux
+                trailmate_fm_radio_page_test trailmate_fm_session_test trailmate_fm_pcm_output_test)
             add_executable(trailmate_linux_pending_call_path_test tests/linux_pending_call_path_test.cpp)
             target_link_libraries(trailmate_linux_pending_call_path_test PRIVATE trailmate_desktop_linux_common)
             target_compile_options(trailmate_linux_pending_call_path_test PRIVATE -UNDEBUG)
@@ -130,9 +248,44 @@ if(TRAIL_MATE_LINUX_BUILD_APP)
         target_link_libraries(trailmate_linux_keyboard_backlight_menu_test PRIVATE trailmate_desktop_ui trailmate_linux_sdl_host)
         add_test(NAME linux_keyboard_backlight_menu COMMAND trailmate_linux_keyboard_backlight_menu_test)
         add_executable(trailmate_linux_probe_session_page_test tests/linux_probe_session_page_test.cpp)
+        add_executable(trailmate_linux_lora_config_transaction_test tests/linux_lora_config_transaction_test.cpp)
+        target_include_directories(trailmate_linux_lora_config_transaction_test PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/include"
+            "${TRAIL_MATE_REPO_ROOT}/platform/shared/include")
+        target_compile_options(trailmate_linux_lora_config_transaction_test PRIVATE -UNDEBUG)
+        target_compile_features(trailmate_linux_lora_config_transaction_test PRIVATE cxx_std_17)
+        add_test(NAME linux_lora_config_transaction COMMAND trailmate_linux_lora_config_transaction_test)
+        if(TARGET trailmate_linux_radiolib)
+            set(LR2021_RX_SOURCE "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/platform/linux/lr2021_radio.cpp")
+            set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+                "${LR2021_RX_SOURCE}" tests/extract_linux_lr2021_rx.py)
+            execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/extract_linux_lr2021_rx.py"
+                "${LR2021_RX_SOURCE}" "${CMAKE_CURRENT_BINARY_DIR}/linux_lr2021_rx.inc"
+                COMMAND_ERROR_IS_FATAL ANY)
+            add_executable(trailmate_linux_lr2021_receive_test tests/linux_lr2021_receive_test.cpp)
+            target_include_directories(trailmate_linux_lr2021_receive_test PRIVATE
+                "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/include" "${CMAKE_CURRENT_BINARY_DIR}")
+            target_compile_options(trailmate_linux_lr2021_receive_test PRIVATE -UNDEBUG)
+            target_link_libraries(trailmate_linux_lr2021_receive_test PRIVATE trailmate_linux_radiolib)
+            add_test(NAME linux_lr2021_receive COMMAND trailmate_linux_lr2021_receive_test)
+            add_executable(trailmate_idf_lr2021_irq_test tests/idf_lr2021_irq_test.cpp)
+            target_include_directories(trailmate_idf_lr2021_irq_test PRIVATE
+                "${TRAIL_MATE_REPO_ROOT}/platform/shared/include"
+                "${TRAIL_MATE_REPO_ROOT}/platform/esp/idf_common/include")
+            target_compile_options(trailmate_idf_lr2021_irq_test PRIVATE -UNDEBUG)
+            target_link_libraries(trailmate_idf_lr2021_irq_test PRIVATE trailmate_linux_radiolib)
+            add_test(NAME idf_lr2021_irq_mapping COMMAND trailmate_idf_lr2021_irq_test)
+        endif()
         target_compile_definitions(trailmate_linux_probe_session_page_test PRIVATE TRAIL_MATE_PLATFORM_LINUX=1)
         target_link_libraries(trailmate_linux_probe_session_page_test PRIVATE trailmate_desktop_ui trailmate_linux_sdl_host)
         add_test(NAME linux_probe_session_page COMMAND trailmate_linux_probe_session_page_test)
+        add_executable(trailmate_linux_probe_iq_page_test tests/linux_probe_session_page_test.cpp
+            "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/src/ui/screens/energy_sweep/energy_sweep_page_runtime.cpp")
+        target_compile_definitions(trailmate_linux_probe_iq_page_test PRIVATE
+            TRAIL_MATE_PLATFORM_LINUX=1 TRAIL_MATE_EXTERNAL_RADIO_IQ_RUNTIME=1)
+        target_link_libraries(trailmate_linux_probe_iq_page_test PRIVATE trailmate_desktop_ui trailmate_linux_sdl_host)
+        add_test(NAME linux_probe_iq_page COMMAND trailmate_linux_probe_iq_page_test)
+        add_test(NAME linux_probe_iq_page_compact COMMAND trailmate_linux_probe_iq_page_test compact)
         target_link_libraries(trailmate_linux_menu_status_refresh_test PRIVATE trailmate_desktop_ui trailmate_linux_sdl_host)
         foreach(refresh_mode IN ITEMS default cached zero large)
             add_test(NAME linux_menu_status_refresh_${refresh_mode} COMMAND trailmate_linux_menu_status_refresh_test ${refresh_mode})
@@ -840,6 +993,10 @@ if(TRAIL_MATE_LINUX_BUILD_APP)
         set(CPACK_PACKAGING_INSTALL_PREFIX /usr)
         set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
         set(CPACK_DEBIAN_PACKAGE_DEPENDS "ca-certificates")
+        if(TRAIL_MATE_DEVICE_DEBIAN_DEPENDS)
+            # Native shlibdeps cannot discover Python sidecars or device services.
+            set(CPACK_DEBIAN_PACKAGE_DEPENDS "${TRAIL_MATE_DEVICE_DEBIAN_DEPENDS}")
+        endif()
         if(CMAKE_CROSSCOMPILING)
             if(NOT TRAIL_MATE_DEBIAN_ARCH OR NOT TRAIL_MATE_DEVICE_DEBIAN_DEPENDS)
                 message(FATAL_ERROR "Cross packages require a Debian architecture and device-owned dependencies")
@@ -1371,12 +1528,58 @@ if(TRAIL_MATE_LINUX_BUILD_APP)
         endif()
         if(TARGET trailmate_linux_lr2021)
             add_executable(trailmate_lr2021_driver_test tests/lr2021_driver_test.cpp)
+            target_include_directories(trailmate_lr2021_driver_test PRIVATE "${TRAIL_MATE_REPO_ROOT}/platform/shared/include")
             target_link_libraries(trailmate_lr2021_driver_test PRIVATE trailmate_linux_lr2021)
             add_test(NAME linux_lr2021_error_paths COMMAND trailmate_lr2021_driver_test)
+            find_package(Python3 REQUIRED COMPONENTS Interpreter)
+            add_test(NAME linux_oneseg_iq_probe COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/oneseg_iq_probe_test.py"
+                "$<TARGET_FILE:trailmate-linux-oneseg-iq>"
+                "${TRAIL_MATE_REPO_ROOT}/boards/t_display_cm0/device.conf")
+            set_tests_properties(linux_oneseg_iq_probe PROPERTIES TIMEOUT 15)
+            if(TRAIL_MATE_LINUX_ENABLE_ONESEG_MEDIA)
+                set_tests_properties(linux_oneseg_iq_probe PROPERTIES ENVIRONMENT "TRAIL_MATE_TEST_ONESEG_MEDIA=1")
+            endif()
         endif()
         add_executable(trailmate_packet_radio_coordinator_test tests/packet_radio_coordinator_test.cpp)
         target_link_libraries(trailmate_packet_radio_coordinator_test PRIVATE trailmate_desktop_linux_common)
         add_test(NAME linux_packet_radio_coordinator COMMAND trailmate_packet_radio_coordinator_test)
+        add_executable(trailmate_oneseg_radio_coordinator_test tests/oneseg_radio_coordinator_test.cpp)
+        target_link_libraries(trailmate_oneseg_radio_coordinator_test PRIVATE trailmate_desktop_linux_common)
+        target_compile_options(trailmate_oneseg_radio_coordinator_test PRIVATE -UNDEBUG)
+        add_test(NAME linux_oneseg_radio_coordinator COMMAND trailmate_oneseg_radio_coordinator_test)
+        set_tests_properties(linux_oneseg_radio_coordinator PROPERTIES TIMEOUT 20)
+        if(TRAIL_MATE_LINUX_ENABLE_MEDIA)
+            add_executable(trailmate_fm_radio_page_test tests/fm_radio_page_test.cpp
+                "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/ui/fm_radio_app.cpp")
+            target_link_libraries(trailmate_fm_radio_page_test PRIVATE trailmate_desktop_ui trailmate_linux_sdl_host)
+            target_compile_options(trailmate_fm_radio_page_test PRIVATE -UNDEBUG)
+            add_test(NAME linux_fm_radio_page COMMAND trailmate_fm_radio_page_test "${CMAKE_CURRENT_BINARY_DIR}/fm-page-review")
+            set_tests_properties(linux_fm_radio_page PROPERTIES TIMEOUT 30)
+            add_custom_target(trailmate_linux_fm_validation DEPENDS trailmate-linux
+                trailmate_fm_radio_page_test trailmate_fm_session_test trailmate_fm_pcm_output_test)
+            add_executable(trailmate_fm_session_test tests/fm_session_test.cpp)
+            target_link_libraries(trailmate_fm_session_test PRIVATE trailmate_desktop_linux_common)
+            target_compile_options(trailmate_fm_session_test PRIVATE -UNDEBUG)
+            add_test(NAME linux_fm_session COMMAND trailmate_fm_session_test)
+            set_tests_properties(linux_fm_session PROPERTIES TIMEOUT 20 ENVIRONMENT "SDL_AUDIODRIVER=dummy")
+            add_executable(trailmate_fm_pcm_output_test tests/fm_pcm_output_test.cpp)
+            target_link_libraries(trailmate_fm_pcm_output_test PRIVATE trailmate_desktop_linux_common)
+            target_compile_options(trailmate_fm_pcm_output_test PRIVATE -UNDEBUG)
+            add_test(NAME linux_fm_pcm_output COMMAND trailmate_fm_pcm_output_test)
+            set_tests_properties(linux_fm_pcm_output PROPERTIES TIMEOUT 20 ENVIRONMENT "SDL_AUDIODRIVER=dummy")
+        endif()
+        add_executable(trailmate_fm_radio_coordinator_test tests/fm_radio_coordinator_test.cpp)
+        target_link_libraries(trailmate_fm_radio_coordinator_test PRIVATE trailmate_desktop_linux_common)
+        target_compile_options(trailmate_fm_radio_coordinator_test PRIVATE -UNDEBUG)
+        add_test(NAME linux_fm_radio_coordinator COMMAND trailmate_fm_radio_coordinator_test)
+        set_tests_properties(linux_fm_radio_coordinator PROPERTIES TIMEOUT 20)
+        add_custom_target(trailmate_linux_radio_validation DEPENDS trailmate-linux
+            trailmate_fm_radio_coordinator_test trailmate_packet_radio_coordinator_test
+            trailmate_oneseg_radio_coordinator_test)
+        if(TARGET trailmate_linux_lr2021)
+            add_dependencies(trailmate_linux_radio_validation trailmate_lr2021_driver_test trailmate-linux-oneseg-iq)
+        endif()
         add_executable(trailmate_linux_geocaching_draft_store_test tests/linux_geocaching_draft_store_test.cpp
             "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/platform/linux/geocaching_draft_store.cpp")
         target_include_directories(trailmate_linux_geocaching_draft_store_test PRIVATE
@@ -1608,6 +1811,16 @@ if(BUILD_TESTING)
             target_link_options(trailmate_linux_lora_receive_session_test PRIVATE -fsanitize=address,undefined)
         endif()
         add_test(NAME linux_lora_receive_session COMMAND trailmate_linux_lora_receive_session_test)
+        set_tests_properties(linux_lora_receive_session PROPERTIES TIMEOUT 20)
+        add_executable(trailmate_linux_radio_iq_runtime_test tests/linux_radio_iq_runtime_test.cpp
+            "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/platform/ui/radio_iq_runtime.cpp")
+        target_include_directories(trailmate_linux_radio_iq_runtime_test PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/include" "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/include")
+        target_compile_definitions(trailmate_linux_radio_iq_runtime_test PRIVATE TRAIL_MATE_PLATFORM_LINUX=1)
+        target_compile_features(trailmate_linux_radio_iq_runtime_test PRIVATE cxx_std_17)
+        target_link_libraries(trailmate_linux_radio_iq_runtime_test PRIVATE Threads::Threads)
+        add_test(NAME linux_radio_iq_runtime COMMAND trailmate_linux_radio_iq_runtime_test)
+        set_tests_properties(linux_radio_iq_runtime PROPERTIES TIMEOUT 20)
         add_executable(trailmate_lora_receive_session_fallback_test tests/lora_receive_session_fallback_test.cpp)
         target_include_directories(trailmate_lora_receive_session_fallback_test PRIVATE
             "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/include")

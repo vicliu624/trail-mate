@@ -637,11 +637,79 @@ jobs:
           cmake --build .codex-build/music --parallel 2
           ctest --test-dir .codex-build/music --output-on-failure
 
+      - name: Verify broadcast FM DSP against synthetic IQ
+        run: |
+          cmake -S tests/broadcast_fm -B .codex-build/broadcast-fm -G Ninja -DCMAKE_BUILD_TYPE=Debug
+          cmake --build .codex-build/broadcast-fm --parallel 2
+          ctest --test-dir .codex-build/broadcast-fm --output-on-failure
+
+      - name: Verify pinned LR2021 RX transactions and bounded queue
+        run: |
+          cmake -S tests/lr2021_iq -B .codex-build/lr2021-iq/build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+          cmake --build .codex-build/lr2021-iq/build --parallel 2
+          ctest --test-dir .codex-build/lr2021-iq/build --output-on-failure
+
+      - name: Verify CM0 1seg receive-only configuration
+        run: |
+          cmake -S tests/oneseg -B .codex-build/oneseg -G Ninja -DCMAKE_BUILD_TYPE=Debug
+          cmake --build .codex-build/oneseg --parallel 2
+          ctest --test-dir .codex-build/oneseg --output-on-failure
+
       - name: Verify demand-driven TCP and Wi-Fi memory ownership
         run: |
           cmake -S tests/ram -B .codex-build/ram-audit/native -G Ninja -DCMAKE_BUILD_TYPE=Debug
           cmake --build .codex-build/ram-audit/native --parallel 2
           ctest --test-dir .codex-build/ram-audit/native --output-on-failure
+
+  oneseg_native_media:
+    name: 1seg Native Media and Backend Package
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.11.1'
+      - name: Install native decoder and media build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential cmake ninja-build pkg-config dpkg-dev gnuradio gnuradio-dev python3-numpy pybind11-dev libgsl-dev libsdl2-dev libavformat-dev libavcodec-dev libavutil-dev libswresample-dev libswscale-dev libaribb24-dev ffmpeg libcurl4-openssl-dev libarchive-dev libsqlite3-dev libssl-dev libjpeg-dev libpng-dev libbluetooth-dev libcodec2-dev
+      - name: Build pinned native GNU Radio backend
+        run: |
+          /usr/bin/python3 apps/linux_lvgl/tools/build_oneseg_backend.py --work-dir .codex-build/oneseg/gr-isdbt --jobs 2
+          /usr/bin/python3 apps/linux_lvgl/tests/oneseg_backend_source_test.py --builder apps/linux_lvgl/tools/build_oneseg_backend.py --archive .codex-build/oneseg/gr-isdbt/source.tar.gz --work-dir .codex-build/oneseg
+      - name: Build and test production decoder and media boundaries
+        run: |
+          cmake -S tests/oneseg -B .codex-build/oneseg/linux -G Ninja -DCMAKE_BUILD_TYPE=Debug -DPython3_EXECUTABLE=/usr/bin/python3 -DTRAIL_MATE_TEST_ONESEG_MEDIA=ON -DTRAIL_MATE_ONESEG_BACKEND_PREFIX="$PWD/.codex-build/oneseg/gr-isdbt/prefix"
+          cmake --build .codex-build/oneseg/linux --parallel 2
+          ctest --test-dir .codex-build/oneseg/linux --output-on-failure
+      - name: Verify synthetic programme changes through real FFmpeg
+        run: |
+          /usr/bin/python3 tests/oneseg/make_transport_fixtures.py .codex-build/oneseg/transport-fixtures
+          .codex-build/oneseg/linux/oneseg_media_test .codex-build/oneseg/transport-fixtures/c.ts
+          .codex-build/oneseg/linux/oneseg_tv_programmes_test tests/oneseg/decoder_transport_fixture.py .codex-build/oneseg/transport-fixtures
+      - name: Build Linux TV UI and verify bundled content fonts
+        run: |
+          cmake -S apps/linux_lvgl -B .codex-build/oneseg/ui -G Ninja -DCMAKE_BUILD_TYPE=Debug -DTRAIL_MATE_LINUX_DEVICE_CONFIG="$PWD/boards/t_display_cm0/package.cmake" -DTRAIL_MATE_LINUX_ENABLE_ONESEG_MEDIA=ON -DTRAIL_MATE_LINUX_DEB=OFF -DTRAIL_MATE_ONESEG_GENERATE_BROADCAST_FONT=ON
+          cmake --build .codex-build/oneseg/ui --target trailmate-linux trailmate_broadcast_font_test trailmate_bundled_font_root_test --parallel 2
+          ctest --test-dir .codex-build/oneseg/ui -R '^oneseg_(broadcast_font|bundled_font_(root|override))$' --output-on-failure
+      - name: Package and validate relocated native backend
+        run: |
+          /usr/bin/python3 apps/linux_lvgl/tools/package_oneseg_backend.py --backend-work .codex-build/oneseg/gr-isdbt --output .codex-build/oneseg/backend-package
+          package=$(find .codex-build/oneseg/backend-package -maxdepth 1 -name '*.deb' -print -quit)
+          test -n "$package"
+          /usr/bin/python3 apps/linux_lvgl/tests/oneseg_backend_package_test.py --package "$package" --decoder apps/linux_lvgl/tools/oneseg_decode.py
+          /usr/bin/python3 apps/linux_lvgl/tests/oneseg_package_config_test.py --ffmpeg-prefix / --host-backend-package "$package"
+      - name: Retain native validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oneseg-native-media-and-package
+          path: |
+            .codex-build/oneseg/linux/Testing/Temporary/LastTest.log
+            .codex-build/oneseg/linux/decoder-review/
+            .codex-build/oneseg/gr-isdbt/backend-manifest.json
+          if-no-files-found: ignore
+          retention-days: 7
 
   p4_rendered_ui:
     name: T-Display P4 Rendered UI

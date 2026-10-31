@@ -1,7 +1,7 @@
 #include "ui/components/shortcut_help_modal.h"
 
 #include "ui/app_runtime.h"
-#if defined(ARDUINO_T_LORA_PAGER) || defined(TRAIL_MATE_PLATFORM_LINUX)
+#if defined(ARDUINO_T_LORA_PAGER) || defined(TRAIL_MATE_PLATFORM_LINUX) || defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)
 #include "platform/ui/psram_ui_lease.h"
 #include "ui/components/dialog_frame.h"
 #endif
@@ -76,14 +76,15 @@ lv_coord_t fitted_size(lv_coord_t requested, lv_coord_t available, lv_coord_t mi
     return value;
 }
 
+const lv_font_t* help_font();
+
 lv_coord_t keycap_width(const char* text, bool compact)
 {
-    const std::size_t len = text ? std::strlen(text) : 0;
-    if (compact)
-    {
-        return len > 4 ? 36 : (len > 2 ? 34 : 22);
-    }
-    return 72;
+    lv_point_t extent{};
+    lv_text_get_size(&extent, text ? text : "", help_font(), 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+    const lv_coord_t minimum = compact ? 22 : 72;
+    const lv_coord_t measured = extent.x + 8;
+    return measured > minimum ? measured : minimum;
 }
 
 const lv_font_t* help_font()
@@ -140,13 +141,7 @@ lv_obj_t* create_keycap(lv_obj_t* parent, const char* text, lv_coord_t width)
 void add_row(lv_obj_t* parent, const Row& row)
 {
     lv_obj_t* row_obj = lv_obj_create(parent);
-    lv_obj_set_size(row_obj, LV_PCT(100),
-#if defined(ARDUINO_T_DECK_PRO)
-                    18
-#else
-                    15
-#endif
-    );
+    lv_obj_set_size(row_obj, LV_PCT(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(row_obj, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(row_obj,
                           LV_FLEX_ALIGN_START,
@@ -159,7 +154,10 @@ void add_row(lv_obj_t* parent, const Row& row)
     lv_obj_clear_flag(row_obj, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t* keys = lv_obj_create(row_obj);
-    lv_obj_set_size(keys, 76,
+    const bool secondary = row.secondary && row.secondary[0] != '\0';
+    const lv_coord_t key_width = keycap_width(row.primary, secondary) +
+                                 (secondary ? keycap_width(row.secondary, true) + 2 : 0);
+    lv_obj_set_size(keys, key_width,
 #if defined(ARDUINO_T_DECK_PRO)
                     18
 #else
@@ -177,7 +175,7 @@ void add_row(lv_obj_t* parent, const Row& row)
     lv_obj_set_style_pad_column(keys, 2, 0);
     lv_obj_clear_flag(keys, LV_OBJ_FLAG_SCROLLABLE);
 
-    if (row.secondary && row.secondary[0] != '\0')
+    if (secondary)
     {
         create_keycap(keys, row.primary, keycap_width(row.primary, true));
         create_keycap(keys, row.secondary, keycap_width(row.secondary, true));
@@ -195,7 +193,7 @@ void add_row(lv_obj_t* parent, const Row& row)
 #else
     lv_obj_set_style_text_color(text, lv_color_hex(kTextDim), 0);
 #endif
-    lv_label_set_long_mode(text, LV_LABEL_LONG_DOT);
+    lv_label_set_long_mode(text, LV_LABEL_LONG_WRAP);
     lv_label_set_text(text, row.description ? row.description : "");
     apply_help_text(text, row.description ? row.description : "");
 }
@@ -252,7 +250,7 @@ void focus(State& state)
 
 bool open(State& state, lv_obj_t* parent, const Config& config)
 {
-#if defined(ARDUINO_T_LORA_PAGER) || defined(TRAIL_MATE_PLATFORM_LINUX)
+#if defined(ARDUINO_T_LORA_PAGER) || defined(TRAIL_MATE_PLATFORM_LINUX) || defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)
     platform::ui::PsramUiLease memory;
 #endif
     if (is_open(state))
@@ -285,7 +283,7 @@ bool open(State& state, lv_obj_t* parent, const Config& config)
         set_default_group(state.group);
     }
 
-#if defined(ARDUINO_T_LORA_PAGER) || defined(TRAIL_MATE_PLATFORM_LINUX)
+#if defined(ARDUINO_T_LORA_PAGER) || defined(TRAIL_MATE_PLATFORM_LINUX) || defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)
     // Use the same titled, closable frame as Preview and other app dialogs.
     const auto frame = dialog_frame::create(host, {config.title ? config.title : "Help", panel_w, panel_h,
                                                    [](lv_event_t* event)
@@ -401,7 +399,7 @@ bool open(State& state, lv_obj_t* parent, const Config& config)
     if (state.group)
     {
         lv_group_add_obj(state.group, state.panel);
-#if defined(ARDUINO_T_LORA_PAGER) || defined(TRAIL_MATE_PLATFORM_LINUX)
+#if defined(ARDUINO_T_LORA_PAGER) || defined(TRAIL_MATE_PLATFORM_LINUX) || defined(TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4)
         lv_group_add_obj(state.group, frame.close);
         dialog_frame::bind_close_shortcuts(frame, state.group);
 #endif

@@ -4,6 +4,106 @@ Reviewed on 2026-10-15 for PR #104. Both TFT and AMOLED firmware targets use
 the same V1 board wiring. This is a source audit and host regression report;
 physical acceptance results must be recorded separately.
 
+## Probe transmit recovery (2026-10-30)
+
+The shared IDF LoRa UI port now reports a completed packet transmission as
+successful only if restarting RX also succeeds. Previously it discarded the
+restart result and could report success after a failed return to reception.
+An exact-source host test covers successful TX/RX, RX restart failure, rejected
+start, IRQ timeout and elapsed timeout across clock wrap. The subsequent
+receive-path test additionally rejects RX_DONE combined with CRC/header/timeout
+errors before payload reads, verifies no RX restart on normal preamble/sync/header
+progress, and rejects publication when RX restoration fails. This supplements
+the LR2021 driver's damaged-packet checks at the shared IDF port boundary.
+The native FM/TV boundary suite passed 18/18, and the TFT LR2021 ESP-IDF firmware
+build passed. The current 5,374,592-byte application has SHA-256
+`c472abc0e6b3ac4675a34db6a8c3644f4c15a1f384d4b4b3421a489b2559f918`.
+No flashing or physical RF acceptance was performed for this change. The later
+FSK/FM handoff build below supersedes this binary.
+
+## Saved FSK mode and continuous FM handoff (2026-10-30)
+
+The LR2021 backend commits all configurable FSK parameters only after successful
+configuration and RX startup. Continuous FM can now preserve that committed
+profile: it stages an actual LoRa PHY for the existing IQ engine, then performs
+a cold reset and restores FSK frequency, bitrate, deviation, bandwidth, power,
+preamble, sync word, CRC and the prior RX/standby state under the physical mutex.
+Staging/capture failure still runs restoration; restoration failure leaves the
+driver offline. The original configuration cannot be overwritten by a failed
+reconfiguration. This does not change finite Probe IQ's LoRa-only contract.
+
+Exact production configuration/staging/restoration bodies passed fault-injection
+tests, including RX/standby, all saved fields, invalid profile, staging failure,
+capture failure and restoration failures. The native suite passed 19/19, the
+existing IQ contracts passed 8/8, and the TFT LR2021 ESP-IDF build completed.
+Current application: 5,379,328 bytes, SHA-256
+`3e30912fcfcfb8fad9a3d1c400f082aceef8b902e6cd81f259e38de18b5b3a6e`.
+No board was accessed or flashed. Physical mode restoration and FM listening
+remain acceptance gates.
+
+## LR2021 variant follow-up (2026-10-29)
+
+The user confirmed TFT + LR2021. The follow-up adds explicit
+`t_display_p4_tft_lr2021` and `t_display_p4_amoled_lr2021` targets alongside the
+original SX1262 targets. The TFT LR2021 firmware compiled and linked with
+ESP-IDF 5.5.4: application size 5,351,616 bytes in a 6 MiB app partition, with
+15 percent remaining. This is build evidence, not physical RF acceptance.
+
+The native LR2021 backend uses the pinned RadioLib 7.8.1 implementation and
+the same shared configuration transaction as Linux. Mesh, Probe, Walkie and
+quick controls resolve the same selected singleton. IRQ conversion preserves
+the existing IDF logical bits; RX/TX/FIFO and error bits are not interchangeable
+between chips. The board owns one recoverable radio reference with a wrap-safe
+retry delay, while foreground tools retain their own references. A transport
+failure marks the driver offline, invalidates configuration and asserts reset;
+Walkie's task also clears its active/PTT/monitor state if the radio goes offline.
+
+Packet reads reject hardware length/address errors as well as CRC/header
+damage. The original TFT SX1262 target also compiled successfully. Object-symbol
+checks verified the board, Probe runtime, Walkie runtime and quick controls use
+LR2021 in the new target and SX1262 in the original target. Host tests cover IRQ
+translation, board-reference recovery and both quick-control selections; these
+checks do not replace physical packet or audio tests.
+
+Board setup follows the [current pinned V1 vendor reference](https://github.com/Xinyuan-LilyGO/lilygo_device_driver/blob/d25dba8623c5fa6475b756e5a601f3b55862c479/src/device/t_display_p4/v1/driver.cpp):
+3.0 V TCXO, DIO6 RX-HF, DIO7 TX-HF, DIO8 LF path, DIO10 HF path and DIO11 IRQ.
+RadioLib validates ROM 1.24. Chip RF-switch writes are checked individually;
+the convenience `setRfSwitchTable` API discards those results. The software
+BUSY deadline also terminates the dependency's calibration wait on a stuck pin.
+Large SPI scratch buffers live in internal DMA storage rather than task stacks.
+
+[LR2021-SDR](https://github.com/SAMS0N1TE/lr2021-sdr) provides a portable raw-IQ
+access path and an ESP32-P4 bridge reference. Its board-specific bus performance
+does not establish performance on CM0. The FM decoder and frequency-range
+limitations, SPI throughput prerequisite, ownership/restore requirements and
+source-license distinction are recorded in the
+[CM0 SDR investigation](t-display-cm0-hardware-integration.md#lr2021-sdr-investigation-2026-10-29).
+Continuous raw-IQ acquisition and the broadcast FM receiver remain unimplemented. A portable
+[mono FM DSP core](../../tests/broadcast_fm/README.md) now passes synthetic-IQ
+tests for 250 ksample/s input and 48 kHz output, including full 75 kHz deviation,
+de-emphasis, anti-alias filtering and discontinuity reset. It is not yet connected
+to radio capture or speaker playback and does not establish target throughput.
+The pinned MIT RX engine and bounded queue are now available through a separate
+[RX contract build](../../tests/lr2021_iq/README.md). Its upstream transaction and
+concurrent-queue tests pass on the host. The FM consumer validates block sizes,
+rates, generations and sample indices before feeding the decoder.
+The P4 driver now implements a finite 256-pair IQ adapter with real singleton
+SPI, ROM preflight, SRAM verification and prior LoRa RX/standby restoration.
+It rejects capture unless radio tasks are already paused, the caller holds a
+radio reference, power is enabled and no FSK/TX is active. Output stays invalid
+on any capture/recovery failure; recovery failure takes the radio offline.
+Protocol Probe now exposes IQ Snapshot on the native P4 LR2021 target only,
+through its button and `I` key. A worker captures the current mesh PHY, restores
+and releases the radio before publishing diagnostics. Scan/apply actions are
+blocked while capture is active; page exit joins recovery before transitioning.
+Results explicitly retain an unqualified sample rate when the finite route does
+not establish it, and never count IQ statistics as protocol evidence. This
+diagnostic remains physically unverified and unsuitable for continuous FM.
+No streaming FIFO producer/consumer tasks are enabled.
+The compiled packet backend and
+the earlier SX1262 hardware audit do not prove those capabilities or physical
+LR2021 receive/transmit operation.
+
 ## Reference baseline
 
 - [LilyGO V1 device driver, pinned revision](https://github.com/Xinyuan-LilyGO/lilygo_device_driver/blob/bcca4c674659abab850eaade06afb3f87cfbe85b/src/device/t_display_p4/v1/driver.cpp).
@@ -39,7 +139,7 @@ physical acceptance results must be recorded separately.
 | BQ27220 battery gauge | SYS I2C `0x55`, little-endian word access, signed current and readiness handling reviewed. Charging indication and calibration require battery/device measurements. |
 | SX1262 LoRa | SPI2 GPIO2/4/3, NSS24, BUSY6 and expander reset/DIO1/RF switch match the reference. Expander IO10–17 names are decimal pin labels for port1, not invalid linear indices. The existing pin decoder handles them explicitly. RF performance requires two-device testing. |
 | Ethernet | IP101 is not initialized by this product. Keep XL9535 IO5 reset asserted until a real RMII owner configures the clock/pins. Previously it was released without an owner. |
-| Camera / expansion radios | OV2710/SGM38121 camera, LR2021 alternative radio, QMI8658/QMC6309 alternative motion hardware, and keyboard T-MixRF radios/NFC are outside the implemented product backend. An official driver supporting these parts does not establish support in Trail Mate. Do not advertise them as verified. |
+| Camera / expansion radios | OV2710/SGM38121 camera, QMI8658/QMC6309 alternative motion hardware, and keyboard T-MixRF radios/NFC are outside the implemented product backend. LR2021 packet support is described in the follow-up above and still requires physical acceptance. An official driver supporting a part does not establish verified support in Trail Mate. |
 | Power button/sleep | GPIO35 and existing bounded monitoring reviewed. Deep-sleep wake and actual off-state current need measurement; no unverified wake source is introduced. |
 
 ## Automated evidence
@@ -138,6 +238,37 @@ SDK calls. Display tests verify that initial rotation and brightness writes hold
 the LVGL lock and that failed brightness writes preserve the cached value.
 The rendered dashboard/lifecycle checks are recorded in the
 [UI audit](t-display-p4-ui-audit.md).
+
+## Independent FM integration status
+
+FM is a separate application, not a Protocol Probe mode. The shared
+`FmReceiver` service owns its station, session, PCM volume and failure cleanup.
+The P4 codec backend now recognizes a dedicated FM owner and audio-focus kind.
+It opens at 48 kHz with unity hardware volume because the receiver applies PCM
+gain. Notification volume changes do not alter the active FM session. Host
+tests exercise PCM stereo expansion, rejection of another owner's writes and
+close attempts, music suspension/resumption, and subsequent Walkie ownership.
+These tests use a fake codec transport; they do not prove physical speaker output.
+
+The continuous receive adapter and standalone menu/page are still pending.
+Do not mark FM supported from the existence of the codec owner or DSP tests.
+The pinned upstream stream loop busy-polls and cancels through its sink; an
+empty FIFO therefore also needs an independent bounded cancellation mechanism.
+The current TFT LR2021 build enables idle-task watchdog checks on both cores
+and uses `CONFIG_FREERTOS_HZ=100`. At 250 kpair/s IQ8, a nominal 1 KiB FIFO spans
+about 2 ms, less than one 10 ms scheduler tick. A tick-delay polling adapter is
+therefore unsuitable. Implement a checked, bounded producer scheduling and
+cancellation path before connecting the service; preserve watchdog coverage.
+Qualify actual RF tuning/passband and FIFO service latency on the board before
+claiming reception across 87.5–108 MHz.
+
+The user-selected first physical FM acceptance frequency is **100.8 MHz**
+(`100800000` Hz). Record actual tuning success, continuous FIFO validity,
+demodulated PCM, audible speaker output and stop/exit restoration at that
+frequency. It is a test frequency, not evidence that a station was received.
+The RX engine's local cancellation overlay now handles empty FIFO cancellation
+and unpublished-tail discard; RTOS scheduling and physical passband validation
+remain separate outstanding work.
 
 ## Physical acceptance to record
 

@@ -273,6 +273,19 @@ void Menu::outside_event(lv_event_t* event)
 void Menu::key_event(lv_event_t* event)
 {
     const auto key = lv_event_get_key(event);
+    if (key == LV_KEY_UP || key == LV_KEY_DOWN)
+    {
+        auto* target = lv_event_get_target_obj(event);
+        auto* group = target ? lv_obj_get_group(target) : nullptr;
+        if (!group) return;
+        lv_event_stop_processing(event);
+        lv_event_stop_bubbling(event);
+        if (key == LV_KEY_UP) lv_group_focus_prev(group);
+        else lv_group_focus_next(group);
+        if (auto* focused = lv_group_get_focused(group))
+            lv_obj_scroll_to_view(focused, LV_ANIM_OFF);
+        return;
+    }
     if (key != LV_KEY_ESC && key != LV_KEY_BACKSPACE && key != LV_KEY_LEFT) return;
     auto* menu = static_cast<Menu*>(lv_event_get_user_data(event));
     lv_event_stop_processing(event);

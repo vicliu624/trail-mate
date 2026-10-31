@@ -6,6 +6,7 @@
 #include "platform/ui/screen_runtime.h"
 #include "platform/ui/walkie_runtime.h"
 #include "ui/app_runtime.h"
+#include "ui/input/pager_navigation.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
 #include "ui/runtime/ui_feedback.h"
@@ -39,6 +40,7 @@ lv_obj_t* s_monitor_row = nullptr;
 lv_obj_t* s_monitor_switch = nullptr;
 lv_obj_t* s_monitor_label = nullptr;
 lv_obj_t* s_control_panel = nullptr;
+lv_obj_t* s_ptt_button = nullptr;
 lv_obj_t* s_volume_bar = nullptr;
 lv_obj_t* s_volume_label = nullptr;
 lv_timer_t* s_timer = nullptr;
@@ -140,6 +142,17 @@ void on_back(void*)
 void root_key_event_cb(lv_event_t* e)
 {
     uint32_t key = lv_event_get_key(e);
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    if (key == 't' || key == 'T')
+    {
+        const auto status = platform::ui::walkie::get_status();
+        if (status.active && !ui_is_overlay_active() && !::ui::input::pager::help_open())
+            platform::ui::walkie::set_ptt(!status.tx);
+        lv_event_stop_bubbling(e);
+        lv_event_stop_processing(e);
+        return;
+    }
+#endif
     if (key != LV_KEY_BACKSPACE && key != LV_KEY_ESC)
     {
         return;
@@ -167,6 +180,13 @@ void monitor_row_event_cb(lv_event_t* e)
     }
 
     const uint32_t key = lv_event_get_key(e);
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    if (key == 't' || key == 'T')
+    {
+        root_key_event_cb(e);
+        return;
+    }
+#endif
     if (key == LV_KEY_ENTER || key == ' ')
     {
         toggle_monitor_from_ui();
@@ -314,6 +334,8 @@ void ptt_event_cb(lv_event_t* event)
         platform::ui::walkie::set_ptt(false);
 }
 
+void set_error_text(const char* message);
+
 void refresh_cb(lv_timer_t*)
 {
     platform::ui::walkie::Status st = platform::ui::walkie::get_status();
@@ -321,15 +343,14 @@ void refresh_cb(lv_timer_t*)
     if (!st.active)
     {
         const char* error = platform::ui::walkie::last_error();
-        if (s_mode_label)
-        {
-            ::ui::i18n::set_label_text(s_mode_label, error && *error ? error : "Starting...");
-            lv_obj_set_style_text_color(s_mode_label, lv_color_hex(kWarn), LV_PART_MAIN);
-        }
-        update_vu(s_left_fill, 0);
-        update_vu(s_right_fill, 0);
+        set_error_text(error && *error ? error : "Starting...");
         return;
     }
+    if (s_monitor_row) lv_obj_clear_state(s_monitor_row, LV_STATE_DISABLED);
+    if (s_monitor_switch) lv_obj_clear_state(s_monitor_switch, LV_STATE_DISABLED);
+    if (s_ptt_button) lv_obj_clear_state(s_ptt_button, LV_STATE_DISABLED);
+    if (s_mod_label) ::ui::i18n::set_label_text(s_mod_label, "FSK");
+    if (s_freq_label) lv_obj_clear_flag(s_freq_label, LV_OBJ_FLAG_HIDDEN);
     set_freq_text(st.freq_mhz);
     if (s_mode_label)
     {
@@ -382,6 +403,8 @@ void set_error_text(const char* message)
     if (s_freq_label)
     {
         ::ui::i18n::set_label_text(s_freq_label, "Walkie Talkie");
+        if (lv_display_get_vertical_resolution(nullptr) <= 200)
+            lv_obj_add_flag(s_freq_label, LV_OBJ_FLAG_HIDDEN);
     }
     if (s_mod_label)
     {
@@ -389,12 +412,21 @@ void set_error_text(const char* message)
     }
     if (s_mode_label)
     {
+        auto* row = lv_obj_get_parent(s_mode_label);
+        lv_obj_update_layout(row);
+        lv_obj_set_width(s_mode_label, std::max<lv_coord_t>(100, lv_obj_get_width(row) - 70));
+        lv_label_set_long_mode(s_mode_label, LV_LABEL_LONG_WRAP);
+        lv_obj_set_style_text_font(s_mode_label, ::ui::page_profile::resolve_body_font(), 0);
+        lv_obj_set_height(row, LV_SIZE_CONTENT);
         ::ui::i18n::set_label_text(s_mode_label,
                                    message ? message : "Walkie not available");
         lv_obj_set_style_text_color(s_mode_label, lv_color_hex(kWarn), LV_PART_MAIN);
     }
     update_vu(s_left_fill, 0);
     update_vu(s_right_fill, 0);
+    if (s_monitor_row) lv_obj_add_state(s_monitor_row, LV_STATE_DISABLED);
+    if (s_monitor_switch) lv_obj_add_state(s_monitor_switch, LV_STATE_DISABLED);
+    if (s_ptt_button) lv_obj_add_state(s_ptt_button, LV_STATE_DISABLED);
 }
 
 } // namespace
@@ -404,7 +436,13 @@ namespace walkie_page::ui::runtime
 
 bool is_available()
 {
+#if defined(TRAIL_MATE_PLATFORM_LINUX)
+    // The page exists even when the audio/radio backend is not ready.
+    // enter() reports startup errors inside the normal device UI.
+    return true;
+#else
     return platform::ui::walkie::is_supported();
+#endif
 }
 
 void enter(const shell::Host* host, lv_obj_t* parent)
@@ -468,6 +506,7 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     lv_obj_clear_flag(content, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_coord_t screen_w = lv_display_get_horizontal_resolution(nullptr);
+    const bool short_screen = lv_display_get_vertical_resolution(nullptr) <= 200;
     if (screen_w <= 0)
     {
         screen_w = 320;
@@ -478,21 +517,26 @@ void enter(const shell::Host* host, lv_obj_t* parent)
                                                   screen_w - kControlPanelSideMargin));
 
     lv_obj_t* stack = lv_obj_create(content);
-    lv_obj_set_size(stack, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_size(stack, LV_PCT(100), short_screen ? LV_SIZE_CONTENT : LV_PCT(100));
+    if (short_screen)
+    {
+        lv_obj_add_flag(content, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_set_scroll_dir(content, LV_DIR_VER);
+    }
     lv_obj_set_style_bg_opa(stack, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(stack, 0, 0);
     lv_obj_set_style_pad_left(stack, 10, 0);
     lv_obj_set_style_pad_right(stack, 10, 0);
-    lv_obj_set_style_pad_top(stack, 8, 0);
-    lv_obj_set_style_pad_bottom(stack, 8, 0);
-    lv_obj_set_style_pad_row(stack, 6, 0);
+    lv_obj_set_style_pad_top(stack, short_screen ? 2 : 8, 0);
+    lv_obj_set_style_pad_bottom(stack, short_screen ? 2 : 8, 0);
+    lv_obj_set_style_pad_row(stack, short_screen ? 2 : 6, 0);
     lv_obj_set_flex_flow(stack, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(stack, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_clear_flag(stack, LV_OBJ_FLAG_SCROLLABLE);
 
     s_freq_label = lv_label_create(stack);
     ::ui::i18n::set_label_text_raw(s_freq_label, "--.- MHz");
-    lv_obj_set_style_text_font(s_freq_label, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_font(s_freq_label, short_screen ? &lv_font_montserrat_18 : &lv_font_montserrat_28, 0);
     lv_obj_set_style_text_color(s_freq_label, lv_color_hex(kText), 0);
     lv_obj_set_style_text_align(s_freq_label, LV_TEXT_ALIGN_CENTER, 0);
 
@@ -535,9 +579,15 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     s_control_panel = lv_obj_create(stack);
     lv_obj_set_size(s_control_panel, panel_w, LV_SIZE_CONTENT);
     style_control_panel(s_control_panel);
+    if (short_screen)
+    {
+        lv_obj_set_style_pad_top(s_control_panel, 4, 0);
+        lv_obj_set_style_pad_bottom(s_control_panel, 4, 0);
+        lv_obj_set_style_pad_row(s_control_panel, 2, 0);
+    }
 
     s_monitor_row = lv_btn_create(s_control_panel);
-    lv_obj_set_size(s_monitor_row, LV_PCT(100), kMonitorRowHeight);
+    lv_obj_set_size(s_monitor_row, LV_PCT(100), short_screen ? 26 : kMonitorRowHeight);
     lv_obj_set_style_pad_left(s_monitor_row, 10, LV_PART_MAIN);
     lv_obj_set_style_pad_right(s_monitor_row, 8, LV_PART_MAIN);
     lv_obj_set_style_pad_top(s_monitor_row, 0, LV_PART_MAIN);
@@ -567,7 +617,7 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     lv_obj_add_event_cb(s_monitor_switch, monitor_row_event_cb, LV_EVENT_KEY, nullptr);
 
     lv_obj_t* volume_row = lv_obj_create(s_control_panel);
-    lv_obj_set_size(volume_row, LV_PCT(100), 24);
+    lv_obj_set_size(volume_row, LV_PCT(100), short_screen ? 18 : 24);
     lv_obj_set_style_bg_opa(volume_row, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(volume_row, 0, 0);
     lv_obj_set_style_pad_all(volume_row, 0, 0);
@@ -604,10 +654,14 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     if (::ui::page_profile::current().large_touch_hitbox)
     {
         lv_obj_t* ptt = lv_button_create(s_control_panel);
+        s_ptt_button = ptt;
         lv_obj_set_size(ptt, LV_PCT(100), 48);
         lv_obj_set_style_bg_color(ptt, lv_color_hex(kAmber), 0);
         lv_obj_set_style_bg_color(ptt, lv_color_hex(kAmberDark), LV_STATE_PRESSED);
+        lv_obj_set_style_bg_color(ptt, lv_color_hex(kLine), LV_STATE_DISABLED);
+        lv_obj_set_style_bg_opa(ptt, LV_OPA_50, LV_STATE_DISABLED);
         lv_obj_set_style_text_color(ptt, lv_color_hex(kText), 0);
+        lv_obj_set_style_text_color(ptt, lv_color_hex(kGray), LV_STATE_DISABLED);
         lv_obj_add_event_cb(ptt, ptt_event_cb, LV_EVENT_ALL, nullptr);
         lv_obj_t* label = lv_label_create(ptt);
         ::ui::i18n::set_label_text(label, "Hold to talk");
@@ -615,8 +669,17 @@ void enter(const shell::Host* host, lv_obj_t* parent)
         if (app_g) lv_group_add_obj(app_g, ptt);
     }
 
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    if (short_screen)
+    {
+        auto* hint = lv_label_create(stack);
+        ::ui::i18n::set_label_text(hint, "T: Talk / listen");
+        lv_obj_set_style_text_font(hint, ::ui::page_profile::resolve_caption_font(), 0);
+    }
+#endif
     lv_obj_t* level_row = lv_obj_create(stack);
-    lv_obj_set_size(level_row, panel_w, kLevelMeterHeight);
+    const lv_coord_t meter_height = short_screen ? 10 : kLevelMeterHeight;
+    lv_obj_set_size(level_row, panel_w, meter_height);
     lv_obj_set_style_bg_opa(level_row, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(level_row, 0, 0);
     lv_obj_set_style_pad_all(level_row, 0, 0);
@@ -629,7 +692,7 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     lv_obj_clear_flag(level_row, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t* vu_left = lv_obj_create(level_row);
-    lv_obj_set_size(vu_left, 0, kLevelMeterHeight);
+    lv_obj_set_size(vu_left, 0, meter_height);
     lv_obj_set_flex_grow(vu_left, 1);
     lv_obj_set_style_bg_color(vu_left, lv_color_hex(kPanelBg), 0);
     lv_obj_set_style_bg_opa(vu_left, LV_OPA_COVER, 0);
@@ -648,7 +711,7 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     lv_obj_clear_flag(s_left_fill, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t* vu_right = lv_obj_create(level_row);
-    lv_obj_set_size(vu_right, 0, kLevelMeterHeight);
+    lv_obj_set_size(vu_right, 0, meter_height);
     lv_obj_set_flex_grow(vu_right, 1);
     lv_obj_set_style_bg_color(vu_right, lv_color_hex(kPanelBg), 0);
     lv_obj_set_style_bg_opa(vu_right, LV_OPA_COVER, 0);
@@ -737,6 +800,7 @@ void exit(lv_obj_t* parent)
     s_monitor_switch = nullptr;
     s_monitor_label = nullptr;
     s_control_panel = nullptr;
+    s_ptt_button = nullptr;
     s_volume_bar = nullptr;
     s_volume_label = nullptr;
     s_top_bar = {};

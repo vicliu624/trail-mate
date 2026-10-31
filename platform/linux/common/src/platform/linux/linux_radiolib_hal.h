@@ -33,6 +33,10 @@ class LinuxRadioLibHal final : public RadioLibHal
     void spiEnd() override;
     void yield() override;
     bool healthy() const { return error_.empty(); }
+    // Caller holds the driver mutex/exclusive coordinator lease. Switch the
+    // kernel device limit and each transfer together; restore before reset/PHY.
+    bool setIqTransferMode(bool enabled);
+    uint32_t spiClockHz() const { return iq_mode_ ? 16000000u : hardware_.bus.spi_speed_hz; }
     const std::string& error() const { return error_; }
 
   private:
@@ -40,6 +44,7 @@ class LinuxRadioLibHal final : public RadioLibHal
     bool waitReady();
     PacketRadioHardware hardware_;
     int spi_ = -1;
+    bool iq_mode_ = false;
     int chip_ = -1;
     std::map<uint32_t, int> pins_;
     std::string error_;

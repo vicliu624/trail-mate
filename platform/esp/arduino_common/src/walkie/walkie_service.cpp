@@ -338,6 +338,11 @@ void walkie_task(void*)
 
     while (!s_stop_requested)
     {
+        if (!walkie_runtime::isRadioReady(s_runtime_session))
+        {
+            set_error("Walkie radio became unavailable");
+            break;
+        }
         bool want_tx = s_ptt_pressed;
         if (want_tx != tx_mode)
         {

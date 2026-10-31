@@ -11,6 +11,23 @@ int main(int argc, char** argv)
     if (options.radio.driver != "lr2021" || options.radio.bus.spi_device != "/dev/spidev0.0" ||
         options.radio.bus.reset_gpio != 7 || options.radio.bus.busy_gpio != 24 ||
         options.radio.bus.irq_gpio != -1 || options.radio.tcxo_voltage != 3.0f) return 4;
+    using RfProfile = platform::linux_runtime::Lr2021RfSwitchProfile;
+    if (options.radio.rf_switch_profile != RfProfile::Cm0_16E8 ||
+        platform::desktop::DeviceOptions{}.radio.rf_switch_profile != RfProfile::None) return 12;
+    for (const bool wrong_driver : {false, true})
+    {
+        auto invalid_rf = options;
+        if (wrong_driver) invalid_rf.radio.driver = "sx126x";
+        else invalid_rf.radio.rf_switch_profile = static_cast<RfProfile>(255);
+        try
+        {
+            platform::desktop::validateDeviceOptions(invalid_rf);
+            return 13;
+        }
+        catch (const std::runtime_error&)
+        {
+        }
+    }
     if (options.sensors.expected || options.sensors.landscape_rotation) return 5;
     if (options.runtime_mode != platform::linux_runtime::LinuxRuntimeMode::DeviceRealMesh) return 7;
     if (options.gnss.protocol != "nmea" || !options.gnss.device.empty() ||

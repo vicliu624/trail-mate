@@ -1052,9 +1052,11 @@ void apply_topbar_summary(const GnssStatus& st)
     const uint32_t fix_color = (st.fix == GnssStatus::NOFIX) ? kColorWarn : kColorOk;
 
     char buf[128];
+    const bool short_screen = s_layout.compact_layout && s_layout.screen_h <= 200;
     snprintf(buf,
              sizeof(buf),
-             "#%06lX USE: %d/%d#|#%06lX HDOP: %.1f#|#%06lX FIX: %s#",
+             short_screen ? "#%06lX S:%d/%d# #%06lX H:%.1f# #%06lX %s#"
+                          : "#%06lX USE: %d/%d#|#%06lX HDOP: %.1f#|#%06lX FIX: %s#",
              use_color,
              st.sats_in_use,
              st.sats_in_view,

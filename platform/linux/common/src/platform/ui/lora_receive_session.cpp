@@ -34,6 +34,7 @@ class ReceiveWorker
             stopping_ = true;
         }
         wake_.notify_one();
+        idle_.notify_all();
         worker_.join();
     }
     uint32_t request(float frequency, const ReceiveConfig& config)
@@ -43,11 +44,20 @@ class ReceiveWorker
         state_.state = ReceiveSessionState::Configuring;
         state_.transmit_pending = false;
         active_ = true;
+        hardware_idle_ = false;
         frequency_ = frequency;
         config_ = config;
         head_ = count_ = 0;
         wake_.notify_one();
+        idle_.notify_all();
         return state_.generation;
+    }
+    bool waitReleased()
+    {
+        std::unique_lock<std::mutex> lock(mutex_);
+        idle_.wait(lock, [this]
+                   { return stopping_ || active_ || hardware_idle_; });
+        return !stopping_ && !active_ && hardware_idle_;
     }
     ReceiveSessionSnapshot snapshot()
     {
@@ -105,10 +115,15 @@ class ReceiveWorker
                 acquired = false;
                 configured = 0;
                 lock.lock();
+                hardware_idle_ = !active_;
+                idle_.notify_all();
                 wake_.wait(lock, [this]
-                           { return stopping_ || active_; });
+                           { return stopping_ || active_ || !hardware_idle_; });
                 continue;
             }
+            // A request can arrive while the prior release runs unlocked.
+            // Mark busy under the mutex before starting any new physical I/O.
+            hardware_idle_ = false;
             const auto generation = state_.generation;
             if (configured != generation)
             {
@@ -176,6 +191,8 @@ class ReceiveWorker
     }
     std::mutex mutex_;
     std::condition_variable wake_;
+    std::condition_variable idle_;
+    bool hardware_idle_ = true;
     bool stopping_ = false, active_ = false;
     ReceiveSessionSnapshot state_;
     float frequency_ = 0;
@@ -217,4 +234,13 @@ void release_receive_session(uint32_t generation)
 {
     if (auto* value = instance.load()) value->release(generation);
 }
+bool wait_receive_session_released()
+{
+    auto* value = instance.load();
+    return !value || value->waitReleased();
+}
+namespace detail
+{
+void prepare_receive_session_worker() { (void)worker(); }
+} // namespace detail
 } // namespace platform::ui::lora

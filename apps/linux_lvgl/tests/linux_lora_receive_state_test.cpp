@@ -10,14 +10,14 @@ namespace
 namespace port = platform::linux_runtime;
 struct Radio final : port::IPacketRadio
 {
-    bool fail_config = false;
+    bool fail_config = false, fail_receive = false;
     unsigned samples = 0, polls = 0, sends = 0, releases = 0;
     const char* name() const override { return "receive-state fixture"; }
     bool hardwareCandidatePresent() const override { return true; }
     bool acquire() override { return true; }
     void release() override { ++releases; }
     bool configureLoRa(const port::RadioSettings&) override { return !fail_config; }
-    bool startReceive() override { return true; }
+    bool startReceive() override { return !fail_receive; }
     bool transmit(const uint8_t*, size_t) override
     {
         ++sends;
@@ -74,6 +74,15 @@ int main()
     radio.fail_config = false;
     require(lora::configure_receive(433.5f, config), "configuration recovery failed");
     require(lora::read_instant_rssi() == -77 && radio.samples == 2, "recovery did not restore sampling");
+    require(lora::transmit_packet(bytes, 1) && radio.sends == 1, "valid TX/RX cycle failed");
+    radio.fail_receive = true;
+    require(!lora::transmit_packet(bytes, 1) && radio.sends == 2, "failed RX restart reported transmit success");
+    require(std::isnan(lora::read_instant_rssi()) && radio.samples == 2, "failed RX restart retained RSSI context");
+    require(!lora::poll_received_packet(bytes, sizeof(bytes), &packet) && radio.polls == 1, "failed RX restart admitted packet");
+    require(!lora::transmit_packet(bytes, 1) && radio.sends == 2, "failed RX restart allowed another transmit");
+    radio.fail_receive = false;
+    require(lora::configure_receive(433.5f, config), "RX restart failure did not recover through configuration");
+    require(lora::transmit_packet(bytes, 1) && radio.sends == 3, "TX/RX cycle did not recover");
     require(!lora::configure_receive(std::numeric_limits<float>::quiet_NaN(), config), "invalid frequency accepted");
     require(std::isnan(lora::read_instant_rssi()) && radio.samples == 2, "invalid retune retained old context");
     lora::release();

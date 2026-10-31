@@ -9,6 +9,23 @@ Use the [current acceptance audit](cm0-adaptation-acceptance.md) for the
 requirement/evidence map and open compatibility review. Sections below retain
 chronological findings; later verified implementations supersede older gaps.
 
+## Probe transmit recovery, 30 October 2026
+
+The Linux LoRa UI port now checks RX restart after transmitting. If restarting
+reception fails, the operation returns failure and invalidates the receive
+context. RSSI, packet polling and subsequent transmissions remain unavailable
+until explicit reconfiguration succeeds. This also holds for a backend whose
+online flag remains optimistically true. The prior behavior was reproduced by
+fault injection: a failed RX restart incorrectly returned transmit success.
+
+The normal dependency build rebuilt the production port, linked the main
+application and rebuilt both Probe page harnesses. Four focused tests passed
+(receive state, asynchronous session, Probe session page and IQ page), and the
+compact IQ page passed separately. The P4 equivalent fix passed its exact-source
+test, the complete native FM/TV suite (17/17) and the TFT LR2021 firmware build.
+No physical TX/RX acceptance was performed. CM0 and its LR2021 remain reserved
+for the user; this verification used local software and explicit test boundaries.
+
 ## Current display evidence, 23 October 2026
 
 The stock Labwc session advertises one `wl_output`,
@@ -1782,13 +1799,176 @@ been performed, as requested by the user.
 
 ## Radio dependency decision
 
-The existing ESP dependency is RadioLib 7.4.0 and does not provide this backend.
+### LR2021 SDR investigation (2026-10-29)
+
+[LR2021-SDR](https://github.com/SAMS0N1TE/lr2021-sdr) is a candidate for an
+additional raw-IQ receiver, not a replacement for the current packet receiver.
+Its MIT license requires retaining the copyright and license notices when code
+is incorporated. Its published measurements use an LR2021 ROM 1.24 on a
+T-Display P4 LR2021 board; they do not establish CM0 throughput or RF coverage.
+The current CM0 profile selects LR2021 over Linux spidev at 1 MHz. The P4
+follow-up now has explicit TFT/AMOLED LR2021 packet targets and a native IDF
+backend alongside SX1262. The user confirmed TFT + LR2021, and that exact
+firmware target compiles and links. Physical RF, raw-IQ and FM acceptance remain
+separate; see the [P4 follow-up](t-display-p4-hardware-audit.md#lr2021-variant-follow-up-2026-10-29).
+
+At 1 MHz, SPI carries at most 125,000 bytes/s before framing and scheduling
+overhead. The upstream 125,000-sample/s IQ16 mode requires 500,000 bytes/s
+(two 16-bit components per complex sample). The current CM0 bus configuration
+therefore cannot sustain even that mode. A higher bus clock, bounded BUSY
+handling and measured loss-free FIFO service are prerequisites, not an assumed
+consequence of enabling the decoder.
+
+For Protocol Probe, measure candidate configuration time, actual receive dwell,
+packet queue drops and UI latency separately. The Linux LR2021 `configureLoRa`
+now uses the shared `LoRaReceiveConfig` transaction to omit unchanged setters.
+It invalidates the cache on reacquisition, final release, FSK configuration and
+failed I/O, and publishes applied settings only after receive restart succeeds.
+Even identical candidates still enter standby and restart receive. The focused
+transaction test uses the production configuration type and transaction code:
+full configuration makes 12 driver calls, an identical request makes two, an
+SF-only change makes three, and a frequency-only retune makes four. Retuning
+also reapplies output power because RadioLib selects the LF/HF PA table using
+the current frequency. These are driver-call counts rather than
+SPI transaction counts or measured RF throughput. Every full-configuration
+failure position, partial delta failure and transport-health rejection is
+followed by a checked full recovery in the test.
+No reduction in SPI delays or increase in bus clock is justified by the
+upstream P4 measurements alone. Raw-IQ support should be a separately leased
+radio mode with bounded queues, loss counters and a generation boundary on
+retune; stopping it must restore the packet modem and normal receiver owner.
+See the upstream [porting requirements](https://github.com/SAMS0N1TE/lr2021-sdr/blob/main/docs/porting.md).
+
+The Linux packet-radio port now has an optional finite `captureIq` contract.
+Support defaults to false for backends without an implementation. The Linux
+LR2021 driver now implements finite capture through the pinned portable RX
+engine; SX126x and unavailable backends retain the unsupported default. This
+driver integration is now connected to the conditional Protocol Probe IQ entry;
+physical IQ acceptance remains pending. The coordinator permits
+capture only through an acquired foreground lease and holds its operation lock
+through capture and recovery. It rejects overlapping/undersized buffers,
+unsupported backends, incomplete results, capture errors and failed/offline
+recovery; rejected results publish zero bytes and no nominal rate. A soft
+capture failure may leave an otherwise restored radio usable. Failed recovery
+invalidates the coordinated configuration, blocking subsequent packet I/O until
+checked recovery. Foreground release retains the existing checked mesh restore.
+
+The coordinator regression tests cover lease/power/capability admission, buffer
+validation, valid and partial results, sticky backend-online flags after failed
+recovery, explicit configuration recovery and deferred mesh configuration.
+A blocking fake capture also verifies serialized physical operations alongside
+nonblocking cached status queries, followed by mesh resumption after release.
+The actual Linux application and affected callers rebuilt successfully; the
+coordinator and Walkie session regressions passed. These are host contracts,
+not evidence for physical capture or measured throughput.
+
+The Linux LR2021 adapter uses the coordinator-owned transport under its driver
+mutex, reads the actual ROM/configuration and requires one acquired LoRa owner.
+The engine captures 256 pairs into caller-owned storage, backs up and verifies
+SRAM around reset, and reapplies the saved LoRa configuration and receive state.
+Reset retains the configured TCXO voltage; failed recovery holds the configured
+reset GPIO and takes the driver offline. Error codes are statically checked
+against the pinned engine's domain. Unknown nominal rate remains zero.
+The capture hook clock uses the process monotonic clock across HAL reset.
+
+Production adapter methods are extracted into a host test covering SPI framing,
+big-endian addresses/data, command-width restoration after failure, actual ROM
+reporting, exclusive LoRa preflight, TCXO/reset and configuration restore errors.
+The application rebuilt/relinked with both `Lr2021Radio::captureIq` and the
+portable `lr2021_iq_capture` present in its final symbols. Driver/coordinator/
+configuration regressions passed. Physical ROM/capture/recovery acceptance remains pending. Finite SRAM
+capture is distinct from streaming and does not relax the 1 MHz throughput limit.
+
+The Linux diagnostic worker now connects the Probe button/`I` shortcut through
+the foreground coordinator to this driver. It is unavailable in demo/synthetic
+LoRa mode and requires a supporting backend with existing SPI/GPIO endpoints.
+The page stops its receive session first; a worker-side release barrier waits
+for in-flight I/O and mesh restoration to finish rather than trusting the
+immediate UI Idle state. A replacement active session rejects the handoff.
+The receiver marks hardware busy under its mutex before every new I/O, including
+requests arriving during an older release. Immediate request/release and that
+replacement-session interleaving are covered by the handoff regression.
+
+Only checked capture plus successful foreground release produces Ready. Missing
+hardware, acquisition failures, partial data and failed recovery publish no
+samples. The worker owns its IQ buffers and never touches LVGL objects; page exit
+joins it before another page can acquire the radio. Small-screen results use a
+four-line summary and a separate scrollable viewport for long errors. The Help
+map documents IQ and scrolling. [Marked UI fixtures](../images/cm0/iq-review/README.md)
+show both layouts using test data and do not prove physical reception.
+
+The Linux packet receiver also rejects CRC, LoRa header CRC, length and address
+errors before reading any payload, including when `RX_DONE` is set. RadioLib's
+`readData` does not itself reject length/address IRQs. These errors update the
+matching receive counters and restart RX; progress/FIFO/TX-only flags do not
+restart an in-progress receive. Hardware, command and PA protection faults take
+precedence over packet completion: the driver attempts standby, holds the reset
+GPIO when configured, marks the radio offline and invalidates its configuration
+cache. It never publishes a packet from that interrupt state.
+
+`linux_lr2021_receive` extracts the production receive method and exercises it
+with the pinned RadioLib constants and fake radio/GPIO boundaries. It verifies
+damaged-frame rejection with and without `RX_DONE`, failure recovery, fatal
+reset/offline behavior, progress preservation and valid-packet delivery. The
+driver and actual Linux application rebuilt/relinked successfully, and the
+receive/configuration/IRQ regression tests passed. This is host evidence, not
+physical RF acceptance; the CM0 SPI clock remains 1 MHz.
+
+A broadcast-FM receiver requires a real chain from IQ acquisition through
+channel filtering, wideband FM demodulation, de-emphasis and resampling to the
+existing audio output service. It must release ownership when another radio
+tool starts. The upstream advertised 100 MHz lower bound does not prove full
+87.5–108 MHz coverage on this board. Its higher sample-rate modes are candidates
+for wideband FM; narrowband voice demodulation alone is insufficient evidence.
+The currently pinned RadioLib packet API accepts LF frequencies only from
+150 MHz, with parameter checking enabled in our native build. A future FM
+receiver needs its own exclusively owned receive-only tuning lifecycle; widening
+packet TX/RX validation is not part of this investigation. Raw sources 0/1
+provide signed IQ8, while source 6 carries gain-tagged IQ6 and cannot share that
+decoder. The FM consumer now explicitly accepts IQ8 and IQ16, resets across
+format changes and rejects tagged/unknown formats. Host tests verify identical
+PCM for equivalent IQ8/IQ16 sequences and a low-resolution full-deviation FM
+tone. No streaming, RF passband or physical FM acceptance is implied.
+[LakeShark](https://github.com/SAMS0N1TE/LakeShark) has related decoder and audio
+integration, but its detailed [FM guide](https://github.com/SAMS0N1TE/LakeShark/blob/caf3fbe9e28103d14baa5639f37dc43d307a8149/docs/apps/FM.md)
+still describes WFM using an external RTL-SDR or HackRF. The pinned
+[`fm_lr_dsp.h`](https://github.com/SAMS0N1TE/LakeShark/blob/caf3fbe9e28103d14baa5639f37dc43d307a8149/components/lakeshark/apps/fm/fm_lr_dsp.h)
+resolves the mode distinction: its LR IQ path accepts narrowband FM, AM and
+several data decoders, but excludes `FM_MODE_WFM`. It consumes 125 ksample/s IQ
+and imposes a 104 MHz lower tuning limit. Thus the current analog FM support
+is not evidence of a ready-to-port broadcast FM receiver. No FM launcher entry
+or completed FM capability is introduced by this investigation.
+
+LakeShark carries a [GPLv3 license](https://github.com/SAMS0N1TE/LakeShark/blob/caf3fbe9e28103d14baa5639f37dc43d307a8149/LICENSE),
+unlike the MIT radio-access library. Do not treat the two repositories as one
+interchangeable dependency or copy decoder sources under the radio library's
+license. This investigation has incorporated no upstream source code.
+
+Arduino ESP builds retain their existing RadioLib 7.4.0 dependency. The native
+IDF LR2021 and Linux targets use an isolated shared dependency declaration.
 The [upstream 7.8.1 release](https://github.com/jgromes/RadioLib/releases/tag/7.8.1)
 contains LR2021 fixes. Its verified tag resolves to
-`2325a38a89dd0f0e402c19f67fe910111da1e246`. A Linux-only pinned dependency and
-configurable Linux SPI/GPIO HAL should be isolated from ESP builds. The vendor
+`2325a38a89dd0f0e402c19f67fe910111da1e246`. Linux SPI/GPIO and IDF SPI/expander
+HALs remain platform-owned; packet configuration transactions are shared. The vendor
 sample has a modified older RadioLib/CM0 HAL with hardcoded global descriptors;
 do not copy that ownership model into shared runtime code.
+
+## Onboard 1seg radio integration, 29 October 2026
+
+The CM0 profile now explicitly selects `radio_rf_switch_profile=cm0_16e8`.
+Its DIO7/DIO6 function and mode writes are checked, selected only for that board
+profile, and reapplied after cold start, GFSK initialization, LoRa restoration
+and IQ reset before RX resumes. Generic Linux radio configurations default to
+`none`; unprofiled LR2021 backends do not advertise the optional TV IQ port.
+Native tests cover all four RF-switch write failures in each lifecycle path.
+They establish software behavior, not RF sensitivity or programme reception.
+
+The current continuous IQ port and separate television integration gates are
+tracked in [CM0 1seg TV](t-display-cm0-oneseg-tv.md). It uses the pinned MIT RX
+engine with checked queue publication and cancellation; no transmitter or MMIO
+backend is added. The TV worker, decoder, media output, menu/page and actual
+on-board reception acceptance remain pending. Earlier deployed-package evidence
+in this ledger does not imply that these new changes have been deployed.
 
 ## Completion gates
 

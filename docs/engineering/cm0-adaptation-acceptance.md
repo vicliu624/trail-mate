@@ -7,6 +7,48 @@ exhaustive physical testing or completion of every formal management operation.
 
 ## Delivered artifact
 
+### Host UI follow-up on 29 October 2026
+
+The source follow-up at `fee017b3` plus local UI changes uses the production CM0
+profile at 1232 x 568. It keeps Protocol Probe accessible when the radio is
+offline, with an explicit unavailable state and disabled operations. Contextual
+Help has separate keyboard and pointer-only review modes; pointer-only checks
+create no keyboard device. Map's asynchronous dialog and Contacts' private
+focus group are validated through their actual Help content. Walkie Help does
+not consume Space as PTT, and an unavailable Walkie backend disables the touch
+transmit button.
+
+All 29 selected host regressions passed: 13 production pages in keyboard and
+pointer-only Help modes (26 cases), plus Probe receive-session, audio-routing
+and audio-lifetime regressions. The Walkie cases also assert that an inactive
+backend leaves the transmit button disabled. The matching Cardputer Zero build
+passed all 13 app-level Help/focus regressions, including bottom-meter bounds
+in the 320 x 170 hardware-error state. The shared bottom-bar focus test passed
+separately. These results are additional software verification, not a claim
+of exhaustive hardware functionality.
+
+The subsequent LR2021 configuration-delta follow-up compiled the real radio
+backend and relinked the CM0 application. Four focused regressions passed:
+configuration transaction, Probe receive session, and the keyboard/touch Probe
+Help cases. The transaction preserves standby/receive restart and the
+frequency-to-PA dependency, and invalidates on reset, final release, FSK and I/O
+failure. Driver-call reductions are recorded in the SDR investigation; they
+are not device timing or RF-throughput measurements.
+
+The host review disables simulated radio, GNSS and demo-world data and uses
+isolated application state. The actual page captures are in
+[`docs/images/cm0/current-review`](../images/cm0/current-review/):
+[Protocol Probe](../images/cm0/current-review/energy_sweep.png),
+[Walkie Talkie](../images/cm0/current-review/walkie_talkie.png),
+[Map touch Help](../images/cm0/current-review/map-touch.png), and
+[Contacts touch Help](../images/cm0/current-review/contacts-touch.png).
+These are host-rendering and software-path evidence. The package identities
+below describe the earlier installed release, rather than this uncommitted
+source follow-up. LR2021 raw-IQ and broadcast FM remain a separate
+[investigation](t-display-cm0-hardware-integration.md#lr2021-sdr-investigation-2026-10-29).
+
+### Installed release artifact
+
 Scope control: the CM0 adaptation and Cardputer Zero maintenance remain the
 delivery requirements. Additional feature work is permitted only after an
 explicit assessment shows that moving duplicated logic into a shared module

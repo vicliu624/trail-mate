@@ -12,6 +12,7 @@
 #include <cstring>
 
 #include "ui/assets/fonts/font_utils.h"
+#include "ui/app_runtime.h"
 #include "ui/input/pager_navigation.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
@@ -40,6 +41,20 @@ static void back_event_cb(lv_event_t* e)
     {
         bar->back_cb(bar->back_user_data);
     }
+}
+
+static void help_event_cb(lv_event_t* event)
+{
+    lv_group_t* group = nullptr;
+    for (auto* device = lv_indev_get_next(nullptr); device; device = lv_indev_get_next(device))
+        if (lv_indev_get_type(device) == LV_INDEV_TYPE_KEYPAD && lv_indev_get_group(device))
+        {
+            group = lv_indev_get_group(device);
+            break;
+        }
+    if (!group) group = lv_group_get_default();
+    if (!group) group = app_g;
+    (void)::ui::input::pager::open_help(static_cast<lv_obj_t*>(lv_event_get_user_data(event)), group);
 }
 
 static lv_coord_t resolve_top_bar_height(const TopBarConfig& config)
@@ -91,6 +106,7 @@ void top_bar_init(TopBar& bar, lv_obj_t* parent, const TopBarConfig& config)
     const bool large_touch = resolved_height > ::ui::kUnifiedTopBarHeight &&
                              (profile.large_touch_hitbox || resolved_height >= 56);
     const bool dense = !large_touch && resolved_height <= 24;
+    const bool narrow = dense && lv_display_get_horizontal_resolution(nullptr) <= 320;
     const lv_coord_t side_pad = large_touch ? 18 : (dense ? 4 : (resolved_height >= 40 ? 14 : 10));
     const lv_coord_t vertical_pad = large_touch ? 10 : (dense ? 1 : (resolved_height >= 40 ? 8 : 6));
     const lv_coord_t back_btn_height = std::max<lv_coord_t>(
@@ -108,7 +124,7 @@ void top_bar_init(TopBar& bar, lv_obj_t* parent, const TopBarConfig& config)
 #else
     const lv_coord_t back_btn_radius = std::max<lv_coord_t>(large_touch ? 16 : 10, back_btn_height / 2);
 #endif
-    const lv_coord_t right_label_width = large_touch ? 156 : (dense ? 72 : (resolved_height >= 40 ? 120 : 90));
+    const lv_coord_t right_label_width = large_touch ? 156 : (narrow ? 56 : (dense ? 72 : (resolved_height >= 40 ? 120 : 90)));
     const lv_font_t* text_font = resolve_top_bar_font(resolved_height);
 
     bar.container = lv_obj_create(parent);
@@ -188,13 +204,15 @@ void top_bar_init(TopBar& bar, lv_obj_t* parent, const TopBarConfig& config)
     lv_obj_set_style_text_color(bar.title_label, lv_color_white(), 0);
 #endif
     lv_obj_set_flex_grow(bar.title_label, 1);
-    lv_obj_set_width(bar.title_label, LV_PCT(100));
+    lv_obj_set_width(bar.title_label, 0);
+    lv_obj_set_style_min_width(bar.title_label, 0, 0);
     lv_obj_set_style_text_align(bar.title_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_max_width(bar.title_label, LV_PCT(100), 0);
 
     bar.right_label = lv_label_create(bar.container);
     lv_label_set_text(bar.right_label, "");
     lv_obj_set_width(bar.right_label, right_label_width);
+    lv_obj_set_height(bar.right_label, lv_font_get_line_height(text_font));
     lv_label_set_long_mode(bar.right_label, LV_LABEL_LONG_DOT);
     lv_obj_set_style_text_color(bar.right_label,
 #if defined(ARDUINO_T_DECK_PRO)
@@ -217,9 +235,19 @@ void top_bar_init(TopBar& bar, lv_obj_t* parent, const TopBarConfig& config)
         // Dialog headers own their shortcuts. Registering them as pages would
         // make H open another Help instead of closing the current dialog.
         auto* help_hint = lv_label_create(bar.container);
-        lv_label_set_text(help_hint, "H Help");
+        lv_label_set_text(help_hint, narrow ? "H ?" : "H Help");
         lv_obj_set_style_text_font(help_hint, &lv_font_montserrat_12, 0);
         lv_obj_set_style_text_color(help_hint, ui::theme::text(), 0);
+        lv_obj_add_flag(help_hint, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_clear_flag(help_hint, LV_OBJ_FLAG_CLICK_FOCUSABLE);
+        lv_obj_set_ext_click_area(help_hint, dense ? 4 : 0);
+        if (large_touch)
+        {
+            lv_obj_set_style_min_height(help_hint, 44, 0);
+            lv_obj_set_style_min_width(help_hint, 72, 0);
+            lv_obj_set_style_pad_all(help_hint, 8, 0);
+        }
+        lv_obj_add_event_cb(help_hint, help_event_cb, LV_EVENT_CLICKED, parent);
         lv_obj_move_to_index(help_hint, lv_obj_get_index(bar.right_label));
         ui::input::pager::install_help(parent, bar.title_label);
     }

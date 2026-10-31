@@ -11,6 +11,8 @@ function(trailmate_enable_linux_media target_name)
         "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/platform/linux/music_storage.cpp"
         "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/platform/linux/music_service.cpp"
         "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/platform/linux/sdl_pcm_output.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/platform/linux/fm_pcm_output.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/platform/linux/fm_session.cpp"
         "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/platform/linux/sdl_pcm_input.cpp"
         "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/platform/linux/walkie_session.cpp"
         "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/platform/linux/voice_audio.cpp"

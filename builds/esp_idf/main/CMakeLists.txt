@@ -2,8 +2,7 @@ include("${CMAKE_CURRENT_LIST_DIR}/../ESP_IDF_COMPONENT_SOURCES.cmake")
 
 # GCC 14's O2 inlining cannot prove std::sort's bounded 8-entry range here.
 # Keep the diagnostic, but do not make this specific false positive fatal on P4.
-if(TRAIL_MATE_IDF_TARGET STREQUAL "t_display_p4_tft" OR
-   TRAIL_MATE_IDF_TARGET STREQUAL "t_display_p4_amoled")
+if(TRAIL_MATE_IDF_TARGET MATCHES "^t_display_p4_(tft|amoled)(_lr2021)?$")
     set_source_files_properties(
         "${TRAILMATE_ROOT}/modules/core_chat/src/delivery/chat_message_ledger.cpp"
         PROPERTIES COMPILE_OPTIONS "-Wno-error=array-bounds")
@@ -32,9 +31,16 @@ endif()
 if(TRAIL_MATE_IDF_TARGET STREQUAL "tab5")
     list(APPEND TRAILMATE_ESP_IDF_PLATFORM_SOURCES
         ${TRAILMATE_ESP_IDF_TAB5_BOARD_SOURCES})
-elseif(TRAIL_MATE_IDF_TARGET STREQUAL "t_display_p4_tft" OR TRAIL_MATE_IDF_TARGET STREQUAL "t_display_p4_amoled")
+elseif(TRAIL_MATE_IDF_TARGET MATCHES "^t_display_p4_(tft|amoled)(_lr2021)?$")
     list(APPEND TRAILMATE_ESP_IDF_PLATFORM_SOURCES
         ${TRAILMATE_ESP_IDF_T_DISPLAY_P4_BOARD_SOURCES})
+endif()
+
+if(TRAIL_MATE_IDF_TARGET MATCHES "_lr2021$")
+    list(APPEND TRAILMATE_ESP_IDF_PLATFORM_SOURCES
+        "${TRAILMATE_ROOT}/platform/esp/idf_common/src/lr2021_radio.cpp"
+        "${TRAILMATE_ROOT}/platform/esp/idf_common/src/platform_ui_fm_runtime.cpp"
+        "${TRAILMATE_ROOT}/platform/esp/idf_common/src/platform_ui_radio_iq_runtime.cpp")
 endif()
 
 idf_component_register(
@@ -92,13 +98,17 @@ target_compile_definitions(${COMPONENT_LIB} PRIVATE
 
 if(TRAIL_MATE_IDF_TARGET STREQUAL "tab5")
     target_compile_definitions(${COMPONENT_LIB} PRIVATE TRAIL_MATE_ESP_BOARD_TAB5=1)
-elseif(TRAIL_MATE_IDF_TARGET STREQUAL "t_display_p4_tft")
+elseif(TRAIL_MATE_IDF_TARGET MATCHES "^t_display_p4_tft(_lr2021)?$")
     target_compile_definitions(${COMPONENT_LIB} PRIVATE
         TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4=1)
-elseif(TRAIL_MATE_IDF_TARGET STREQUAL "t_display_p4_amoled")
+elseif(TRAIL_MATE_IDF_TARGET MATCHES "^t_display_p4_amoled(_lr2021)?$")
     target_compile_definitions(${COMPONENT_LIB} PRIVATE
         TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4=1
         TRAIL_MATE_ESP_BOARD_T_DISPLAY_P4_AMOLED=1)
+endif()
+
+if(TRAIL_MATE_IDF_TARGET MATCHES "_lr2021$")
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE TRAIL_MATE_IDF_RADIO_LR2021=1)
 endif()
 
 if(TRAIL_MATE_IDF_TARGET STREQUAL "tdeck")
@@ -107,13 +117,20 @@ if(TRAIL_MATE_IDF_TARGET STREQUAL "tdeck")
 endif()
 
 target_compile_features(${COMPONENT_LIB} PUBLIC cxx_std_17)
-if(TRAIL_MATE_IDF_TARGET STREQUAL "t_display_p4_tft" OR
-   TRAIL_MATE_IDF_TARGET STREQUAL "t_display_p4_amoled")
+if(TRAIL_MATE_IDF_TARGET MATCHES "^t_display_p4_(tft|amoled)(_lr2021)?$")
     # LVGL introduces these references after libmain's archive scan. Keep the
     # custom allocator object reachable regardless of component archive order.
     target_link_options(${COMPONENT_LIB} INTERFACE "-Wl,--undefined=lv_malloc_core")
 endif()
 if(NOT CMAKE_BUILD_EARLY_EXPANSION)
+    if(TRAIL_MATE_IDF_TARGET MATCHES "_lr2021$")
+        include("${TRAILMATE_ROOT}/cmake/TrailMateRadioLib.cmake")
+        trailmate_add_radiolib(trailmate_idf_radiolib)
+        target_link_libraries(${COMPONENT_LIB} PRIVATE trailmate_idf_radiolib)
+        include("${TRAILMATE_ROOT}/cmake/TrailMateLr2021Iq.cmake")
+        trailmate_add_lr2021_iq(trailmate_idf_lr2021_iq)
+        target_link_libraries(${COMPONENT_LIB} PRIVATE trailmate_idf_lr2021_iq)
+    endif()
     include("${TRAILMATE_ROOT}/cmake/TrailMateTmap.cmake")
     trailmate_add_tmap()
     target_link_libraries(${COMPONENT_LIB} PUBLIC tmap::tmap)

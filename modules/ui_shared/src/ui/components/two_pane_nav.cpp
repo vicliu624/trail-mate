@@ -650,6 +650,16 @@ static void root_key_event_cb(lv_event_t* e)
     if (!binding_alive(binding)) return;
 
     const uint32_t key = lv_event_get_key(e);
+    if ((key == LV_KEY_UP || key == LV_KEY_DOWN) && binding->group &&
+        !lv_group_get_editing(binding->group))
+    {
+        lv_event_stop_bubbling(e);
+        lv_event_stop_processing(e);
+        if (key == LV_KEY_UP) lv_group_focus_prev(binding->group);
+        else lv_group_focus_next(binding->group);
+        if (auto* focused = lv_group_get_focused(binding->group)) lv_obj_scroll_to_view(focused, LV_ANIM_OFF);
+        return;
+    }
     if (binding->adapter.filter_panel && (key == 'm' || key == 'M'))
     {
         lv_event_stop_bubbling(e);

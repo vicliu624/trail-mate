@@ -8,7 +8,9 @@ enum class FocusOwner : uint8_t
     VoiceMessage,
     Walkie,
     Call,
-    Sstv
+    Sstv,
+    FmRadio,
+    Television
 };
 struct FocusToken
 {
