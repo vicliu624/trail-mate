@@ -138,6 +138,12 @@ if(TRAIL_MATE_LINUX_BUILD_APP)
     target_link_libraries(trailmate-linux-hardware-probe PRIVATE
         trailmate_desktop_ui trailmate_linux_device_options)
     if(BUILD_TESTING)
+        if(TARGET trailmate-linux-oneseg-iq AND NOT CMAKE_CROSSCOMPILING)
+            find_package(Python3 REQUIRED COMPONENTS Interpreter)
+            add_test(NAME oneseg_probe_cli COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/oneseg_probe_cli_test.py"
+                "$<TARGET_FILE:trailmate-linux-oneseg-iq>")
+        endif()
         if(TARGET trailmate_linux_oneseg_media)
             add_executable(trailmate_broadcast_font_test
                 "${TRAIL_MATE_REPO_ROOT}/modules/ui_shared/tests/agenda/test_font_binary.cpp")

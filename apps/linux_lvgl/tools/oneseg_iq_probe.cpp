@@ -66,13 +66,13 @@ class StopSignals
     {
     }, old_term_{};
 };
-unsigned number(const std::string& value)
+unsigned number(const std::string& value, unsigned maximum = 3600)
 {
     if (value.empty() || value.find_first_not_of("0123456789") != std::string::npos)
         throw std::runtime_error("Expected an unsigned integer");
     size_t used = 0;
     const auto result = std::stoul(value, &used);
-    if (used != value.size() || result > 3600) throw std::runtime_error("Integer outside supported range");
+    if (used != value.size() || result > maximum) throw std::runtime_error("Integer outside supported range");
     return static_cast<unsigned>(result);
 }
 const char* phase(platform::linux_runtime::OneSegReceiveWorker::Phase value)
@@ -143,17 +143,17 @@ int main(int argc, char** argv)
             else if (key == "--seconds") seconds = number(argv[++n]);
             else if (key == "--sample-rate")
             {
-                reception.sample_rate_hz = number(argv[++n]);
+                reception.sample_rate_hz = number(argv[++n], 500000);
                 reception.enabled = true;
             }
             else if (key == "--gain-step")
             {
-                reception.gain_step = number(argv[++n]);
+                reception.gain_step = number(argv[++n], 13);
                 reception.enabled = true;
             }
             else if (key == "--spi-clock")
             {
-                reception.spi_clock_hz = number(argv[++n]);
+                reception.spi_clock_hz = number(argv[++n], 16000000);
                 reception.enabled = true;
             }
             else if (key == "--capture-result-fd")
