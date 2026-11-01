@@ -1,4 +1,5 @@
 #pragma once
+#include "platform/linux/oneseg_reception_settings.h"
 #include <cstddef>
 #include <cstdint>
 
@@ -15,6 +16,7 @@ struct OneSegIqRequest
     // Nonblocking, thread-safe cancellation; required even for an empty FIFO.
     bool (*cancelled)(void*) = nullptr;
     void* context = nullptr;
+    OneSegReceptionSettings reception{};
 };
 struct OneSegIqResult
 {

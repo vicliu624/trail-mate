@@ -183,7 +183,7 @@ class Lr2021Radio final : public IPacketRadio
             try
             {
                 captured = run_oneseg_capture_process(helper, std::getenv("TRAIL_MATE_ONESEG_CAPTURE_PROFILE"),
-                                                      request, hardware_.oneseg_sample_rate_hz, result);
+                                                      request, request.reception.enabled ? request.reception.sample_rate_hz : hardware_.oneseg_sample_rate_hz, result);
             }
             catch (...)
             {

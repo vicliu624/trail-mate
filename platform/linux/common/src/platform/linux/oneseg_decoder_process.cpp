@@ -3,6 +3,7 @@
 #endif
 #include "platform/linux/oneseg_decoder_process.h"
 #include "platform/linux/oneseg_pipe_sink.h"
+#include <algorithm>
 #include <array>
 #include <cerrno>
 #include <chrono>
@@ -65,6 +66,8 @@ bool absolute(const std::string& path)
 struct OneSegDecoderProcess::Impl
 {
     Config config;
+    std::vector<std::string> original_reception_environment;
+    bool reception_overridden = false;
     mutable std::mutex mutex;
     std::condition_variable changed;
     Snapshot state;
@@ -495,6 +498,32 @@ bool OneSegDecoderProcess::finish()
         s.state.phase = s.error_ready.load() ? Phase::Error : Phase::Stopped;
     }
     return !s.error_ready.load(std::memory_order_acquire);
+}
+bool OneSegDecoderProcess::configureReception(const OneSegReceptionSettings& reception)
+{
+    if (impl_->reader.joinable()) return false;
+    auto& environment = impl_->config.environment;
+    if (!reception.enabled)
+    {
+        if (impl_->reception_overridden)
+        {
+            environment = std::move(impl_->original_reception_environment);
+            impl_->reception_overridden = false;
+        }
+        return true;
+    }
+    if (!reception.valid()) return false;
+    if (!impl_->reception_overridden)
+    {
+        impl_->original_reception_environment = environment;
+        impl_->reception_overridden = true;
+    }
+    const std::string prefix = "TRAIL_MATE_ONESEG_INPUT_RATE=";
+    environment.erase(std::remove_if(environment.begin(), environment.end(), [&](const auto& value)
+                                     { return value.compare(0, prefix.size(), prefix) == 0; }),
+                      environment.end());
+    environment.push_back(prefix + std::to_string(reception.sample_rate_hz));
+    return true;
 }
 bool OneSegDecoderProcess::healthy() const { return impl_->ok.load(std::memory_order_acquire); }
 const char* OneSegDecoderProcess::lastError() const

@@ -36,6 +36,7 @@ struct OneSegReceiveWorker::Impl
     mutable std::mutex mutex;
     std::condition_variable wake, done;
     Snapshot state;
+    OneSegReceptionSettings reception;
     bool active = false, pending = false, shutdown = false;
     std::atomic_bool cancel{false}, producer_done{false};
     std::atomic<Error> fault{Error::None};
@@ -197,7 +198,8 @@ struct OneSegReceiveWorker::Impl
             if (!cancel.load())
             {
                 sink_attempted = true;
-                if (!sink.open(channel, session_generation, cancel) && !cancel.load()) fail(Error::SinkOpen, sink.lastError());
+                if ((!sink.configureReception(reception) || !sink.open(channel, session_generation, cancel)) && !cancel.load())
+                    fail(Error::SinkOpen, sink.lastError());
             }
             if (!cancel.load())
             {
@@ -221,6 +223,7 @@ struct OneSegReceiveWorker::Impl
                                        { consume(); });
                 OneSegIqRequest request;
                 request.channel = channel;
+                request.reception = reception;
                 request.staging = staging.data();
                 request.staging_bytes = staging.size();
                 request.context = this;
@@ -306,11 +309,13 @@ struct OneSegReceiveWorker::Impl
 OneSegReceiveWorker::OneSegReceiveWorker(IPacketRadio& radio, OneSegIqSink& sink, bool (*handoff)())
     : impl_(std::make_unique<Impl>(radio, sink, handoff)) {}
 OneSegReceiveWorker::~OneSegReceiveWorker() = default;
-bool OneSegReceiveWorker::start(unsigned channel)
+bool OneSegReceiveWorker::start(unsigned channel, OneSegReceptionSettings reception)
 {
     auto& s = *impl_;
     std::lock_guard<std::mutex> lock(s.mutex);
     if (s.active || s.shutdown) return false;
+    if (reception.enabled && !reception.valid()) return false;
+    s.reception = reception;
     const uint64_t generation = s.state.generation + 1;
     s.state = {};
     s.state.channel = channel;

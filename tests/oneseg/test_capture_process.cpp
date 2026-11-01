@@ -56,4 +56,13 @@ int main(int argc, char** argv)
     OneSegIqResult result;
     assert(!run_oneseg_capture_process("/does-not-exist", "/fixture.conf", request, 450000, result));
     assert(result.capture_error);
+    setenv("ONESEG_CAPTURE_FIXTURE", "tuning", 1);
+    request.reception.enabled = true;
+    request.reception.gain_step = 13;
+    request.reception.spi_clock_hz = 16000000;
+    assert(run_oneseg_capture_process(argv[1], "/fixture.conf", request, 450000, result));
+    assert(result.nominal_rate_hz == 450000 && state.bytes.size() == 2048);
+    request.reception.spi_clock_hz = 1000000;
+    assert(!run_oneseg_capture_process(argv[1], "/fixture.conf", request, 450000, result));
+    assert(result.capture_error);
 }

@@ -19,6 +19,7 @@ class OneSegTvSession
         std::vector<std::string> environment;
         unsigned startup_timeout_ms = 15000;
         bool automatic_parameters = true;
+        bool reception_tuning = false;
     };
     enum class Phase : uint8_t
     {
@@ -51,6 +52,7 @@ class OneSegTvSession
     };
     struct Snapshot
     {
+        OneSegReceptionSettings reception;
         Phase phase = Phase::Idle;
         Error error = Error::None;
         uint64_t generation = 0, media_epoch = 0, presented_frames = 0;
@@ -72,7 +74,8 @@ class OneSegTvSession
     };
     OneSegTvSession(IPacketRadio&, Config, bool (*handoff)());
     ~OneSegTvSession();
-    bool start(unsigned channel, uint16_t width, uint16_t height);
+    bool start(unsigned channel, uint16_t width, uint16_t height, OneSegReceptionSettings reception = {});
+    bool receptionTuningAvailable() const;
     void requestStop(uint64_t generation = 0);
     bool selectProgramme(uint64_t generation, uint16_t number);
     void setVolume(unsigned percent);

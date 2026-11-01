@@ -26,6 +26,7 @@ struct RecordedRadio final : rt::IPacketRadio
     std::atomic_bool restore_ok{true};
     std::atomic_bool synthetic_iq{false};
     std::atomic_uint acquired{0}, restored{0};
+    std::atomic_uint sample_rate{0}, spi_clock{0}, gain_step{0};
     std::atomic_uint64_t scanned_channels{0};
     std::string path;
     const char* name() const override { return "TEST FIXTURE - NO RF"; }
@@ -63,6 +64,9 @@ struct RecordedRadio final : rt::IPacketRadio
     bool streamOneSegIq(const rt::OneSegIqRequest& request, rt::OneSegIqResult& result) override
     {
         assert(request.channel >= 13 && request.channel <= 62);
+        sample_rate = request.reception.sample_rate_hz;
+        spi_clock = request.reception.spi_clock_hz;
+        gain_step = request.reception.gain_step;
         scanned_channels.fetch_or(uint64_t{1} << (request.channel - 13));
         if (synthetic_iq)
         {
@@ -129,6 +133,14 @@ static lv_obj_t* channel_selector(lv_obj_t* root)
     for (uint32_t i = 0; i < lv_obj_get_child_count(root); ++i)
         if (auto* value = channel_selector(lv_obj_get_child(root, i))) return value;
     return nullptr;
+}
+static lv_obj_t* tuning_choice(lv_obj_t* root, const char* caption)
+{
+    auto* heading = label(root, caption);
+    assert(heading);
+    auto* dropdown = lv_obj_get_child(lv_obj_get_parent(heading), lv_obj_get_index(heading) + 1);
+    assert(lv_obj_check_type(dropdown, &lv_dropdown_class));
+    return dropdown;
 }
 static void pump()
 {
@@ -205,6 +217,13 @@ int main(int argc, char** argv)
         {
             rt::OneSegTvApp page(std::move(session));
             page.enter(lv_screen_active());
+            click("Tune");
+            assert(label(lv_screen_active(), "RECEPTION LAB / SPI + DMA"));
+            assert(label_contains(lv_screen_active(), "Net drain 0.1875 MB/s"));
+            auto* apply_tuning = label(lv_screen_active(), "Apply & save");
+            assert(apply_tuning && lv_obj_has_state(lv_obj_get_parent(apply_tuning), LV_STATE_DISABLED));
+            click("Reset baseline");
+            click("Close tuning");
             click("CH +");
             assert(label(lv_screen_active(), "CH 14"));
             click("Vol +");
@@ -470,6 +489,7 @@ int main(int argc, char** argv)
             radio.restore_ok = true;
             radio.present = true;
             rt::OneSegTvSession::Config metadata;
+            metadata.reception_tuning = true;
             metadata.decoder = fixture;
             const auto time_control = root / "metadata-time-commands";
             std::ofstream(time_control) << "normal\n";
@@ -489,6 +509,25 @@ int main(int argc, char** argv)
             assert(label_contains(lv_screen_active(), "次の番組"));
             assert(!received->snapshot().media.video_frames && !received->snapshot().presented_frames);
             assert(!std::filesystem::exists(saved_channels));
+            const auto tuning_generation = received->snapshot().generation;
+            click("Tune");
+            auto* rate = tuning_choice(lv_screen_active(), "IQ sample rate");
+            auto* clock = tuning_choice(lv_screen_active(), "SPI clock request");
+            auto* gain = tuning_choice(lv_screen_active(), "Receiver gain step / 0 = chip AGC");
+            lv_dropdown_set_selected(rate, 1);
+            lv_dropdown_set_selected(clock, 2);
+            lv_dropdown_set_selected(gain, 13);
+            lv_obj_send_event(rate, LV_EVENT_VALUE_CHANGED, nullptr);
+            assert(label_contains(lv_screen_active(), "Net drain 1.0000 MB/s"));
+            click("Apply & save");
+            until([&]
+                  { return received->snapshot().generation > tuning_generation && radio.sample_rate == 500000 &&
+                           radio.spi_clock == 16000000 && radio.gain_step == 13 && received->snapshot().service_text.following_valid; });
+            assert(received->snapshot().reception.sample_rate_hz == 500000);
+            until([&]
+                  { return label_contains(lv_screen_active(), "Active 500 kpair/s / 16.00 MHz / gain 13"); });
+            capture(host, root, "tv-tuning-model.bmp", "TEST FIXTURE - PARAMETER PREVIEW / SYNTHETIC METADATA - NO RF");
+            click("Close tuning");
             click("Menu");
             click("Programme info");
             until([&]
@@ -538,6 +577,16 @@ int main(int argc, char** argv)
             click("Close info");
             assert(!std::filesystem::exists(saved_channels));
             page.exit(lv_screen_active());
+            {
+                rt::OneSegTvApp restored_page(std::make_unique<rt::OneSegTvSession>(radio, metadata, []
+                                                                                    { return true; }));
+                restored_page.enter(lv_screen_active());
+                click("Tune");
+                assert(lv_dropdown_get_selected(tuning_choice(lv_screen_active(), "IQ sample rate")) == 1);
+                assert(lv_dropdown_get_selected(tuning_choice(lv_screen_active(), "SPI clock request")) == 2);
+                assert(lv_dropdown_get_selected(tuning_choice(lv_screen_active(), "Receiver gain step / 0 = chip AGC")) == 13);
+                restored_page.exit(lv_screen_active());
+            }
             std::filesystem::rename(preserved, saved_channels);
         }
         if (const char* fixture = std::getenv("TRAIL_MATE_TEST_TRANSPORT_DECODER"))

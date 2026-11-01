@@ -19,6 +19,8 @@ struct OneSegTvSession::Impl
     mutable std::mutex mutex;
     std::condition_variable changed;
     Snapshot state;
+    bool reception_tuning = false;
+    OneSegReceptionSettings reception;
     bool pending = false, shutdown = false;
     uint16_t width = 320, height = 180, selection = 0;
     std::atomic_bool stop{false}, armed{false};
@@ -120,6 +122,7 @@ struct OneSegTvSession::Impl
         result.startup_timeout_ms = config.startup_timeout_ms;
         result.automatic_parameters = config.automatic_parameters;
         state.automatic_parameters = config.automatic_parameters;
+        reception_tuning = config.reception_tuning;
         result.ts_context = this;
         result.accept_ts = [](void* context, const uint8_t* data, size_t bytes, uint64_t generation)
         {
@@ -235,7 +238,7 @@ struct OneSegTvSession::Impl
             if (!stop.load())
             {
                 receive_attempted = true;
-                receive_started = receive.start(channel);
+                receive_started = receive.start(channel, reception);
                 if (!receive_started) fail(Error::Radio, receive.snapshot().message);
             }
             while (receive_started && !stop.load())
@@ -378,11 +381,18 @@ struct OneSegTvSession::Impl
 OneSegTvSession::OneSegTvSession(IPacketRadio& radio, Config config, bool (*handoff)())
     : impl_(std::make_unique<Impl>(radio, std::move(config), handoff)) {}
 OneSegTvSession::~OneSegTvSession() = default;
-bool OneSegTvSession::start(unsigned channel, uint16_t width, uint16_t height)
+bool OneSegTvSession::start(unsigned channel, uint16_t width, uint16_t height, OneSegReceptionSettings reception)
 {
     auto& s = *impl_;
     std::lock_guard<std::mutex> lock(s.mutex);
     if (s.state.active || s.shutdown) return false;
+    if (!reception.enabled && s.reception_tuning)
+    {
+        reception = s.reception;
+        reception.enabled = true;
+    }
+    if (reception.enabled && (!s.reception_tuning || !reception.valid())) return false;
+    s.reception = reception;
     if (channel < 13 || channel > 62 || !width || !height || width > OneSegMediaWorker::max_width || height > OneSegMediaWorker::max_height)
     {
         const uint64_t generation = s.state.generation;
@@ -403,6 +413,7 @@ bool OneSegTvSession::start(unsigned channel, uint16_t width, uint16_t height)
     const bool automatic = s.state.automatic_parameters;
     s.state = {};
     s.state.generation = generation ? generation : 1;
+    s.state.reception = s.reception;
     s.state.volume = volume;
     s.state.automatic_parameters = automatic;
     s.state.channel = channel;
@@ -417,6 +428,10 @@ bool OneSegTvSession::start(unsigned channel, uint16_t width, uint16_t height)
     s.pending = true;
     s.changed.notify_one();
     return true;
+}
+bool OneSegTvSession::receptionTuningAvailable() const
+{
+    return impl_->reception_tuning;
 }
 void OneSegTvSession::requestStop(uint64_t generation)
 {

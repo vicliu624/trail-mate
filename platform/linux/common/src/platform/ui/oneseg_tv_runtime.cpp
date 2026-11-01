@@ -13,6 +13,9 @@ std::unique_ptr<OneSegTvSession> make_oneseg_tv_session(OneSegTvSession::Config 
     if (simulated && (!std::strcmp(simulated, "1") || !std::strcmp(simulated, "true") ||
                       !std::strcmp(simulated, "TRUE") || !std::strcmp(simulated, "yes") || !std::strcmp(simulated, "YES"))) return nullptr;
     platform::ui::lora::detail::prepare_receive_session_worker();
+    const char* helper = std::getenv("TRAIL_MATE_ONESEG_CAPTURE_HELPER");
+    const char* dma = std::getenv("TRAIL_MATE_ONESEG_DMA");
+    config.reception_tuning = helper && helper[0] == '/' && dma && !std::strcmp(dma, "1");
     return std::make_unique<OneSegTvSession>(foreground_packet_radio(), std::move(config),
                                              platform::ui::lora::wait_receive_session_released);
 }

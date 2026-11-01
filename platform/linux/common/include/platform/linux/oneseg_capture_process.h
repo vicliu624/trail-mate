@@ -99,6 +99,11 @@ inline bool run_oneseg_capture_process(const char* executable, const char* profi
 {
     constexpr int io_error = -5;
     result = {};
+    if (request.reception.enabled && !request.reception.valid())
+    {
+        result.capture_error = io_error;
+        return false;
+    }
     if (!executable || executable[0] != '/' || !profile || profile[0] != '/' || !request.staging || request.staging_bytes < 2 ||
         !request.accept || !request.cancelled)
     {
@@ -164,8 +169,21 @@ inline bool run_oneseg_capture_process(const char* executable, const char* profi
     char channel[16];
     std::snprintf(channel, sizeof(channel), "%u", request.channel);
     char profile_option[] = "--profile", channel_option[] = "--channel", result_option[] = "--capture-result-fd", result_fd[] = "3";
-    char* arguments[] = {const_cast<char*>(executable), profile_option, const_cast<char*>(profile),
-                         channel_option, channel, result_option, result_fd, nullptr};
+    std::vector<char*> arguments{const_cast<char*>(executable), profile_option, const_cast<char*>(profile),
+                                 channel_option, channel, result_option, result_fd};
+    std::array<std::string, 3> tuning_values;
+    if (request.reception.enabled)
+    {
+        tuning_values = {std::to_string(request.reception.sample_rate_hz), std::to_string(request.reception.gain_step),
+                         std::to_string(request.reception.spi_clock_hz)};
+        const char* names[] = {"--sample-rate", "--gain-step", "--spi-clock"};
+        for (size_t index = 0; index < tuning_values.size(); ++index)
+        {
+            arguments.push_back(const_cast<char*>(names[index]));
+            arguments.push_back(tuning_values[index].data());
+        }
+    }
+    arguments.push_back(nullptr);
     posix_spawn_file_actions_t actions;
     posix_spawnattr_t attributes;
     int error = posix_spawn_file_actions_init(&actions);
@@ -203,7 +221,7 @@ inline bool run_oneseg_capture_process(const char* executable, const char* profi
         check(posix_spawn_file_actions_adddup2(&actions, resources.descriptors[4], 9));
         check(posix_spawn_file_actions_addclose(&actions, resources.descriptors[4]));
     }
-    if (!error) error = posix_spawn(&resources.child, executable, &actions, &attributes, arguments, environment.data());
+    if (!error) error = posix_spawn(&resources.child, executable, &actions, &attributes, arguments.data(), environment.data());
     posix_spawnattr_destroy(&attributes);
     posix_spawn_file_actions_destroy(&actions);
     resources.closeAt(1);

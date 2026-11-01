@@ -17,6 +17,8 @@ class OneSegIqSink
   public:
     virtual ~OneSegIqSink() = default;
     virtual bool open(unsigned channel, uint64_t generation, const std::atomic_bool& cancel) = 0;
+    // Owner-thread operation, after previous finish and before the next open.
+    virtual bool configureReception(const OneSegReceptionSettings&) { return true; }
     virtual bool write(const uint8_t* iq, size_t bytes, uint64_t first_pair,
                        uint64_t generation, const std::atomic_bool& cancel) = 0;
     virtual bool finish() = 0;
@@ -76,7 +78,7 @@ class OneSegReceiveWorker
     ~OneSegReceiveWorker();
     OneSegReceiveWorker(const OneSegReceiveWorker&) = delete;
     OneSegReceiveWorker& operator=(const OneSegReceiveWorker&) = delete;
-    bool start(unsigned channel);
+    bool start(unsigned channel, OneSegReceptionSettings reception = {});
     void requestStop();
     Snapshot snapshot() const;
     // Worker/shutdown/test only. Never block LVGL while awaiting RF recovery.

@@ -112,6 +112,7 @@ int main(int argc, char** argv)
         std::string profile, decoder;
         bool media_requested = false;
         int capture_result_fd = -1;
+        OneSegReceptionSettings reception;
         unsigned channel = 13, seconds = 0;
         for (int n = 1; n < argc; ++n)
         {
@@ -119,12 +120,14 @@ int main(int argc, char** argv)
             if (key == "--help")
             {
                 std::puts("Usage: trailmate-linux-oneseg-iq --profile FILE [--channel 13..62] [--seconds 0..3600] [--decoder FILE]\n"
-                          "Engineering RX tool: signed IQ8 at nominal 576000 pairs/s on stdout.\n"
+                          "Engineering RX tool: signed IQ8 on stdout; sample rate comes from the device profile.\n"
                           "Stdout must be a decoder pipe; all status goes to stderr.\n"
                           "--decoder launches the real named-profile Python decoder, reads TS/metadata,\n"
                           "and reaps it before radio release. Requires its native backend in the environment.\n"
                           "--media also decodes video and writes real PCM when the media component is built.\n"
                           "--seconds is an owner-lifetime budget including setup; 0 waits for Ctrl-C.\n"
+                          "Raw capture child overrides: --sample-rate 450000|500000 --gain-step 0..13\n"
+                          "and --spi-clock 8350000|8700000|16000000.\n"
                           "Exit 0 confirms clean stopping, not TV lock or programme playback.");
                 return 0;
             }
@@ -138,6 +141,21 @@ int main(int argc, char** argv)
             else if (key == "--decoder") decoder = argv[++n];
             else if (key == "--channel") channel = number(argv[++n]);
             else if (key == "--seconds") seconds = number(argv[++n]);
+            else if (key == "--sample-rate")
+            {
+                reception.sample_rate_hz = number(argv[++n]);
+                reception.enabled = true;
+            }
+            else if (key == "--gain-step")
+            {
+                reception.gain_step = number(argv[++n]);
+                reception.enabled = true;
+            }
+            else if (key == "--spi-clock")
+            {
+                reception.spi_clock_hz = number(argv[++n]);
+                reception.enabled = true;
+            }
             else if (key == "--capture-result-fd")
             {
                 if (number(argv[++n]) != 3) throw std::runtime_error("Capture receipt requires fd3");
@@ -160,7 +178,15 @@ int main(int argc, char** argv)
 #if !defined(TRAIL_MATE_ONESEG_MEDIA)
         if (media_requested) throw std::runtime_error("Native 1seg media component is not built");
 #endif
-        const auto options = platform::desktop::loadDeviceOptions(profile);
+        auto options = platform::desktop::loadDeviceOptions(profile);
+        if (reception.enabled)
+        {
+            if (capture_result_fd < 0 || !reception.valid()) throw std::runtime_error("Invalid capture reception settings");
+            options.radio.oneseg_sample_rate_hz = reception.sample_rate_hz;
+            options.radio.oneseg_gain_step = reception.gain_step;
+            const auto clock = std::to_string(reception.spi_clock_hz);
+            if (setenv("TRAIL_MATE_ONESEG_DMA_CLOCK", clock.c_str(), 1)) throw std::runtime_error("Cannot configure capture clock");
+        }
         const char* simulated = std::getenv("TRAIL_MATE_LORA_SIMULATED");
         const bool simulated_radio = simulated && (!std::strcmp(simulated, "1") || !std::strcmp(simulated, "true") ||
                                                    !std::strcmp(simulated, "TRUE") || !std::strcmp(simulated, "yes") || !std::strcmp(simulated, "YES"));

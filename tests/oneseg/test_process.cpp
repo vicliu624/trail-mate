@@ -307,6 +307,31 @@ static void metadata_transport()
     assert(process.finish());
     no_children();
 }
+static void reception_rate()
+{
+    const char* inherited = std::getenv("TRAIL_MATE_ONESEG_INPUT_RATE");
+    const std::string original = inherited ? inherited : "";
+    auto options = config();
+    options.environment.push_back("TRAIL_MATE_ONESEG_INPUT_RATE=576000");
+    Process process(options);
+    platform::linux_runtime::OneSegReceptionSettings settings;
+    settings.enabled = true;
+    for (auto rate : {450000u, 500000u, 576000u})
+    {
+        settings.enabled = rate != 576000;
+        settings.sample_rate_hz = rate;
+        const auto expected = std::to_string(rate);
+        setenv("TRAIL_MATE_ONESEG_TEST_EXPECT_INPUT_RATE", expected.c_str(), 1);
+        assert(process.configureReception(settings));
+        assert(process.open(13, rate, cancel));
+        assert(!process.configureReception(settings));
+        assert(process.finish());
+        const char* current = std::getenv("TRAIL_MATE_ONESEG_INPUT_RATE");
+        assert(std::string(current ? current : "") == original);
+        no_children();
+    }
+    unsetenv("TRAIL_MATE_ONESEG_TEST_EXPECT_INPUT_RATE");
+}
 int main(int argc, char** argv)
 {
     assert(argc == 2 || argc == 4 || argc == 5);
@@ -314,6 +339,7 @@ int main(int argc, char** argv)
     if (argc >= 4) actual_backend(argv[2], argv[3], argc == 5 ? argv[4] : nullptr);
     else
     {
+        reception_rate();
         profile_selection();
         restart_and_transport();
         metadata_transport();

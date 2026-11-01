@@ -18,6 +18,9 @@ if args.profile == "auto":
 if os.environ.get("TRAIL_MATE_ONESEG_TEST_START_MARKER"):
     Path(os.environ["TRAIL_MATE_ONESEG_TEST_START_MARKER"]).write_text("TEST FIXTURE - NO RF\n")
 mode = os.environ.get("TRAIL_MATE_ONESEG_TEST_MODE", "echo")
+if "TRAIL_MATE_ONESEG_TEST_EXPECT_INPUT_RATE" in os.environ:
+    if os.environ.get("TRAIL_MATE_ONESEG_INPUT_RATE") != os.environ["TRAIL_MATE_ONESEG_TEST_EXPECT_INPUT_RATE"]:
+        raise SystemExit(27)
 if os.getpgrp() != os.getpid():
     raise SystemExit(25)
 if "TRAIL_MATE_ONESEG_TEST_FD" in os.environ:

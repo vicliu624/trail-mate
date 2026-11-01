@@ -48,6 +48,7 @@ class OneSegDecoderProcess final : public OneSegIqSink
     explicit OneSegDecoderProcess(Config config);
     ~OneSegDecoderProcess() override;
     bool open(unsigned channel, uint64_t generation, const std::atomic_bool& cancel) override;
+    bool configureReception(const OneSegReceptionSettings&) override;
     bool write(const uint8_t*, size_t, uint64_t first_pair, uint64_t generation,
                const std::atomic_bool& cancel) override;
     bool finish() override;

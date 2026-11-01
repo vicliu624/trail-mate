@@ -18,7 +18,60 @@ Preserve the decoded picture's aspect ratio without upscaling. Fullscreen hides
 surrounding information but retains this viewport; it must not stretch video
 across the CM0 panel.
 
-## Current source and installed-device status
+## Reception controls and timing model
+
+The TV page includes a **Tune** panel, also opened with `T`. It keeps the
+320 x 240 picture viewport and presents station information alongside the video.
+The tuning panel separates parameter selection from the mathematical preview and
+measured session counters. Station and service actions remain in the channel menu.
+
+The current placement test baseline is **450,000 IQ pairs/s, requested SPI clock
+8.7 MHz, and receiver gain step 9**. These are tuning defaults, not a guarantee of
+continuous reception. One run sustained approximately seven minutes of decoded
+picture and audio before the transmitter disconnected. A subsequent run after an
+ordinary reboot still encountered a capture timing failure. Physical acceptance
+of this revised baseline remains open.
+
+The controls allow 450 or 500 kpair/s, SPI clock requests of 8.35, 8.7 or 16 MHz,
+and gain steps 0 through 13, where 0 selects chip AGC. **Apply & save** persists
+the selection in the user's settings directory, requests receiver shutdown, waits
+for the existing physical release barrier, and starts a new generation. Capture
+and decoder input rates change together. Opening the page again restores the
+saved selection; **Reset baseline** previews the defaults until explicitly applied.
+Controls that apply parameters require the real isolated DMA capture backend.
+
+The model uses signed IQ8, or two bytes per complex pair:
+
+| Quantity | Model | 450 kpair/s, 8.7 MHz request |
+| --- | --- | --- |
+| Incoming byte rate | `Rin = 2 * fs` | 900,000 B/s |
+| Ideal SPI byte rate | `Rspi = fspi / 8` | 1,087,500 B/s |
+| Net drain while reading | `Rspi - Rin` | 187,500 B/s |
+| Ideal bus utilization | `Rin / Rspi` | 82.76% |
+| Empty FIFO fill time without reads | `1024 / Rin` | 1.138 ms |
+
+The graph starts at a hypothetical FIFO level of 320 bytes and covers 0 to
+1.5 ms. The incoming-only curve is `L(t) = 320 + Rin * t`; the ideal reading curve
+is `L(t) = max(0, 320 - (Rspi - Rin) * t)`. A separate line marks the 1024-byte
+capacity. Time in these equations is in seconds. Clock quantization, command
+bytes, BUSY handshakes, transfer setup and scheduling delays are excluded, so the
+graph is explicitly a preview rather than a measured FIFO trace. Gain steps have
+no calibrated dB mapping here and are not assigned a fictional signal curve.
+
+The measurement panel reports actual decoded frames, transport bytes, IQ age,
+capture failures, continuity errors, CRC errors and decode errors. Its maximum
+service interval becomes available when capture returns its final result and
+includes time spent transferring data; it is not a direct measurement of CPU
+stall time. Diagnostic labels update at most once per second.
+
+DMA is already used by the kernel SPI path for bulk IQ reads. SPI describes the
+radio's transport interface; DMA describes how the host moves those bytes.
+Replacing individual transfers with a more continuous DMA acquisition mechanism
+would require preserving FIFO command framing, BUSY handling, sample validation,
+cancellation and radio restoration. The tuning UI does not claim that this
+additional backend work is complete.
+
+## Earlier source and installed-device status
 
 The current source defaults the TV session and its real decoder subprocess to
 automatic waveform acquisition. Explicit research-profile selection remains

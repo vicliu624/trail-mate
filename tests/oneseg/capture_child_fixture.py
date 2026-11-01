@@ -7,8 +7,11 @@ import sys
 import time
 
 assert os.environ['TRAIL_MATE_ONESEG_CAPTURE_CHILD'] == '1'
-assert sys.argv[1:] == ['--profile', '/fixture.conf', '--channel', '13', '--capture-result-fd', '3']
 mode = os.environ.get('ONESEG_CAPTURE_FIXTURE', 'normal')
+expected = ['--profile', '/fixture.conf', '--channel', '13', '--capture-result-fd', '3']
+if mode == 'tuning':
+    expected += ['--sample-rate', '450000', '--gain-step', '13', '--spi-clock', '16000000']
+assert sys.argv[1:] == expected
 stopped = False
 signal.signal(signal.SIGTERM, lambda *_: globals().__setitem__('stopped', True))
 if mode == 'hung':
