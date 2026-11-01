@@ -140,6 +140,7 @@ target_include_directories(${PREVIEW_TARGET} PRIVATE
   "${REPO_ROOT}/modules/core_waypoint/include"
   "${REPO_ROOT}/modules/core_music/include"
   "${REPO_ROOT}/modules/core_track_sharing/include"
+  "${REPO_ROOT}/modules/core_hostlink/include"
   "${REPO_ROOT}/modules/core_geocaching/include"
   "${REPO_ROOT}/third_party/yxml"
   "${REPO_ROOT}/platform/esp/arduino_common/include")
@@ -213,6 +214,7 @@ target_sources(${PREVIEW_TARGET} PRIVATE ${CORE_TEAM_SOURCES} ${EXTRA_VIEW_SOURC
     "${REPO_ROOT}/platform/linux/common/src/platform/resource_lock.cpp"
     "${REPO_ROOT}/platform/linux/common/src/platform/ui/quick_controls_runtime.cpp"
   "${REPO_ROOT}/platform/linux/common/src/platform/ui/route_storage.cpp"
+  "${REPO_ROOT}/platform/linux/common/src/platform/linux/route_package_images.cpp"
   "${REPO_ROOT}/platform/linux/common/src/platform/linux/runtime_paths.cpp"
   "${REPO_ROOT}/platform/linux/common/src/platform/ui/firmware_update_runtime.cpp"
   "${REPO_ROOT}/platform/linux/common/src/platform/ui/wireless_companion_runtime.cpp")
