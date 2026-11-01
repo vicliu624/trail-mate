@@ -6,9 +6,9 @@
 #pragma once
 
 #include "chat/domain/chat_types.h"
+#include "chat/infra/lxmf/lxmf_memory.h"
 #include "chat/infra/lxmf/lxmf_wire.h"
 #include "chat/infra/reticulum/lxst_call_state_machine.h"
-#include "chat/infra/lxmf/lxmf_memory.h"
 
 #include <array>
 #include <cstddef>

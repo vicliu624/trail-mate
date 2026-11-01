@@ -2,6 +2,7 @@
 
 #include "platform/linux/packet_radio.h"
 #include <Hal.h>
+#include <array>
 #include <chrono>
 #include <map>
 #include <string>
@@ -35,9 +36,10 @@ class LinuxRadioLibHal final : public RadioLibHal
     bool healthy() const { return error_.empty(); }
     // Caller holds the driver mutex/exclusive coordinator lease. Switch the
     // kernel device limit and each transfer together; restore before reset/PHY.
-    bool setIqTransferMode(bool enabled);
-    uint32_t spiClockHz() const { return iq_mode_ ? 16000000u : hardware_.bus.spi_speed_hz; }
+    bool setIqTransferMode(bool enabled, uint32_t speed_hz = 16000000u);
+    uint32_t spiClockHz() const { return iq_mode_ ? iq_speed_hz_ : hardware_.bus.spi_speed_hz; }
     const std::string& error() const { return error_; }
+    void dumpIqTransferTrace() const;
 
   private:
     void fail(const char* operation);
@@ -45,6 +47,16 @@ class LinuxRadioLibHal final : public RadioLibHal
     PacketRadioHardware hardware_;
     int spi_ = -1;
     bool iq_mode_ = false;
+    uint32_t iq_speed_hz_ = 16000000u;
+    struct TransferTrace
+    {
+        size_t bytes = 0;
+        uint64_t prepare_us = 0, busy_us = 0, ioctl_us = 0, tail_us = 0, cpu_us = 0;
+        long minor = 0, major = 0, voluntary = 0, involuntary = 0;
+    };
+    std::array<TransferTrace, 32> iq_trace_{};
+    unsigned iq_trace_count_ = 0;
+    bool iq_trace_enabled_ = false;
     int chip_ = -1;
     std::map<uint32_t, int> pins_;
     std::string error_;

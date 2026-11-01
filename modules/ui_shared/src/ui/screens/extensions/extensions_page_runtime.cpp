@@ -816,7 +816,7 @@ void install_timer_cb(lv_timer_t* /*timer*/)
         (app_g && lv_group_get_default() != app_g)) return;
     auto* selected = app_g ? lv_group_get_focused(app_g) : nullptr;
     const bool keep_selection = selected && (selected == s_runtime.top_bar.back_btn ||
-        selected == s_runtime.menu.button() || selected == s_runtime.creator_btn);
+                                             selected == s_runtime.menu.button() || selected == s_runtime.creator_btn);
     sync_install_ui(true);
     const auto catalog = packs::catalog_status();
     if (catalog.revision != s_runtime.catalog_revision && !packs::install_status().busy)
@@ -1478,8 +1478,8 @@ void enter(const shell::Host* host, lv_obj_t* parent)
             {
                 s_runtime.menu.close();
                 s_runtime.view = MainView::Creator;
-                ::extensions::ui::tmap_creator::open(s_runtime.root, [](void*) { show_list_view(); sync_focus_group(s_runtime.creator_btn); }, nullptr);
-            }, LV_EVENT_CLICKED, nullptr);
+                ::extensions::ui::tmap_creator::open(s_runtime.root, [](void*) { show_list_view(); sync_focus_group(s_runtime.creator_btn); }, nullptr); },
+            LV_EVENT_CLICKED, nullptr);
     }
     packs::request_catalog_refresh();
     refresh_catalog_and_render();

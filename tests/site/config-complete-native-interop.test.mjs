@@ -206,8 +206,9 @@ test('frequency units and signed power custom values retain native storage throu
 
 test('numeric purpose controls retain capacities, message counts, suffix and all interface ports in native storage',()=>{
  const cases=[],ports=['mt.mqtt.port','mc.mqtt.port','rt.wifi_port',...Array.from({length:6},(_,index)=>['target_port','discovery_port','data_port'].map(field=>`rt.net.interface.${index}.${field}`)).flat()];
- for(const [keys,values] of [[ports,[1,4242,65535]],[['power.gauge.design_mah','power.gauge.full_mah'],[1,1500,10000]],[['rt.net.propagation.max_messages_per_sync'],[1,32,64]],[['aprs.igate_ssid'],[0,15,255]]])for(const key of keys)for(const value of values){const document=fresh();validateConfigurationField(document.get(key),value);setConfigurationRadioInput(document,key,value);cases.push({document,key,value});}
+ for(const [keys,values] of [[ports,[1,4242,65535]],[['power.gauge.design_mah','power.gauge.full_mah'],[1,1500,10000]],[['rt.net.propagation.max_messages_per_sync'],[1,32,64]],[['aprs.igate_ssid'],[0,15,255]]])for(const key of keys)for(const candidate of values){const value=key.endsWith('.discovery_port')&&candidate===65535?65534:candidate;const document=fresh();validateConfigurationField(document.get(key),value);setConfigurationRadioInput(document,key,value);cases.push({document,key,value});}
  const replies=batch(cases.map(row=>row.document));for(let index=0;index<cases.length;index++){const {document,key,value}=cases[index];assert.equal(replies[index].status,0,key);const actual=new TmsDocument(replies[index].bytes);assert.equal(actual.get(key).value,value,key);assert.equal(actual.get(key).type,document.get(key).type);assert.deepEqual([...configurationChanges(actual,document)],[]);}assert.equal(cases.length,75);
+ for(const value of [0,65535]){const document=fresh();document.set('rt.net.interface.1.discovery_port',value);assert.notEqual(batch([document])[0].status,0,'AutoInterface must reject discovery port '+value);}
 });
 
 test('remaining routing and unsigned hexadecimal identifier controls survive native save/readback',()=>{

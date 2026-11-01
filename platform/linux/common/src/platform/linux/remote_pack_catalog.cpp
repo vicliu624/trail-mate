@@ -1,5 +1,5 @@
-#include "platform/linux/remote_pack_repository.h"
 #include "platform/linux/http_download.h"
+#include "platform/linux/remote_pack_repository.h"
 #include "platform/linux/runtime_paths.h"
 #include "platform/ui/pack_repository_defaults.h"
 #include <array>
@@ -29,8 +29,8 @@ PackRepositorySource source()
     PackRepositorySource result;
     result.catalog_url = url && *url ? url : packs::kDefaultCatalogUrl;
     const auto* base = std::getenv("TRAIL_MATE_PACK_BASE_URL");
-    result.base_url = base && *base ? base : result.catalog_url == packs::kDefaultCatalogUrl ? packs::kDefaultCatalogBaseUrl :
-                      result.catalog_url.substr(0, result.catalog_url.find_last_of('/'));
+    result.base_url = base && *base ? base : result.catalog_url == packs::kDefaultCatalogUrl ? packs::kDefaultCatalogBaseUrl
+                                                                                             : result.catalog_url.substr(0, result.catalog_url.find_last_of('/'));
     return result;
 }
 std::filesystem::path cache_file(const PackRepositorySource& input)
@@ -41,7 +41,11 @@ std::filesystem::path cache_file(const PackRepositorySource& input)
     unsigned size = 0;
     if (EVP_Digest(identity.data(), identity.size(), digest, &size, EVP_sha256(), nullptr) != 1 || size != 32) return {};
     std::string hex;
-    for (uint8_t byte : digest) { hex += "0123456789abcdef"[byte >> 4]; hex += "0123456789abcdef"[byte & 15]; }
+    for (uint8_t byte : digest)
+    {
+        hex += "0123456789abcdef"[byte >> 4];
+        hex += "0123456789abcdef"[byte & 15];
+    }
     return resolve_paths().cache_root / "pack-repository" / (hex + ".json");
 #else
     return {};
@@ -88,7 +92,11 @@ class CatalogWorker
     std::vector<packs::PackageRecord> packages;
     std::string error;
     ~CatalogWorker() { stop(); }
-    void stop() { stopping = true; if (thread.joinable()) thread.join(); }
+    void stop()
+    {
+        stopping = true;
+        if (thread.joinable()) thread.join();
+    }
     void request(bool force)
     {
         const auto next = source();
@@ -101,22 +109,38 @@ class CatalogWorker
         if (thread.joinable()) thread.join();
         {
             std::lock_guard<std::mutex> lock(mutex);
-            if (next.catalog_url != active.catalog_url || next.base_url != active.base_url) { ready = false; packages.clear(); }
-            active = next; started = true; status.busy = true; error.clear();
+            if (next.catalog_url != active.catalog_url || next.base_url != active.base_url)
+            {
+                ready = false;
+                packages.clear();
+            }
+            active = next;
+            started = true;
+            status.busy = true;
+            error.clear();
         }
         stopping = false;
-        try { thread = std::thread([this, next] { run(next); }); }
+        try
+        {
+            thread = std::thread([this, next]
+                                 { run(next); });
+        }
         catch (const std::exception& exception)
         {
             std::lock_guard<std::mutex> lock(mutex);
-            error = exception.what(); status.busy = false; ++status.revision;
+            error = exception.what();
+            status.busy = false;
+            ++status.revision;
         }
     }
+
   private:
     void publish(std::vector<packs::PackageRecord> next)
     {
         std::lock_guard<std::mutex> lock(mutex);
-        packages = std::move(next); ready = true; ++status.revision;
+        packages = std::move(next);
+        ready = true;
+        ++status.revision;
     }
     void run(PackRepositorySource input)
     {
@@ -128,30 +152,52 @@ class CatalogWorker
             const auto disk = cached_text(path);
             if (!disk.empty() && parse_pack_catalog(disk, input.base_url, parsed, failure)) publish(std::move(parsed));
             platform::ui::http_client::Request request;
-            request.url = input.catalog_url.c_str(); request.max_bytes = 2 * 1024 * 1024; request.timeout_ms = 15000;
+            request.url = input.catalog_url.c_str();
+            request.max_bytes = 2 * 1024 * 1024;
+            request.timeout_ms = 15000;
             std::string text;
-            if (http_download(request, [](const uint8_t* data, size_t bytes, void* context)
-                               { static_cast<std::string*>(context)->append(reinterpret_cast<const char*>(data), bytes); return true; },
-                               &text, failure, nullptr, &stopping) && parse_pack_catalog(text, input.base_url, parsed, failure))
-            { save_cache(path, text); publish(std::move(parsed)); failure.clear(); }
+            if (http_download(
+                    request, [](const uint8_t* data, size_t bytes, void* context)
+                    { static_cast<std::string*>(context)->append(reinterpret_cast<const char*>(data), bytes); return true; },
+                    &text, failure, nullptr, &stopping) &&
+                parse_pack_catalog(text, input.base_url, parsed, failure))
+            {
+                save_cache(path, text);
+                publish(std::move(parsed));
+                failure.clear();
+            }
         }
-        catch (const std::exception& exception) { failure = exception.what(); }
+        catch (const std::exception& exception)
+        {
+            failure = exception.what();
+        }
         std::lock_guard<std::mutex> lock(mutex);
-        error = std::move(failure); status.busy = false; ++status.revision;
+        error = std::move(failure);
+        status.busy = false;
+        ++status.revision;
     }
 };
-CatalogWorker& worker() { static CatalogWorker value; return value; }
+CatalogWorker& worker()
+{
+    static CatalogWorker value;
+    return value;
 }
+} // namespace
 bool remote_pack_catalog_enabled() { return !source().catalog_url.empty(); }
 void refresh_remote_pack_catalog() { worker().request(true); }
-packs::CatalogStatus remote_pack_catalog_status() { std::lock_guard<std::mutex> lock(worker().mutex); return worker().status; }
+packs::CatalogStatus remote_pack_catalog_status()
+{
+    std::lock_guard<std::mutex> lock(worker().mutex);
+    return worker().status;
+}
 bool remote_pack_catalog_snapshot(std::vector<packs::PackageRecord>& packages, std::string& error)
 {
     worker().request(false);
     std::lock_guard<std::mutex> lock(worker().mutex);
     packages = worker().packages;
-    error = worker().ready ? "" : worker().status.busy ? "Loading package catalog..." : worker().error;
+    error = worker().ready ? "" : worker().status.busy ? "Loading package catalog..."
+                                                       : worker().error;
     return worker().ready;
 }
 void stop_remote_pack_catalog() { worker().stop(); }
-}
+} // namespace platform::linux_runtime

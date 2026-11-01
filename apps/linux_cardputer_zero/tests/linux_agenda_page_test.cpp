@@ -6,8 +6,8 @@
 #include "ui_presentation/waypoint/waypoint_model.h"
 #include <cassert>
 #include <chrono>
-#include <cstring>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <thread>

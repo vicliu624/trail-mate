@@ -21,7 +21,9 @@ int main()
         const auto& target = targets[i];
         const bool expected = std::strcmp(target.target_id, "wio_tracker_l2") == 0 ||
                               std::strcmp(target.target_id, "tdeck") == 0 ||
-                              std::strcmp(target.target_id, "tlora_pager") == 0;
+                              std::strcmp(target.target_id, "tlora_pager") == 0 ||
+                              std::strcmp(target.target_id, "cardputerzero") == 0 ||
+                              std::strcmp(target.target_id, "t_display_cm0") == 0;
         const auto* manifest = ui::presentation::findPageManifest(target.page_manifest_id);
         bool declared = false;
         if (manifest)
@@ -54,12 +56,19 @@ int main()
         ui_lvgl_ux::CompatibilityScreenFactory{}.buildBindingsForMenu(menu, bindings);
         assert(bindings.size() == menu.size());
         const auto* calendar = bindings.find(ui::menu::MenuScreenId::Calendar);
-        assert((calendar != nullptr) == expected);
+        // P4 and CM0 share a UX pack. Product capability is checked against
+        // each target's manifest above; the pack exposes their combined pages.
+        const bool p4_pack = std::strcmp(binding->active_ux_pack_id, "t_display_p4_touch") == 0;
+        const bool pack_has_calendar = expected || p4_pack;
+        assert((calendar != nullptr) == pack_has_calendar);
         if (calendar)
         {
             assert(calendar->available && std::strcmp(calendar->binding_id, "calendar") == 0);
             const bool touch_only = std::strcmp(target.target_id, "wio_tracker_l2") == 0;
-            assert(screens.size() == (touch_only ? 10 : 11));
+            const bool expanded = std::strcmp(target.target_id, "cardputerzero") == 0 ||
+                                  p4_pack;
+            assert(screens.size() == (expanded ? 14 : touch_only ? 10
+                                                                 : 11));
             assert(target.renderer == product_composition::TargetRenderer::Lvgl);
             std::printf("%s: manifest=%zu screens=%zu bindings=%zu\n",
                         target.target_id, manifest->item_count, screens.size(), bindings.size());

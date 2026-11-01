@@ -3,9 +3,12 @@
 #include <array>
 #include <cassert>
 #include <cerrno>
+#include <chrono>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 
+template <size_t MaxRead = 256>
 struct Fifo
 {
     struct Hal
@@ -17,14 +20,14 @@ struct Fifo
         void spiTransfer(uint8_t* tx, size_t n, uint8_t* rx)
         {
             ++calls;
-            assert(n >= 3 && n <= 258 && tx[0] == 0 && tx[1] == 1);
+            assert(n >= 3 && n <= MaxRead + 2 && tx[0] == 0 && tx[1] == 1);
             for (size_t j = 2; j < n; ++j) assert(tx[j] == 0);
             std::fill_n(rx, n, 0x42);
             rx[0] = status >> 8;
             rx[1] = status & 255;
         }
     } hal_;
-    std::array<uint8_t, 258> iq_fifo_tx_{}, iq_fifo_rx_{};
+    std::array<uint8_t, MaxRead + 2> iq_fifo_tx_{}, iq_fifo_rx_{};
 #include "fifo.inc"
 };
 #define SPI_IOC_WR_MAX_SPEED_HZ 1
@@ -50,6 +53,23 @@ int ioctl(int fd, unsigned command, spi_ioc_transfer* transfer)
 unsigned writes = 0, reads = 0;
 uint32_t clock_value = 1000000;
 bool write_ok = true, read_ok = true, wrong_readback = false;
+// The extracted HAL diagnostics use per-thread resource counters. Keep this
+// transport fixture deterministic and independent of host resource APIs.
+struct rusage
+{
+    struct Time
+    {
+        long tv_sec = 0, tv_usec = 0;
+    } ru_utime, ru_stime;
+    long ru_minflt = 0, ru_majflt = 0, ru_nvcsw = 0, ru_nivcsw = 0;
+};
+constexpr int RUSAGE_THREAD = 1;
+int getrusage(int who, rusage* usage)
+{
+    assert(who == RUSAGE_THREAD);
+    *usage = {};
+    return 0;
+}
 int ioctl(int fd, unsigned command, uint32_t* value)
 {
     assert(fd == 7);
@@ -70,6 +90,16 @@ struct LinuxRadioLibHal
 {
     int spi_ = 7;
     bool iq_mode_ = false;
+    uint32_t iq_speed_hz_ = 16000000u;
+    struct TransferTrace
+    {
+        size_t bytes = 0;
+        uint64_t prepare_us = 0, busy_us = 0, ioctl_us = 0, tail_us = 0, cpu_us = 0;
+        long minor = 0, major = 0, voluntary = 0, involuntary = 0;
+    };
+    std::array<TransferTrace, 32> iq_trace_{};
+    unsigned iq_trace_count_ = 0;
+    bool iq_trace_enabled_ = false;
     struct
     {
         struct
@@ -80,10 +110,10 @@ struct LinuxRadioLibHal
     std::string error;
     bool healthy() const { return error.empty(); }
     void fail(const char* message) { error = message; }
-    bool setIqTransferMode(bool enabled);
+    bool setIqTransferMode(bool enabled, uint32_t speed_hz = 16000000u);
     unsigned last_delay = 0;
     bool waitReady() const { return healthy(); }
-    uint32_t spiClockHz() const { return iq_mode_ ? 16000000u : hardware_.bus.spi_speed_hz; }
+    uint32_t spiClockHz() const { return iq_mode_ ? iq_speed_hz_ : hardware_.bus.spi_speed_hz; }
     void delayMicroseconds(unsigned value) { last_delay = value; }
     void spiTransfer(uint8_t*, size_t, uint8_t*);
 };
@@ -91,6 +121,11 @@ struct LinuxRadioLibHal
 #include "transfer.inc"
 int main()
 {
+    Fifo<1020> burst;
+    std::array<uint8_t, 1020> burst_data{};
+    assert(!burst.iqFifoRead(burst_data.data(), burst_data.size()) && burst.hal_.calls == 1);
+    for (auto value : burst_data) assert(value == 0x42);
+    assert(burst.iqFifoRead(burst_data.data(), 1021) == LR2021_IQ_ARGUMENT && burst.hal_.calls == 1);
     Fifo f;
     uint8_t data[256]{};
     assert(f.iqFifoRead(data, sizeof(data)) == 0 && f.hal_.calls == 1);
@@ -114,6 +149,12 @@ int main()
     assert(h.setIqTransferMode(true) && h.iq_mode_ && clock_value == 16000000);
     h.spiTransfer(tx, sizeof(tx), rx);
     assert(last_transfer_speed == 16000000 && h.last_delay == 1);
+    h.iq_trace_enabled_ = true;
+    h.spiTransfer(tx, sizeof(tx), rx);
+    assert(h.iq_trace_count_ == 1 && h.iq_trace_[0].bytes == sizeof(tx));
+    assert(h.setIqTransferMode(true, 8700000u));
+    h.spiTransfer(tx, sizeof(tx), rx);
+    assert(last_transfer_speed == 8700000u);
     assert(h.setIqTransferMode(false) && !h.iq_mode_ && clock_value == 1000000);
     h.spiTransfer(tx, sizeof(tx), rx);
     assert(last_transfer_speed == 1000000 && h.last_delay == 100);

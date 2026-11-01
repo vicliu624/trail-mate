@@ -1,6 +1,7 @@
 #include "oneseg_lr2021_stream.h"
 #include <cassert>
 #include <cstring>
+#include <initializer_list>
 
 using namespace platform::linux_runtime;
 struct Fake : OneSegLr2021Rx::Port
@@ -8,6 +9,8 @@ struct Fake : OneSegLr2021Rx::Port
     lr2021_iq_profile profile{};
     unsigned locked = 0, reads = 0, setup_writes = 0, resets = 0, restores = 0, polls = 0;
     uint32_t base = 0, size = 0;
+    uint32_t expected_rate = 576000;
+    unsigned idle_waits = 0;
     uint64_t time = 0, delivered = 0;
     bool fast = false, active = true, reject = false;
     uint8_t flags = 0;
@@ -102,7 +105,7 @@ struct Fake : OneSegLr2021Rx::Port
             {
                 assert(n == 11 && p[0] == 17 && p[5] == 8 && p[10] == 1);
                 const uint32_t rate = uint32_t(p[1]) << 24 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 8 | p[4];
-                assert(rate == 576000);
+                assert(rate == f.expected_rate);
             }
             else if (op == 0x020c)
             {
@@ -143,7 +146,8 @@ struct Fake : OneSegLr2021Rx::Port
         { assert(static_cast<Fake*>(c)->active); std::memset(data, 0x42, n); return 0; };
         h.now_us = [](void* c) -> uint64_t
         { return static_cast<Fake*>(c)->time += 50; };
-        h.sleep_us = [](void*, unsigned) {};
+        h.sleep_us = [](void* c, unsigned us)
+        { assert(us == 100); ++static_cast<Fake*>(c)->idle_waits; };
         return h;
     }
     OneSegIqRequest request(uint8_t* staging)
@@ -200,6 +204,38 @@ int main()
         assert(f.resets == 1 && f.restores == 1 && f.active && !f.fast && !f.delivered);
     }
     Fake cancelled;
+    for (const unsigned level : {64u, 800u})
+    {
+        uint8_t large[2048]{};
+        Fake paced;
+        paced.level = level;
+        auto input = paced.request(large);
+        input.staging_bytes = sizeof(large);
+        OneSegIqResult measured;
+        assert(!run_oneseg_lr2021_stream(paced.hal(), paced, input, measured));
+        assert(measured.cancelled && !measured.recovery_error);
+        assert((paced.idle_waits > 0) == (level < 256));
+    }
+    for (const uint32_t rate : {450000u, 500000u})
+    {
+        Fake rate500;
+        rate500.expected_rate = rate;
+        OneSegIqResult measured;
+        assert(!run_oneseg_lr2021_stream(rate500.hal(), rate500, rate500.request(staging), measured, 5, rate));
+        assert(measured.nominal_rate_hz == rate && measured.validated_bytes && !measured.recovery_error);
+    }
+    for (const uint8_t flags : {uint8_t{0}, uint8_t{0x10}, uint8_t{0x20}})
+    {
+        Fake predicted;
+        predicted.level = 800;
+        predicted.expected_rate = 500000;
+        predicted.flags = flags;
+        OneSegIqResult measured;
+        const int code = run_oneseg_lr2021_stream(predicted.hal(), predicted, predicted.request(staging), measured, 5, 500000, 4);
+        if (flags) assert(code == LR2021_IQ_DATA && !measured.validated_bytes && !predicted.delivered);
+        else assert(!code && measured.cancelled && measured.validated_bytes);
+        assert(!measured.recovery_error && predicted.restores == 1 && predicted.active && !predicted.fast);
+    }
     auto request = cancelled.request(staging);
     request.cancelled = [](void*)
     { return true; };

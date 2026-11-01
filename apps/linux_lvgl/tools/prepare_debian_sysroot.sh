@@ -37,7 +37,7 @@ options=(-o "APT::Architecture=$arch"
     -o "APT::Sandbox::User=$(id -un)")
 apt-get "${options[@]}" update
 apt-get "${options[@]}" --download-only --no-install-recommends --assume-yes install \
-    libc6-dev libstdc++-14-dev libsdl2-dev libcurl4-openssl-dev libsqlite3-dev libssl-dev "${extra_packages[@]}"
+    libc6-dev libstdc++-14-dev libsdl2-dev libjpeg62-turbo-dev libpng-dev libarchive-dev libcurl4-openssl-dev libsqlite3-dev libssl-dev "${extra_packages[@]}"
 for package in "$work"/apt/archives/*.deb; do
     dpkg-deb --extract "$package" "$work/root"
 done

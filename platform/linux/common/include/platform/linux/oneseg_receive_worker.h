@@ -30,6 +30,10 @@ class OneSegIqSink
 class OneSegReceiveWorker
 {
   public:
+    // Automatic parameter probing can briefly pause the decoder pipe. Reserve
+    // about four seconds at 1 MB/s without dropping samples or blocking capture.
+    static constexpr uint32_t queue_slots = 2048;
+    static constexpr size_t max_block_bytes = 2048;
     enum class Phase : uint8_t
     {
         Idle,

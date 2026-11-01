@@ -6,4 +6,4 @@ class AppTasks
   public:
     static bool areRadioTasksPaused();
 };
-}
+} // namespace app

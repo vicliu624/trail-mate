@@ -12,6 +12,7 @@
 #include <fcntl.h>
 #include <mutex>
 #include <poll.h>
+#include <pthread.h>
 #include <signal.h>
 #include <spawn.h>
 #include <sys/wait.h>
@@ -83,7 +84,8 @@ struct OneSegDecoderProcess::Impl
     OneSegPipeSink pipe;
 
     explicit Impl(Config value) : config(std::move(value)), pipe({this, [](void* context, unsigned, uint64_t, const std::atomic_bool& cancel)
-                                                                  { return static_cast<Impl*>(context)->launch(cancel); }}) {}
+                                                                  { return static_cast<Impl*>(context)->launch(cancel); },
+                                                                  config.automatic_parameters ? config.startup_timeout_ms : 0}) {}
     void fault(const char* message)
     {
         std::lock_guard<std::mutex> lock(mutex);
@@ -338,6 +340,7 @@ struct OneSegDecoderProcess::Impl
     }
     void readLoop()
     {
+        (void)pthread_setname_np(pthread_self(), "oneseg-ts-read");
         bool child_exited = false;
         auto drain_deadline = Clock::time_point::max();
         for (;;)

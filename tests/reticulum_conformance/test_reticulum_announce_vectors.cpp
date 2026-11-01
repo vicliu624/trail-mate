@@ -1,5 +1,5 @@
-#include "chat/infra/reticulum/reticulum_wire.h"
 #include "chat/infra/reticulum/announce_verifier.h"
+#include "chat/infra/reticulum/reticulum_wire.h"
 
 #include "chat/infra/meshcore/crypto/ed25519/ed_25519.h"
 

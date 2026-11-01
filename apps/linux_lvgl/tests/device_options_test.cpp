@@ -4,8 +4,10 @@
 
 int main(int argc, char** argv)
 {
-    if (argc != 2) return 1;
+    if (argc < 2 || argc > 4) return 1;
     const auto options = platform::desktop::loadDeviceOptions(argv[1]);
+    if (options.radio.oneseg_gain_step != (argc >= 3 ? std::stoul(argv[2]) : 0)) return 14;
+    if (options.radio.oneseg_sample_rate_hz != (argc == 4 ? std::stoul(argv[3]) : 576000)) return 15;
     if (options.width != 1232 || options.height != 568 || options.rotation != 0 || !options.auto_keyboard ||
         !options.fullscreen || options.ux_pack != "t_display_p4_touch") return 2;
     if (options.radio.driver != "lr2021" || options.radio.bus.spi_device != "/dev/spidev0.0" ||
@@ -60,6 +62,30 @@ int main(int argc, char** argv)
         rejected = true;
     }
     if (!rejected) return 9;
+    auto invalid_gain = options;
+    invalid_gain.radio.oneseg_gain_step = 14;
+    rejected = false;
+    try
+    {
+        platform::desktop::validateDeviceOptions(invalid_gain);
+    }
+    catch (const std::runtime_error&)
+    {
+        rejected = true;
+    }
+    if (!rejected) return 10;
+    auto invalid_rate = options;
+    invalid_rate.radio.oneseg_sample_rate_hz = 499999;
+    rejected = false;
+    try
+    {
+        platform::desktop::validateDeviceOptions(invalid_rate);
+    }
+    catch (const std::runtime_error&)
+    {
+        rejected = true;
+    }
+    if (!rejected) return 16;
     // A second device can use this same backend without acquiring CM0 defaults.
     auto other = options;
     other.width = 800;

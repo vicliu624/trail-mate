@@ -336,6 +336,8 @@ int main(int argc, char** argv)
         if (options.radio.driver == "lr2021" && options.radio.rf_switch_profile == platform::linux_runtime::Lr2021RfSwitchProfile::Cm0_16E8)
         {
             platform::linux_runtime::OneSegTvSession::Config config;
+            config.startup_timeout_ms = 30000;
+            config.environment.emplace_back("TRAIL_MATE_ONESEG_INPUT_RATE=" + std::to_string(options.radio.oneseg_sample_rate_hz));
             const char* decoder = std::getenv("TRAIL_MATE_ONESEG_DECODER");
             config.decoder = decoder && *decoder ? decoder : TRAIL_MATE_ONESEG_DECODER_PATH;
             television = std::make_unique<platform::linux_runtime::OneSegTvApp>(

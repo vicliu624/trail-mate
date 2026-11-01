@@ -114,8 +114,9 @@ bool http_download(const http::Request& request, http::WriteCallback write, void
     if (stats) *stats = {static_cast<int>(status), transfer.bytes};
     if (result != CURLE_OK || status < 200 || status >= 300)
     {
-        error = transfer.failure ? transfer.failure : cancelled && cancelled->load() ? "HTTP transfer cancelled" :
-                status >= 400 || result == CURLE_OK ? "HTTP " + std::to_string(status) : curl_easy_strerror(result);
+        error = transfer.failure ? transfer.failure : cancelled && cancelled->load()    ? "HTTP transfer cancelled"
+                                                  : status >= 400 || result == CURLE_OK ? "HTTP " + std::to_string(status)
+                                                                                        : curl_easy_strerror(result);
         return false;
     }
     return true;
@@ -131,9 +132,10 @@ bool download(const Request& request, WriteCallback write, void* context, std::s
 bool get_text(const Request& request, std::string& output, std::string& error, TransferStats* stats)
 {
     output.clear();
-    const bool ok = download(request, [](const uint8_t* data, size_t bytes, void* context)
-                             { static_cast<std::string*>(context)->append(reinterpret_cast<const char*>(data), bytes); return true; },
-                             &output, error, stats);
+    const bool ok = download(
+        request, [](const uint8_t* data, size_t bytes, void* context)
+        { static_cast<std::string*>(context)->append(reinterpret_cast<const char*>(data), bytes); return true; },
+        &output, error, stats);
     if (!ok) output.clear();
     return ok;
 }

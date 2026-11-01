@@ -1,15 +1,15 @@
 #include "platform/ui/route_storage.h"
+#include "../linux/hostlink_upload_io.h"
+#include "../linux/route_image_source_io.h"
 #include "hostlink/route_storage_lease.h"
+#include "platform/linux/http_download.h"
+#include "platform/linux/route_image_cache.h"
+#include "platform/linux/route_image_tasks.h"
+#include "platform/linux/route_package_images.h"
+#include "track_sharing/file_integrity.h"
 #include "track_sharing/image_source_binding.h"
 #include "track_sharing/image_source_binding_store.h"
-#include "track_sharing/file_integrity.h"
 #include "track_sharing/installed_package_path.h"
-#include "platform/linux/http_download.h"
-#include "platform/linux/route_image_tasks.h"
-#include "platform/linux/route_image_cache.h"
-#include "platform/linux/route_package_images.h"
-#include "../linux/route_image_source_io.h"
-#include "../linux/hostlink_upload_io.h"
 
 #include <algorithm>
 #include <atomic>
@@ -229,7 +229,11 @@ bool start_image_job(const std::string& asset_id, std::size_t total, std::string
         std::lock_guard<std::mutex> lock(s_image_batch_mutex);
         if (s_image_batch_running || s_image_batch_status.busy)
         {
-            if (s_image_batch_status.asset_id == asset_id) { promote_batch_presentation_locked(presentation); return true; }
+            if (s_image_batch_status.asset_id == asset_id)
+            {
+                promote_batch_presentation_locked(presentation);
+                return true;
+            }
             error = "Another route image task is running";
             return false;
         }
@@ -242,7 +246,8 @@ bool start_image_job(const std::string& asset_id, std::size_t total, std::string
         auto& owner = worker_owner();
         if (owner.thread.joinable()) owner.thread.join();
         owner.stopping = false;
-        owner.thread = std::thread([job = std::move(job), &owner]() mutable { job(&owner.stopping); });
+        owner.thread = std::thread([job = std::move(job), &owner]() mutable
+                                   { job(&owner.stopping); });
         return true;
     }
     catch (...)
@@ -260,11 +265,14 @@ void route_cache_worker(std::string asset_id, std::vector<RouteImageCacheItem> i
                         const std::string& package_route_path)
 {
     std::size_t processed = 0, saved = 0, failed = 0;
-    const auto package_sources = package_route_path.empty() ? uint64_t(0) :
-        ::platform::linux_runtime::materialize_route_package_images(asset_id, package_route_path, items, cancelled);
+    const auto package_sources = package_route_path.empty() ? uint64_t(0) : ::platform::linux_runtime::materialize_route_package_images(asset_id, package_route_path, items, cancelled);
     for (std::size_t index = 0; index < items.size(); ++index)
     {
-        if (cancelled->load()) { failed += items.size() - index; break; }
+        if (cancelled->load())
+        {
+            failed += items.size() - index;
+            break;
+        }
         {
             std::lock_guard<std::mutex> lock(s_image_batch_mutex);
             set_batch_status_locked(RouteImageDownloadPhase::Caching, true, asset_id, items.size(), processed, saved, failed, index, 0, "Building image cache", nullptr);
@@ -294,7 +302,11 @@ void route_image_worker(std::string asset_id, std::vector<RouteImageDownloadItem
 
     for (std::size_t index = 0; index < total; ++index)
     {
-        if (cancelled->load()) { failed += total - index; break; }
+        if (cancelled->load())
+        {
+            failed += total - index;
+            break;
+        }
         const auto& item = items[index];
         {
             std::lock_guard<std::mutex> lock(s_image_batch_mutex);
@@ -402,7 +414,8 @@ bool list_routes(std::vector<std::string>& out_routes, std::size_t max_count)
             continue;
         }
         auto extension = it->path().extension().string();
-        std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char c) { return char(std::tolower(c)); });
+        std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char c)
+                       { return char(std::tolower(c)); });
         if (extension != ".kml") continue;
         out_routes.push_back(it->path().filename().string());
     }
@@ -425,7 +438,8 @@ bool remove_route(const std::string& path)
     const auto relative = input.is_absolute() ? input.lexically_relative(route_dir_path()) : input;
     if (relative.empty() || !relative.parent_path().empty()) return false;
     auto extension = relative.extension().string();
-    std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char c) { return char(std::tolower(c)); });
+    std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char c)
+                   { return char(std::tolower(c)); });
     if (extension != ".kml") return false;
     ::platform::linux_runtime::UploadIo filesystem_lease(::platform::linux_runtime::resolve_paths().sd_root);
     if (!filesystem_lease.current() || !filesystem_lease.lock()) return false;
@@ -566,17 +580,29 @@ RouteImageDownloadResult download_route_image(const std::string& url,
         return result;
     }
     uint8_t reference[32]{}, digest[32]{}, scratch[320]{};
-    if (!route_image_reference_hash(url, reference)) { result.error = "Invalid image URL"; return result; }
+    if (!route_image_reference_hash(url, reference))
+    {
+        result.error = "Invalid image URL";
+        return result;
+    }
     std::error_code error;
     std::filesystem::create_directories(image.parent_path(), error);
-    if (error) { result.error = "Create image directory failed"; return result; }
+    if (error)
+    {
+        result.error = "Create image directory failed";
+        return result;
+    }
     static std::atomic_uint64_t sequence{0};
     const auto candidate = image.string() + ".download-" + std::to_string(getpid()) + "-" + std::to_string(sequence++);
     const auto candidate_binding = candidate + ".source";
     struct Cleanup
     {
         std::string image, binding;
-        ~Cleanup() { ::unlink(image.c_str()); ::unlink(binding.c_str()); }
+        ~Cleanup()
+        {
+            ::unlink(image.c_str());
+            ::unlink(binding.c_str());
+        }
     } cleanup{candidate, candidate_binding};
     native::RouteSourceIo io;
     native::RouteSourceHash hash;
@@ -585,7 +611,11 @@ RouteImageDownloadResult download_route_image(const std::string& url,
         result.error = "Create image staging file failed";
         return result;
     }
-    struct Writer { native::RouteSourceIo& io; native::RouteSourceHash& hash; } writer{io, hash};
+    struct Writer
+    {
+        native::RouteSourceIo& io;
+        native::RouteSourceHash& hash;
+    } writer{io, hash};
     http_client::Request request;
     request.url = url.c_str();
     request.max_bytes = max_bytes;
@@ -597,11 +627,12 @@ RouteImageDownloadResult download_route_image(const std::string& url,
         s_image_batch_status.current_total_bytes = total;
     };
     http_client::TransferStats stats;
-    const bool downloaded = native::http_download(request, [](const uint8_t* data, size_t bytes, void* context)
-                                                  {
+    const bool downloaded = native::http_download(
+        request, [](const uint8_t* data, size_t bytes, void* context)
+        {
                                                       auto& work = *static_cast<Writer*>(context);
-                                                      return work.hash.update(data, bytes) && work.io.write(&work.io, data, bytes) == bytes;
-                                                  }, &writer, result.error, &stats, s_transfer_cancelled);
+                                                      return work.hash.update(data, bytes) && work.io.write(&work.io, data, bytes) == bytes; },
+        &writer, result.error, &stats, s_transfer_cancelled);
     result.http_status = stats.http_status;
     result.bytes = stats.bytes;
     if (!downloaded) return result;
@@ -619,7 +650,11 @@ RouteImageDownloadResult download_route_image(const std::string& url,
     }
     while (verified.active())
     {
-        if (s_transfer_cancelled && s_transfer_cancelled->load()) { result.error = "Image download cancelled"; return result; }
+        if (s_transfer_cancelled && s_transfer_cancelled->load())
+        {
+            result.error = "Image download cancelled";
+            return result;
+        }
         verified.step(scratch, sizeof(scratch));
     }
     char thumbnail[32]{}, view_name[32]{};
@@ -636,7 +671,11 @@ RouteImageDownloadResult download_route_image(const std::string& url,
     {
         std::lock_guard<std::mutex> lock(s_image_commit_mutex);
         const native::RouteImageLease lease((directory / ".route-images.lock").c_str());
-        if (!lease) { result.error = "Route image storage busy"; return result; }
+        if (!lease)
+        {
+            result.error = "Route image storage busy";
+            return result;
+        }
         result.ok = bindings.commit(paths, expected, verified, scratch, sizeof(scratch)) == track_sharing::ImageBindingResult::Ready;
     }
     if (!result.ok) result.error = "Image verification or source binding failed";

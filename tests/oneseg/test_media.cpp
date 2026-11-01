@@ -125,6 +125,51 @@ static void failure_paths(const char* path)
     blocked.release = true;
     media.join();
     assert(media.snapshot().error == Media::Error::QueueFull && blocked.ends == 1);
+
+    // A temporarily stalled real consumer can recover without dropping a TS
+    // packet. Persistent stalls still fail, and stop interrupts a waiting producer.
+    for (unsigned mode = 0; mode < 3; ++mode)
+    {
+        Audio slow;
+        slow.release = false;
+        Media waiting(&slow);
+        const uint64_t generation = 30 + mode;
+        assert(waiting.start({generation, 256, 257, 320, 180}));
+        std::ifstream fixture(path, std::ios::binary);
+        while (!slow.entered && fixture.read(reinterpret_cast<char*>(packet.data()), packet.size()))
+        {
+            assert(waiting.acceptTs(packet.data(), packet.size(), generation));
+            std::this_thread::sleep_for(std::chrono::microseconds(400));
+        }
+        assert(slow.entered);
+        packet.fill(0xff);
+        packet[0] = 0x47;
+        packet[1] = 0x1f;
+        packet[2] = 0xff;
+        packet[3] = 0x10;
+        while (waiting.snapshot().queue_high_water < 512)
+            assert(waiting.acceptTs(packet.data(), packet.size(), generation));
+        std::thread resume;
+        if (mode != 1)
+            resume = std::thread([&]
+                                 {
+                                     std::this_thread::sleep_for(std::chrono::milliseconds(mode == 0 ? 350 : 30));
+                                     if (mode == 2) waiting.requestStop();
+                                     slow.release = true; });
+        const auto start = std::chrono::steady_clock::now();
+        const bool accepted = waiting.acceptTs(packet.data(), packet.size(), generation, mode == 1 ? 30 : 3000);
+        const auto elapsed = std::chrono::steady_clock::now() - start;
+        if (resume.joinable()) resume.join();
+        slow.release = true;
+        waiting.requestStop();
+        waiting.join();
+        assert(accepted == (mode == 0));
+        assert(elapsed < std::chrono::milliseconds(500));
+        assert(elapsed >= std::chrono::milliseconds(20));
+        if (mode == 0) assert(elapsed >= std::chrono::milliseconds(300));
+        assert(waiting.snapshot().error == (mode == 1 ? Media::Error::QueueFull : Media::Error::None));
+        assert(waiting.snapshot().queue_high_water == 512 && slow.ends == 1);
+    }
 }
 int main(int argc, char** argv)
 {

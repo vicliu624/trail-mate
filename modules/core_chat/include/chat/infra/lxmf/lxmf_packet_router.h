@@ -5,8 +5,8 @@
 
 #pragma once
 
-#include "chat/infra/lxmf/lxmf_wire.h"
 #include "chat/infra/lxmf/lxmf_runtime_state.h"
+#include "chat/infra/lxmf/lxmf_wire.h"
 
 namespace chat::lxmf::runtime
 {

@@ -1,7 +1,7 @@
 #include "platform/linux/route_package_images.h"
 #include "platform/linux/geocaching_crypto.h"
-#include "platform/linux/track_manifest_crypto.h"
 #include "platform/linux/runtime_paths.h"
+#include "platform/linux/track_manifest_crypto.h"
 #include "route_image_source_io.h"
 #include "track_sharing/attachment_package_file_check.h"
 #include "track_sharing/image_source_binding_store.h"
@@ -36,7 +36,9 @@ class PackageIo : public RouteSourceIo
   private:
     std::filesystem::path root_;
 };
-struct ManifestCrypto : LinuxTrackManifestCrypto {};
+struct ManifestCrypto : LinuxTrackManifestCrypto
+{
+};
 struct ImageEntry
 {
     std::array<uint8_t, 32> reference{}, hash{};

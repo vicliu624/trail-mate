@@ -12,8 +12,8 @@
 
 #include "platform/ui/settings_store.h"
 #include "sys/clock.h"
-#include "ui/assets/fonts/font_utils.h"
 #include "ui/assets/fonts/bundled_font_root.h"
+#include "ui/assets/fonts/font_utils.h"
 #include "ui/runtime/memory_profile.h"
 #include "ui/support/lvgl_fs_utils.h"
 #include "ui/widgets/foreground_operation_overlay.h"

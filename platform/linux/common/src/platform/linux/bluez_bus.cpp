@@ -21,7 +21,7 @@ gboolean cancelConnect(gpointer opaque)
     g_cancellable_cancel(static_cast<GCancellable*>(opaque));
     return G_SOURCE_REMOVE;
 }
-}
+} // namespace
 GDBusConnection* connectBluezBus(const std::string& requested, std::string& error)
 {
     Connect state;
@@ -51,5 +51,5 @@ GDBusConnection* connectBluezBus(const std::string& requested, std::string& erro
     g_clear_error(&state.error);
     return state.connection;
 }
-}
+} // namespace platform::linux_runtime::detail
 #endif

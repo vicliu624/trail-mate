@@ -1,13 +1,13 @@
+#include "lvgl.h"
 #include "platform/linux/http_download.h"
 #include "platform/linux/route_image_tasks.h"
 #include "platform/ui/route_storage.h"
-#include "lvgl.h"
 #include <algorithm>
 #include <cassert>
 #include <chrono>
+#include <fcntl.h>
 #include <filesystem>
 #include <fstream>
-#include <fcntl.h>
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <thread>
@@ -46,9 +46,15 @@ int main(int argc, char** argv)
     assert(!http::get_text(request, output, error, &stats) && output.empty());
     url = base + "/ok";
     request.url = url.c_str();
-    assert(!http::download(request, [](const uint8_t*, size_t, void*) { return false; }, nullptr, error, &stats));
+    assert(!http::download(
+        request, [](const uint8_t*, size_t, void*)
+        { return false; },
+        nullptr, error, &stats));
     std::atomic_bool cancelled{true};
-    assert(!platform::linux_runtime::http_download(request, [](const uint8_t*, size_t, void*) { return true; }, nullptr, error, &stats, &cancelled));
+    assert(!platform::linux_runtime::http_download(
+        request, [](const uint8_t*, size_t, void*)
+        { return true; },
+        nullptr, error, &stats, &cancelled));
     url = base + "/slow";
     request.url = url.c_str();
     request.timeout_ms = 80;
@@ -147,7 +153,10 @@ int main(int argc, char** argv)
     assert(uint8_t(thumb[left_pixel + 2]) == 255 && uint8_t(thumb[left_pixel]) == 0);
     // Binding length alone cannot detect same-size corruption; cache admission must hash.
     std::string original;
-    { std::ifstream input(image, std::ios::binary); original.assign(std::istreambuf_iterator<char>(input), {}); }
+    {
+        std::ifstream input(image, std::ios::binary);
+        original.assign(std::istreambuf_iterator<char>(input), {});
+    }
     auto corrupt = original;
     corrupt.back() ^= 1;
     std::ofstream(image, std::ios::binary).write(corrupt.data(), corrupt.size());

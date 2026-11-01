@@ -1,8 +1,8 @@
 #include "platform/desktop/device_options.h"
 #include "platform/linux/rtc_clock.h"
 #include "platform/ui/device_runtime.h"
-#include "platform/ui/wifi_runtime.h"
 #include "platform/ui/network_runtime.h"
+#include "platform/ui/wifi_runtime.h"
 #include <chrono>
 #include <cstdio>
 #include <string>

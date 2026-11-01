@@ -5,8 +5,8 @@
 
 #pragma once
 
-#include "chat/ports/i_mesh_peer_directory.h"
 #include "chat/infra/lxmf/lxmf_destination_registry.h"
+#include "chat/ports/i_mesh_peer_directory.h"
 
 #include <array>
 #include <cstddef>

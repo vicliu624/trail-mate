@@ -30,6 +30,9 @@ class OneSegMediaWorker
         uint64_t generation = 0;
         uint16_t video_pid = 0x1fff, audio_pid = 0x1fff;
         uint16_t width = 320, height = 180;
+        // Optional demux bootstrap from CRC-validated received programme metadata.
+        // ARIB partial reception can supply PMT without a PAT on the segment.
+        uint16_t programme_number = 0, pmt_pid = 0x1fff, transport_id = 0;
     };
     enum class Phase : uint8_t
     {
@@ -72,8 +75,10 @@ class OneSegMediaWorker
     // Owner thread only, after joining the previous generation. Does not probe
     // streams, open audio, or wait for data on the calling/UI thread.
     bool start(Config config);
-    // One TS producer only: bounded copy plus lock-free atomics, no waits/I/O.
-    bool acceptTs(const uint8_t*, size_t bytes, uint64_t generation);
+    // One TS producer only. The default is nonblocking; a background producer
+    // may allow bounded, cancellable backpressure (clamped to 3000 ms). Never
+    // request a wait from the UI thread.
+    bool acceptTs(const uint8_t*, size_t bytes, uint64_t generation, uint32_t wait_ms = 0);
     void endInput();
     void requestStop();
     void join(); // Worker/shutdown/test only, never LVGL.

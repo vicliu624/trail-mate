@@ -1,5 +1,5 @@
-#include "platform/ui/hostlink_runtime.h"
 #include "app/linux_app_services.h"
+#include "platform/ui/hostlink_runtime.h"
 #include <cassert>
 #include <chrono>
 #include <cstdlib>
@@ -76,7 +76,8 @@ int main()
     {
         trailmate::linux_app::LinuxAppServices services;
         link_runtime::start();
-        assert(wait_for([&] { return std::filesystem::exists(endpoint); }));
+        assert(wait_for([&]
+                        { return std::filesystem::exists(endpoint); }));
         services.shutdown();
         assert(!link_runtime::is_active() && !std::filesystem::exists(endpoint));
     }

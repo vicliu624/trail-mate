@@ -3,8 +3,8 @@
 #include "platform/linux/track_blob_upload.h"
 #include "track_sharing/attachment_package_file_check.h"
 #include "track_sharing/object_paths.h"
-#include <vector>
 #include <memory>
+#include <vector>
 
 namespace platform::linux_runtime
 {

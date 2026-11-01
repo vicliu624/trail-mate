@@ -11,12 +11,22 @@ namespace platform::linux_runtime
 {
 namespace
 {
-void require(bool ready, const char* message) { if (!ready) throw std::runtime_error(message); }
+void require(bool ready, const char* message)
+{
+    if (!ready) throw std::runtime_error(message);
+}
 struct Database
 {
     sqlite3* value = nullptr;
-    Database() { require(sqlite3_open(":memory:", &value) == SQLITE_OK, "JSON parser unavailable"); sqlite3_limit(value, SQLITE_LIMIT_LENGTH, 2 * 1024 * 1024); }
-    ~Database() { if (value) sqlite3_close(value); }
+    Database()
+    {
+        require(sqlite3_open(":memory:", &value) == SQLITE_OK, "JSON parser unavailable");
+        sqlite3_limit(value, SQLITE_LIMIT_LENGTH, 2 * 1024 * 1024);
+    }
+    ~Database()
+    {
+        if (value) sqlite3_close(value);
+    }
 };
 struct Query
 {
@@ -76,7 +86,8 @@ std::vector<std::string> strings(sqlite3* database, const std::string& json, con
 bool identifier(const std::string& value)
 {
     return !value.empty() && value.size() <= 128 && value != "." && value != ".." &&
-           std::all_of(value.begin(), value.end(), [](unsigned char c) { return std::isalnum(c) || c == '_' || c == '-' || c == '.'; });
+           std::all_of(value.begin(), value.end(), [](unsigned char c)
+                       { return std::isalnum(c) || c == '_' || c == '-' || c == '.'; });
 }
 bool web_url(const std::string& value)
 {
@@ -107,12 +118,12 @@ bool parse_pack_catalog(const std::string& json, const std::string& base_url,
             package.id = field(database.value, entry, "$.id");
             package.version = field(database.value, entry, "$.version");
             require(identifier(package.id) && !package.version.empty() && package.version.size() <= 128 &&
-                    std::all_of(package.version.begin(), package.version.end(), [](unsigned char c) { return std::isalnum(c) || c == '.' || c == '-' || c == '_' || c == '+'; }) &&
-                    ids.insert(package.id).second, "Invalid or duplicate package identity");
+                        std::all_of(package.version.begin(), package.version.end(), [](unsigned char c)
+                                    { return std::isalnum(c) || c == '.' || c == '-' || c == '_' || c == '+'; }) &&
+                        ids.insert(package.id).second,
+                    "Invalid or duplicate package identity");
             for (auto [path, output] : std::initializer_list<std::pair<const char*, std::string*>>{
-                     {"$.package_type", &package.package_type}, {"$.display_name", &package.display_name}, {"$.summary", &package.summary},
-                     {"$.description", &package.description}, {"$.author", &package.author}, {"$.homepage", &package.homepage},
-                     {"$.min_firmware_version", &package.min_firmware_version}})
+                     {"$.package_type", &package.package_type}, {"$.display_name", &package.display_name}, {"$.summary", &package.summary}, {"$.description", &package.description}, {"$.author", &package.author}, {"$.homepage", &package.homepage}, {"$.min_firmware_version", &package.min_firmware_version}})
                 *output = field(database.value, entry, path, true);
             if (package.display_name.empty()) package.display_name = package.id;
             package.supported_memory_profiles = strings(database.value, entry, "$.supported_memory_profiles");
@@ -126,8 +137,11 @@ bool parse_pack_catalog(const std::string& json, const std::string& base_url,
             package.archive_sha256 = field(database.value, entry, "$.archive.sha256");
             package.archive_size_bytes = number(database.value, entry, "$.archive.size_bytes");
             require(package.archive_size_bytes && package.archive_size_bytes <= 128U * 1024U * 1024U && package.archive_sha256.size() == 64 &&
-                    std::all_of(package.archive_sha256.begin(), package.archive_sha256.end(), [](unsigned char c) { return std::isxdigit(c); }), "Invalid archive size or digest");
-            std::transform(package.archive_sha256.begin(), package.archive_sha256.end(), package.archive_sha256.begin(), [](unsigned char c) { return std::tolower(c); });
+                        std::all_of(package.archive_sha256.begin(), package.archive_sha256.end(), [](unsigned char c)
+                                    { return std::isxdigit(c); }),
+                    "Invalid archive size or digest");
+            std::transform(package.archive_sha256.begin(), package.archive_sha256.end(), package.archive_sha256.begin(), [](unsigned char c)
+                           { return std::tolower(c); });
             require(!package.archive_path.empty() && package.archive_path.front() != '/' && package.archive_path.find_first_of("\\\r\n\t") == package.archive_path.npos, "Invalid archive location");
             require(web_url(package.archive_path) || package.archive_path.find(':') == package.archive_path.npos, "Unsupported archive URL scheme");
             package.download_url = web_url(package.archive_path) ? package.archive_path : base_url + (base_url.ends_with('/') ? "" : "/") + package.archive_path;
@@ -137,6 +151,11 @@ bool parse_pack_catalog(const std::string& json, const std::string& base_url,
         require(result == SQLITE_DONE, "Invalid catalog document");
         return true;
     }
-    catch (const std::exception& exception) { packages.clear(); error = exception.what(); return false; }
+    catch (const std::exception& exception)
+    {
+        packages.clear();
+        error = exception.what();
+        return false;
+    }
 }
 } // namespace platform::linux_runtime

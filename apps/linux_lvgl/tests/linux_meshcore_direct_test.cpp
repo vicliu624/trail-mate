@@ -1,7 +1,7 @@
 #include "chat/infra/meshcore/meshcore_payload_helpers.h"
+#include "chat/linux_meshcore_direct_routes.h"
 #include "chat/linux_meshcore_direct_state.h"
 #include "chat/linux_meshcore_direct_wire.h"
-#include "chat/linux_meshcore_direct_routes.h"
 #include "platform/linux/runtime_paths.h"
 #include <cassert>
 #include <cstdlib>

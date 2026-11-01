@@ -28,6 +28,8 @@ struct PacketRadioHardware
     Sx126xRadioConfig bus{};
     float tcxo_voltage = 0.0f;
     Lr2021RfSwitchProfile rf_switch_profile = Lr2021RfSwitchProfile::None;
+    unsigned oneseg_gain_step = 0; // 0 = chip AGC; explicit raw-IQ gain 1..13.
+    uint32_t oneseg_sample_rate_hz = 576000;
 };
 
 // Matches the pinned portable RX engine's error domain without exposing that

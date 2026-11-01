@@ -2,12 +2,15 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
 #include <linux/gpio.h>
 #include <linux/spi/spidev.h>
 #include <sys/file.h>
 #include <sys/ioctl.h>
+#include <sys/resource.h>
 #include <thread>
 #include <unistd.h>
 
@@ -186,21 +189,34 @@ bool LinuxRadioLibHal::waitReady()
 
 void LinuxRadioLibHal::spiTransfer(uint8_t* output, size_t size, uint8_t* input)
 {
-    if (input) std::memset(input, 0, size);
-    if (!size || size > 4096 || !output || !input)
+    using Clock = std::chrono::steady_clock;
+    // Short FIFO status/level transactions can stall too. Keep them in the
+    // same bounded postmortem ring when the explicit IQ diagnostic is enabled.
+    const bool traced = iq_trace_enabled_;
+    const auto entered = traced ? Clock::now() : Clock::time_point{};
+    rusage before{}, after{};
+    if (traced) getrusage(RUSAGE_THREAD, &before);
+    const size_t frame_limit = iq_mode_ && (iq_speed_hz_ == 8350000u || iq_speed_hz_ == 8700000u) ? 32768 : 4096;
+    if (!size || size > frame_limit || !output || !input)
     {
         errno = EINVAL;
         fail("invalid SPI frame");
         return;
     }
-    if (!healthy() || !waitReady()) return;
+    std::memset(input, 0, size);
+    const auto prepared = traced ? Clock::now() : Clock::time_point{};
+    const bool ready = healthy() && waitReady();
+    const auto ready_at = traced ? Clock::now() : Clock::time_point{};
+    if (!ready) return;
     spi_ioc_transfer transfer{};
     transfer.tx_buf = reinterpret_cast<uintptr_t>(output);
     transfer.rx_buf = reinterpret_cast<uintptr_t>(input);
     transfer.len = static_cast<uint32_t>(size);
     transfer.speed_hz = spiClockHz();
     transfer.bits_per_word = 8;
-    if (ioctl(spi_, SPI_IOC_MESSAGE(1), &transfer) != static_cast<int>(size))
+    const int transferred = ioctl(spi_, SPI_IOC_MESSAGE(1), &transfer);
+    const auto completed = traced ? Clock::now() : Clock::time_point{};
+    if (transferred != static_cast<int>(size))
     {
         fail("SPI transfer");
         return;
@@ -208,16 +224,56 @@ void LinuxRadioLibHal::spiTransfer(uint8_t* output, size_t size, uint8_t* input)
     // BUSY may assert after NSS rises. Do not require observing its high edge;
     // short pulses may already be over when userspace is scheduled again.
     delayMicroseconds(iq_mode_ ? 1 : 100);
+    if (traced)
+    {
+        const auto finished = Clock::now();
+        getrusage(RUSAGE_THREAD, &after);
+        auto& entry = iq_trace_[iq_trace_count_++ % iq_trace_.size()];
+        entry = {};
+        entry.bytes = size;
+        entry.prepare_us = std::chrono::duration_cast<std::chrono::microseconds>(prepared - entered).count();
+        entry.busy_us = std::chrono::duration_cast<std::chrono::microseconds>(ready_at - prepared).count();
+        entry.ioctl_us = std::chrono::duration_cast<std::chrono::microseconds>(completed - ready_at).count();
+        entry.tail_us = std::chrono::duration_cast<std::chrono::microseconds>(finished - completed).count();
+        entry.cpu_us = (after.ru_utime.tv_sec + after.ru_stime.tv_sec - before.ru_utime.tv_sec - before.ru_stime.tv_sec) * 1000000LL +
+                       after.ru_utime.tv_usec + after.ru_stime.tv_usec - before.ru_utime.tv_usec - before.ru_stime.tv_usec;
+        entry.minor = after.ru_minflt - before.ru_minflt;
+        entry.major = after.ru_majflt - before.ru_majflt;
+        entry.voluntary = after.ru_nvcsw - before.ru_nvcsw;
+        entry.involuntary = after.ru_nivcsw - before.ru_nivcsw;
+    }
 }
 
-bool LinuxRadioLibHal::setIqTransferMode(bool enabled)
+void LinuxRadioLibHal::dumpIqTransferTrace() const
+{
+    for (unsigned i = iq_trace_count_ > iq_trace_.size() ? iq_trace_count_ - static_cast<unsigned>(iq_trace_.size()) : 0;
+         i < iq_trace_count_; ++i)
+    {
+        const auto& entry = iq_trace_[i % iq_trace_.size()];
+        std::fprintf(stderr, "[oneseg_spi] bytes=%zu prepare_us=%llu busy_us=%llu ioctl_us=%llu tail_us=%llu cpu_us=%llu minor=%ld major=%ld voluntary=%ld involuntary=%ld\n",
+                     entry.bytes, (unsigned long long)entry.prepare_us, (unsigned long long)entry.busy_us,
+                     (unsigned long long)entry.ioctl_us, (unsigned long long)entry.tail_us, (unsigned long long)entry.cpu_us,
+                     entry.minor, entry.major, entry.voluntary, entry.involuntary);
+    }
+}
+
+bool LinuxRadioLibHal::setIqTransferMode(bool enabled, uint32_t speed_hz)
 {
     if (spi_ < 0) return !enabled;
     if (enabled && !healthy()) return false;
-    uint32_t speed = enabled ? 16000000u : hardware_.bus.spi_speed_hz;
+    if (enabled && speed_hz != 16000000u && speed_hz != 10000000u && speed_hz != 8350000u && speed_hz != 8700000u)
+    {
+        errno = EINVAL;
+        fail("Unsupported IQ SPI clock");
+        return false;
+    }
+    uint32_t speed = enabled ? speed_hz : hardware_.bus.spi_speed_hz;
     // Keep the requested mode for cleanup even if ioctl reports an error.
     // The checked stream always resets/reopens on setup or bus-restore failure.
     iq_mode_ = enabled;
+    if (enabled) iq_speed_hz_ = speed_hz;
+    iq_trace_enabled_ = enabled && (speed_hz == 16000000u || speed_hz == 10000000u || speed_hz == 8350000u || speed_hz == 8700000u) && std::getenv("TRAIL_MATE_ONESEG_DMA_TRACE");
+    if (iq_trace_enabled_) iq_trace_count_ = 0;
     if (ioctl(spi_, SPI_IOC_WR_MAX_SPEED_HZ, &speed) != 0)
     {
         fail(enabled ? "IQ SPI clock" : "restore packet SPI clock");

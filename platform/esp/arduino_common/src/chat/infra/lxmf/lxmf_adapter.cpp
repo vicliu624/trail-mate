@@ -2,13 +2,13 @@
  * @file lxmf_adapter.cpp
  * @brief Device-side LXMF adapter over the existing RNode raw carrier
  */
-#include "chat/infra/reticulum/link_handshake_wire.h"
 #include "chat/infra/lxmf/lxmf_incoming_envelope.h"
 #include "chat/infra/lxmf/lxmf_resource_wire.h"
+#include "chat/infra/reticulum/link_handshake_wire.h"
 
-#include "platform/esp/arduino_common/chat/infra/lxmf/lxmf_adapter.h"
 #include "chat/infra/reticulum/path_request_wire.h"
 #include "geocaching/protocol/sign_record.h"
+#include "platform/esp/arduino_common/chat/infra/lxmf/lxmf_adapter.h"
 #if (defined(ESP_PLATFORM) && !defined(ARDUINO)) || defined(TRAIL_MATE_USB_HOSTLINK_AUTOSTART)
 #include "hostlink/identity_backup_export.h"
 #include "track_sharing/device_signer.h"
@@ -9031,7 +9031,7 @@ bool LxmfAdapter::queueOutgoingResource(LinkSession& session,
         return true;
     };
     if (!runtime::prepareOutgoingResource(data, len, session.derived_key, session.mdu,
-        flags, request_id, request_id_len, millis(), kResourceWindowSize, random, nullptr, *queued_resource) ||
+                                          flags, request_id, request_id_len, millis(), kResourceWindowSize, random, nullptr, *queued_resource) ||
         !advertiseLinkResource(session, *queued_resource, 0))
     {
         (void)link_manager_.discardLastOutgoingResource(session);

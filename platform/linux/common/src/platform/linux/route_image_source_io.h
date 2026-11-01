@@ -3,8 +3,8 @@
 #include <cstdint>
 #include <cstdio>
 #include <fcntl.h>
-#include <sys/stat.h>
 #include <sys/file.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #if defined(TRAIL_MATE_HAS_OPENSSL)
 #include <openssl/evp.h>
@@ -17,17 +17,23 @@ class RouteImageLease
     explicit RouteImageLease(const char* path)
     {
         fd_ = ::open(path, O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK, 0600);
-        struct stat info{};
+        struct stat info
+        {
+        };
         if (fd_ >= 0 && (fstat(fd_, &info) != 0 || !S_ISREG(info.st_mode) || flock(fd_, LOCK_EX | LOCK_NB) != 0))
         {
             ::close(fd_);
             fd_ = -1;
         }
     }
-    ~RouteImageLease() { if (fd_ >= 0) ::close(fd_); }
+    ~RouteImageLease()
+    {
+        if (fd_ >= 0) ::close(fd_);
+    }
     explicit operator bool() const { return fd_ >= 0; }
     RouteImageLease(const RouteImageLease&) = delete;
     RouteImageLease& operator=(const RouteImageLease&) = delete;
+
   private:
     int fd_ = -1;
 };
@@ -35,17 +41,39 @@ class RouteImageLease
 class RouteSourceIo
 {
   public:
-    enum class Mode { Read, CreateTemporary };
-    enum class OpenStatus { Ready, Missing, Unavailable };
-    struct OpenResult { void* handle; OpenStatus status; };
-    ~RouteSourceIo() { if (fd_ >= 0) ::close(fd_); }
+    enum class Mode
+    {
+        Read,
+        CreateTemporary
+    };
+    enum class OpenStatus
+    {
+        Ready,
+        Missing,
+        Unavailable
+    };
+    struct OpenResult
+    {
+        void* handle;
+        OpenStatus status;
+    };
+    ~RouteSourceIo()
+    {
+        if (fd_ >= 0) ::close(fd_);
+    }
     OpenResult open(const char* path, Mode mode)
     {
         if (fd_ >= 0) return {nullptr, OpenStatus::Unavailable};
         fd_ = ::open(path, O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK | (mode == Mode::Read ? O_RDONLY : O_WRONLY | O_CREAT | O_EXCL), 0600);
         if (fd_ < 0) return {nullptr, errno == ENOENT ? OpenStatus::Missing : OpenStatus::Unavailable};
-        struct stat info{};
-        if (fstat(fd_, &info) != 0 || !S_ISREG(info.st_mode)) { close(this); return {nullptr, OpenStatus::Unavailable}; }
+        struct stat info
+        {
+        };
+        if (fstat(fd_, &info) != 0 || !S_ISREG(info.st_mode))
+        {
+            close(this);
+            return {nullptr, OpenStatus::Unavailable};
+        }
         return {this, OpenStatus::Ready};
     }
     bool close(void*)
@@ -56,7 +84,9 @@ class RouteSourceIo
     }
     bool size(void*, uint64_t& bytes)
     {
-        struct stat info{};
+        struct stat info
+        {
+        };
         if (fstat(fd_, &info) != 0 || info.st_size < 0) return false;
         bytes = static_cast<uint64_t>(info.st_size);
         return true;
@@ -65,7 +95,10 @@ class RouteSourceIo
     size_t read(void*, uint8_t* output, size_t bytes)
     {
         ssize_t count;
-        do { count = ::read(fd_, output, bytes); } while (count < 0 && errno == EINTR);
+        do
+        {
+            count = ::read(fd_, output, bytes);
+        } while (count < 0 && errno == EINTR);
         return count < 0 ? 0 : static_cast<size_t>(count);
     }
     size_t write(void*, const uint8_t* input, size_t bytes)
@@ -83,6 +116,7 @@ class RouteSourceIo
     bool sync(void*) { return fsync(fd_) == 0; }
     bool remove(const char* path) { return ::unlink(path) == 0; }
     bool rename(const char* from, const char* to) { return ::rename(from, to) == 0; }
+
   private:
     int fd_ = -1;
 };
@@ -98,7 +132,11 @@ class RouteSourceHash
         unsigned size = 0;
         return context_ && EVP_DigestFinal_ex(context_, output, &size) == 1 && size == 32;
     }
-    void reset() { if (context_) EVP_MD_CTX_reset(context_); }
+    void reset()
+    {
+        if (context_) EVP_MD_CTX_reset(context_);
+    }
+
   private:
     EVP_MD_CTX* context_;
 };

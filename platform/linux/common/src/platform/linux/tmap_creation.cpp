@@ -1,8 +1,8 @@
 #include "platform/linux/tmap_creation.h"
-#include "platform/linux/tmap_job_workspace.h"
 #include "platform/linux/hostlink_upload_io.h"
 #include "platform/linux/route_image_source_io.h"
 #include "platform/linux/runtime_paths.h"
+#include "platform/linux/tmap_job_workspace.h"
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -429,7 +429,8 @@ struct LinuxTmapCreation::Impl
             std::optional<tc::Plan> plan;
             {
                 std::unique_lock<std::mutex> lock(mutex);
-                const auto ready = [&] { return stopping || pending.has_value() || scan_requested; };
+                const auto ready = [&]
+                { return stopping || pending.has_value() || scan_requested; };
                 if (recovery_pending) changed.wait_for(lock, std::chrono::seconds(2), ready);
                 else changed.wait(lock, ready);
                 if (stopping) return;

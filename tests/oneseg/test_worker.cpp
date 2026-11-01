@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <stdexcept>
+#include <sys/resource.h>
 #include <thread>
 #include <unistd.h>
 
@@ -32,6 +33,8 @@ struct State
     std::thread::id ui = std::this_thread::get_id();
     std::atomic_uint acquired{0}, released{0}, streams{0}, opens{0}, writes{0}, finishes{0};
     std::atomic_bool sink_finished{false};
+    std::atomic_uint acquire_attempts{0};
+    unsigned busy_attempts = 0;
     bool supported = true, present = true, acquire_ok = true, restore_ok = true;
     bool open_ok = true, write_ok = true, finish_ok = true, blocked_sink = false, throw_sink = false;
     enum Flow
@@ -54,6 +57,7 @@ class Radio final : public IPacketRadio
     bool acquire() override
     {
         assert(std::this_thread::get_id() != s.ui);
+        if (++s.acquire_attempts <= s.busy_attempts) return false;
         if (!s.acquire_ok) return false;
         ++s.acquired;
         return true;
@@ -83,7 +87,7 @@ class Radio final : public IPacketRadio
         return 0;
     }
     bool isOnline() const override { return true; }
-    const char* lastError() const override { return "test"; }
+    const char* lastError() const override { return s.acquire_attempts <= s.busy_attempts && s.busy_attempts ? "" : "test"; }
     RadioSettings appliedLoRaConfig() const override { return {}; }
     RadioStatistics stats() const override { return {}; }
     bool streamOneSegIq(const OneSegIqRequest& request, OneSegIqResult& result) override
@@ -93,8 +97,8 @@ class Radio final : public IPacketRadio
         result = {};
         std::array<uint8_t, 1280> data;
         data.fill(0x42);
-        const unsigned count = s.flow == State::Rapid ? 64 : s.flow == State::Empty ? 0
-                                                                                    : 4;
+        const unsigned count = s.flow == State::Rapid ? OneSegReceiveWorker::queue_slots + 2 : s.flow == State::Empty ? 0
+                                                                                                                      : 4;
         for (unsigned n = 0; n < count && !request.cancelled(request.context); ++n)
         {
             const auto first = s.flow == State::BadIndex ? 1 : result.validated_bytes / 2;
@@ -167,6 +171,25 @@ void prepare_receive_session_worker() { ++prepares; }
 int main()
 {
     {
+        rlimit original{};
+        assert(!getrlimit(RLIMIT_MEMLOCK, &original));
+        auto denied = original;
+        denied.rlim_cur = 0;
+        assert(!setrlimit(RLIMIT_MEMLOCK, &denied));
+        State state;
+        Radio radio(state);
+        Sink sink(state);
+        {
+            Worker worker(radio, sink, barrier);
+            assert(worker.start(13));
+            worker.waitUntilFinished();
+            assert(worker.snapshot().error == Worker::Error::Unavailable);
+            assert(!state.acquired && !state.streams && !state.opens && !barrier_calls);
+            assert(std::strstr(worker.snapshot().message, "lock") != nullptr);
+        }
+        assert(!setrlimit(RLIMIT_MEMLOCK, &original));
+    }
+    {
         State s;
         Radio radio(s);
         Sink sink(s);
@@ -227,7 +250,7 @@ int main()
         assert(s.finishes == 1 && s.released == s.acquired);
         if (scenario == 2)
         {
-            assert(report.queue_high_water == 8);
+            assert(report.queue_high_water == Worker::queue_slots);
             assert(!worker.start(0) && worker.snapshot().queue_high_water == 0);
         }
     }
@@ -324,5 +347,37 @@ int main()
         reader.join();
         assert(worker.snapshot().forwarded_pairs == 2560 && worker.snapshot().phase == Worker::Phase::Stopped);
         assert(s.released == 1);
+    }
+    for (unsigned mode = 0; mode < 3; ++mode)
+    {
+        State s;
+        s.busy_attempts = mode == 0 ? 3 : 1000;
+        Radio radio(s);
+        Sink sink(s);
+        Worker worker(radio, sink, barrier);
+        const auto started = std::chrono::steady_clock::now();
+        assert(worker.start(13));
+        if (mode == 0)
+        {
+            await([&]
+                  { return worker.snapshot().forwarded_pairs == 2560; });
+            worker.requestStop();
+        }
+        else if (mode == 2)
+        {
+            await([&]
+                  { return s.acquire_attempts.load() != 0; });
+            worker.requestStop();
+        }
+        worker.waitUntilFinished();
+        const auto elapsed = std::chrono::steady_clock::now() - started;
+        if (mode == 1)
+        {
+            assert(worker.snapshot().error == Worker::Error::RadioAcquire);
+            assert(elapsed >= 200ms && elapsed < 1s && !s.acquired);
+        }
+        else assert(worker.snapshot().phase == Worker::Phase::Stopped);
+        if (mode == 0) assert(s.acquire_attempts == 4 && s.acquired == 1 && s.released == 1);
+        if (mode == 2) assert(elapsed < 100ms && !s.acquired && !s.streams);
     }
 }

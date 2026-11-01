@@ -4,8 +4,8 @@
 #include <filesystem>
 #include <memory>
 #include <sqlite3.h>
-#include <unordered_map>
 #include <unistd.h>
+#include <unordered_map>
 
 namespace
 {
@@ -51,7 +51,7 @@ int openFile(sqlite3_vfs*, const char* name, sqlite3_file* file, int flags, int*
     files.emplace(file, std::move(entry));
     return result;
 }
-}
+} // namespace
 int main()
 {
     const auto root = std::filesystem::temp_directory_path() / ("trailmate-chat-io-" + std::to_string(getpid()));

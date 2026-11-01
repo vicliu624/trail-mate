@@ -4,11 +4,11 @@
 #include "platform/linux/resource_pack_tasks.h"
 #include "platform/ui/http_client_runtime.h"
 #include <cassert>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
-#include <chrono>
-#include <thread>
 #include <sys/wait.h>
+#include <thread>
 #include <unistd.h>
 
 namespace native = platform::linux_runtime;
@@ -68,7 +68,12 @@ int main(int argc, char** argv)
         assert(!native::ResourcePackStore(installed).install(ready, error));
         ready.version = package.version;
         std::atomic_bool cancel_publish{false};
-        assert(!native::ResourcePackStore(installed, [&] { cancel_publish = true; }, [&] { return cancel_publish.load(); }).install(ready, error));
+        assert(!native::ResourcePackStore(
+                    installed, [&]
+                    { cancel_publish = true; },
+                    [&]
+                    { return cancel_publish.load(); })
+                    .install(ready, error));
         assert(native::ResourcePackStore(installed).installed(records, error) && records[0].archive_sha256 == package.archive_sha256);
     }
     auto wrong = package;
@@ -121,7 +126,11 @@ int main(int argc, char** argv)
     (void)get(base + "/catalog-offline");
     const auto child = fork();
     assert(child >= 0);
-    if (child == 0) { execl(argv[0], argv[0], base.c_str(), root.c_str(), nullptr); _exit(127); }
+    if (child == 0)
+    {
+        execl(argv[0], argv[0], base.c_str(), root.c_str(), nullptr);
+        _exit(127);
+    }
     int child_status = 0;
     assert(waitpid(child, &child_status, 0) == child && WIFEXITED(child_status) && WEXITSTATUS(child_status) == 0);
     setenv("TRAIL_MATE_PACK_CATALOG_URL", (base + "/slow-catalog.json").c_str(), 1);

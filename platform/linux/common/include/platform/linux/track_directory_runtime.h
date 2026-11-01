@@ -33,6 +33,6 @@ bool track_directories_available(const std::filesystem::path& database);
 ::hostlink::management::Status read_track_directories(const std::filesystem::path&, const uint8_t session[16], size_t cursor, uint8_t*, size_t, size_t&);
 ::hostlink::management::Status request_track_directory(const std::filesystem::path&, const uint8_t session[16], const uint8_t destination[16]);
 void close_track_directories(const std::filesystem::path&, const uint8_t* session);
-::hostlink::management::Status pin_track_directory(const std::filesystem::path&,const uint8_t session[16],geocaching::ByteView delivery,
-                                                   geocaching::ByteView epoch,track_sharing::PublicationDirectory&);
+::hostlink::management::Status pin_track_directory(const std::filesystem::path&, const uint8_t session[16], geocaching::ByteView delivery,
+                                                   geocaching::ByteView epoch, track_sharing::PublicationDirectory&);
 } // namespace platform::linux_runtime

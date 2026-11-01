@@ -191,7 +191,16 @@ void calculate_required_tiles(TileContext& c, double lat, double lon, int z, int
     if (c.has_visible_map_data) *c.has_visible_map_data = any;
 }
 void tile_loader_step(TileContext&) {}
-void init_tile_context(TileContext& c, lv_obj_t* obj, MapAnchor* anchor, std::vector<MapTile>* tiles, ui::map_tiles::MapTileRenderQueue* queue, bool* has, bool* visible) { c = {obj, anchor, tiles, queue, has, visible}; }
+void init_tile_context(TileContext& c, lv_obj_t* obj, MapAnchor* anchor, std::vector<MapTile>* tiles, ui::map_tiles::MapTileRenderQueue* queue, bool* has, bool* visible)
+{
+    c = {};
+    c.map_container = obj;
+    c.anchor = anchor;
+    c.tiles = tiles;
+    c.render_queue = queue;
+    c.has_map_data = has;
+    c.has_visible_map_data = visible;
+}
 void release_tile_context(TileContext& c)
 {
     cleanup_tiles(c);

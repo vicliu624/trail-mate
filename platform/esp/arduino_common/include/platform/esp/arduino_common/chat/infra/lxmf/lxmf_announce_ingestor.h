@@ -36,7 +36,6 @@ struct AnnounceIngestOptions
     LocalDestinationResolver resolve_local_destination = nullptr;
 };
 
-
 class AnnounceIngestor
 {
   public:

@@ -1,4 +1,5 @@
 #include "platform/desktop/device_options.h"
+#include "platform/linux/oneseg_capture_process.h"
 #include "platform/linux/oneseg_decoder_process.h"
 #include "platform/linux/oneseg_pipe_sink.h"
 #include "platform/linux/packet_radio.h"
@@ -9,9 +10,11 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <sched.h>
 #include <signal.h>
 #include <stdexcept>
 #include <string>
+#include <sys/stat.h>
 #include <thread>
 #include <unistd.h>
 
@@ -26,7 +29,7 @@ struct MediaRoute
     {
         auto& self = *static_cast<MediaRoute*>(context);
         if (!self.armed.load(std::memory_order_acquire)) return true;
-        const bool accepted = self.media->acceptTs(data, size, generation);
+        const bool accepted = self.media->acceptTs(data, size, generation, 3000);
         // Disarming precedes media cancellation. A concurrent final packet is
         // an expected stop, rather than a failed transport queue.
         return accepted || !self.armed.load(std::memory_order_acquire);
@@ -108,6 +111,7 @@ int main(int argc, char** argv)
     {
         std::string profile, decoder;
         bool media_requested = false;
+        int capture_result_fd = -1;
         unsigned channel = 13, seconds = 0;
         for (int n = 1; n < argc; ++n)
         {
@@ -134,10 +138,25 @@ int main(int argc, char** argv)
             else if (key == "--decoder") decoder = argv[++n];
             else if (key == "--channel") channel = number(argv[++n]);
             else if (key == "--seconds") seconds = number(argv[++n]);
+            else if (key == "--capture-result-fd")
+            {
+                if (number(argv[++n]) != 3) throw std::runtime_error("Capture receipt requires fd3");
+                capture_result_fd = 3;
+            }
             else throw std::runtime_error("Unknown argument");
         }
         if (profile.empty() || channel < 13 || channel > 62) throw std::runtime_error("A CM0 profile and channel 13..62 are required");
         if (media_requested && decoder.empty()) throw std::runtime_error("--media requires the real --decoder composition");
+        if (capture_result_fd >= 0)
+        {
+            struct stat descriptor
+            {
+            };
+            const char* marker = std::getenv("TRAIL_MATE_ONESEG_CAPTURE_CHILD");
+            if (!marker || std::strcmp(marker, "1") || !decoder.empty() || media_requested ||
+                fstat(capture_result_fd, &descriptor) || !S_ISFIFO(descriptor.st_mode))
+                throw std::runtime_error("Invalid raw capture child invocation");
+        }
 #if !defined(TRAIL_MATE_ONESEG_MEDIA)
         if (media_requested) throw std::runtime_error("Native 1seg media component is not built");
 #endif
@@ -149,6 +168,15 @@ int main(int argc, char** argv)
             options.runtime_mode == LinuxRuntimeMode::SimulatorDemo || resolve_runtime_mode() == LinuxRuntimeMode::SimulatorDemo || simulated_radio)
             throw std::runtime_error("A real CM0 LR2021 composition is required");
         StopSignals signals;
+        if (capture_result_fd >= 0)
+        {
+            const long online = sysconf(_SC_NPROCESSORS_ONLN);
+            if (online < 2 || online > CPU_SETSIZE) throw std::runtime_error("Raw capture child requires multiple CPUs");
+            cpu_set_t cpus;
+            CPU_ZERO(&cpus);
+            for (long cpu = 0; cpu < online; ++cpu) CPU_SET(cpu, &cpus);
+            if (sched_setaffinity(0, sizeof(cpus), &cpus)) throw std::runtime_error("Cannot admit raw capture CPUs");
+        }
         PacketRadioCoordinator coordinator(make_lr2021_radio(options.radio));
 #if defined(TRAIL_MATE_ONESEG_MEDIA)
         std::unique_ptr<OneSegPcmOutput> television_audio;
@@ -171,6 +199,7 @@ int main(int argc, char** argv)
         {
             OneSegDecoderProcess::Config config;
             config.decoder = decoder;
+            config.environment.emplace_back("TRAIL_MATE_ONESEG_INPUT_RATE=" + std::to_string(options.radio.oneseg_sample_rate_hz));
 #if defined(TRAIL_MATE_ONESEG_MEDIA)
             if (media_requested)
             {
@@ -186,6 +215,18 @@ int main(int argc, char** argv)
         // uses make_oneseg_receive_worker and its physical handoff barrier.
         OneSegReceiveWorker worker(coordinator.foreground(), *sink, []
                                    { return true; });
+        if (capture_result_fd >= 0)
+        {
+            // The already-created owner retains the full mask and selects its
+            // highest CPU. Keep the reporting thread off that capture CPU.
+            cpu_set_t cpus;
+            if (sched_getaffinity(0, sizeof(cpus), &cpus)) throw std::runtime_error("Cannot read raw capture affinity");
+            int capture_cpu = CPU_SETSIZE - 1;
+            while (capture_cpu >= 0 && !CPU_ISSET(capture_cpu, &cpus)) --capture_cpu;
+            if (capture_cpu >= 0) CPU_CLR(capture_cpu, &cpus);
+            if (!CPU_COUNT(&cpus) || sched_setaffinity(0, sizeof(cpus), &cpus))
+                throw std::runtime_error("Cannot isolate raw capture reporting");
+        }
         if (!worker.start(channel))
         {
             report(worker.snapshot());
@@ -208,6 +249,9 @@ int main(int argc, char** argv)
                 {
                     OneSegMediaWorker::Config config;
                     config.generation = state.generation;
+                    config.programme_number = decoded.programmes.selected_program;
+                    config.pmt_pid = decoded.programmes.pmt_pid;
+                    config.transport_id = decoded.programmes.transport_id;
                     for (size_t i = 0; i < decoded.programmes.stream_count; ++i)
                     {
                         const auto stream = decoded.programmes.streams[i];
@@ -293,6 +337,19 @@ int main(int argc, char** argv)
 #endif
         const auto final = worker.snapshot();
         report(final);
+        if (capture_result_fd >= 0)
+        {
+            auto radio = final.radio;
+            if (final.phase != OneSegReceiveWorker::Phase::Stopped && !radio.capture_error) radio.capture_error = -5;
+            const auto receipt = encode_oneseg_capture_result(radio);
+            ssize_t written;
+            do
+            {
+                written = ::write(capture_result_fd, receipt.data(), receipt.size());
+            } while (written < 0 && errno == EINTR);
+            close(capture_result_fd);
+            if (written != static_cast<ssize_t>(receipt.size())) return 3;
+        }
         if (process)
         {
             const auto decoded = process->snapshot();

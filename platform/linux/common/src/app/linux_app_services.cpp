@@ -2,14 +2,14 @@
 #include "app/linux_app_config_blob.h"
 #include "app/linux_phone_runtime.h"
 #include "app/linux_tms_store.h"
-#include "platform/linux/application_lifecycle.h"
-#include "platform/linux/identity_restore_bridge.h"
-#include "platform/linux/mesh/linux_reticulum_identity.h"
-#include "platform/linux/runtime_paths.h"
 #include "hostlink/identity_restore_request.h"
 #include "hostlink/radio_identity_backup.h"
-#include "platform/linux/mesh/linux_radio_identity_store.h"
+#include "platform/linux/application_lifecycle.h"
 #include "platform/linux/call_audio_service.h"
+#include "platform/linux/identity_restore_bridge.h"
+#include "platform/linux/mesh/linux_radio_identity_store.h"
+#include "platform/linux/mesh/linux_reticulum_identity.h"
+#include "platform/linux/runtime_paths.h"
 #include "platform/linux/tms_import_bridge.h"
 #include "platform/linux/tms_snapshot_bridge.h"
 #include "platform/ui/hostlink_runtime.h"
@@ -1958,7 +1958,10 @@ chat::DeviceIdentityRestoreResult LinuxAppServices::restoreDeviceIdentity(const 
     struct CallGate
     {
         bool retain = false;
-        ~CallGate() { if (!retain) call::end_configuration_change(); }
+        ~CallGate()
+        {
+            if (!retain) call::end_configuration_change();
+        }
     } gate;
 #if defined(TRAIL_MATE_LINUX_HAS_MEDIA)
     if (impl_->voice && impl_->voice->snapshot().busy) return Result::Unavailable;
@@ -1989,9 +1992,9 @@ chat::DeviceIdentityRestoreResult LinuxAppServices::restoreDeviceIdentity(const 
 #endif
     impl_->raw_lora_mesh_adapter.shutdown();
     if (radio) return radios.replace(wireless.kind, wireless.expected_author_generation, wireless.expected_author.data,
-        wireless.expected_radio_generation, wireless.expected_radio_public.data, wireless.public_key.data, wireless.private_key.data, wireless.private_key.size);
+                                     wireless.expected_radio_generation, wireless.expected_radio_public.data, wireless.public_key.data, wireless.private_key.data, wireless.private_key.size);
     return identity.replaceKeyPair(request.expected_generation, request.expected_public.data, request.format,
-        request.private_key.data, request.private_key.size, request.public_key.data);
+                                   request.private_key.data, request.private_key.size, request.public_key.data);
 #endif
 }
 
@@ -2588,7 +2591,7 @@ void LinuxAppServices::updateCoreServices()
     if (settings_import_pending_) return;
 
     ::platform::linux_runtime::service_identity_restore(this, [](void* owner, const ::platform::linux_runtime::IdentityRestoreCommand& command)
-        { return static_cast<LinuxAppServices*>(owner)->restoreDeviceIdentity(command); });
+                                                        { return static_cast<LinuxAppServices*>(owner)->restoreDeviceIdentity(command); });
     if (identity_restore_pending_) return;
 
     // Both tick() and the explicit SDL/Cardputer loops pass through here.

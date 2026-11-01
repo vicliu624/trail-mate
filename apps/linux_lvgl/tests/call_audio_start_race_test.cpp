@@ -89,32 +89,48 @@ int main()
     for (const bool result : {false, true})
     {
         entered = released = false;
-        calls = 0; late_result = result;
+        calls = 0;
+        late_result = result;
         call::MediaHooks hooks;
-        hooks.is_supported = [] { return true; };
-        hooks.start = [] { return true; }; hooks.stop = [] {};
+        hooks.is_supported = []
+        { return true; };
+        hooks.start = []
+        { return true; };
+        hooks.stop = [] {};
         call::set_media_hooks(hooks);
         call::RealtimeHooks realtime;
-        realtime.begin_soft_preempt = [](const uint8_t*) { return start(); };
+        realtime.begin_soft_preempt = [](const uint8_t*)
+        { return start(); };
         call::set_realtime_hooks(realtime);
         call::Peer first, second;
-        first.link_id[0] = 5; first.destination_hash[0] = 6;
-        second.link_id[0] = 7; second.destination_hash[0] = 8;
+        first.link_id[0] = 5;
+        first.destination_hash[0] = 6;
+        second.link_id[0] = 7;
+        second.destination_hash[0] = 8;
         bool begun = true;
-        std::thread pending([&] { begun = call::begin_incoming_identifying(first); });
+        std::thread pending([&]
+                            { begun = call::begin_incoming_identifying(first); });
         {
             std::unique_lock<std::mutex> lock(mutex);
-            changed.wait(lock, [] { return entered; });
+            changed.wait(lock, []
+                         { return entered; });
         }
-        call::reject(); uint8_t link[16]; assert(call::consume_hangup_request(link));
+        call::reject();
+        uint8_t link[16];
+        assert(call::consume_hangup_request(link));
         call::notify_link_closed(first.link_id);
         assert(call::begin_outgoing(second));
-        { std::lock_guard<std::mutex> lock(mutex); released = true; }
-        changed.notify_all(); pending.join();
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            released = true;
+        }
+        changed.notify_all();
+        pending.join();
         const auto current = call::snapshot();
         const bool preserved = current.state == call::State::Outgoing && current.accepted && !std::memcmp(current.link_id, second.link_id, 16);
         call::notify_link_closed(second.link_id);
         assert(!begun && preserved && "Late focus admission cannot resurrect or fail a replaced incoming call");
     }
-    call::set_media_hooks({}); call::set_realtime_hooks({});
+    call::set_media_hooks({});
+    call::set_realtime_hooks({});
 }

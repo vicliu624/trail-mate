@@ -11,8 +11,8 @@
 #include <algorithm>
 #include <cstring>
 
-#include "ui/assets/fonts/font_utils.h"
 #include "ui/app_runtime.h"
+#include "ui/assets/fonts/font_utils.h"
 #include "ui/input/pager_navigation.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"

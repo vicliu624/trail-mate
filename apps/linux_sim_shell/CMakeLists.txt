@@ -629,6 +629,8 @@ if(BUILD_TESTING)
     add_executable(trailmate_linux_reticulum_directory_runtime_smoke
         tests/linux_reticulum_directory_runtime_smoke.cpp
         "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/platform/ui/reticulum_directory_runtime.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/platform/linux/peer_directory.cpp"
+        "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/platform/linux/storage_monitor.cpp"
         "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/platform/linux/runtime_paths.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/infra/mesh_peer_directory_core.cpp")
     target_include_directories(trailmate_linux_reticulum_directory_runtime_smoke

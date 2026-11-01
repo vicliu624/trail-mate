@@ -69,7 +69,8 @@ int main()
     assert(contains(screens, ui_lvgl_ux::ScreenId::Settings));
 
     t_display_p4->buildScreens(screens);
-    assert(screens.size() == 13);
+    assert(screens.size() == 14);
+    assert(contains(screens, ui_lvgl_ux::ScreenId::Calendar));
     assert(contains(screens, ui_lvgl_ux::ScreenId::Dashboard));
     assert(contains(screens, ui_lvgl_ux::ScreenId::Chat));
     assert(contains(screens, ui_lvgl_ux::ScreenId::Contacts));

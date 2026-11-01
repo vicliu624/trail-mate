@@ -103,8 +103,10 @@ int main()
         assert(call::begin_outgoing(value));
         call::mark_link_active(value.link_id);
         bool prepared = true;
-        std::thread opening([&] { prepared = call::prepare_media(value.link_id); });
-        until([&] { return delayed->entered.load(); });
+        std::thread opening([&]
+                            { prepared = call::prepare_media(value.link_id); });
+        until([&]
+              { return delayed->entered.load(); });
         opening.join();
         assert(!prepared);
         assert(call::state() == call::State::Failed && !binding.snapshot().running);

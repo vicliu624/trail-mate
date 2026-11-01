@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""1seg decoder: signed IQ8 stdin (576 ksample/s) to raw TS stdout.
+"""1seg decoder: signed IQ8 stdin (500 or 576 ksample/s) to raw TS stdout.
 
 Select automatic parameter acquisition or the explicit OneSegCast profile.
 No hardware is opened and no RF lock or playback success state is emitted.
@@ -7,6 +7,7 @@ No hardware is opened and no RF lock or playback success state is emitted.
 import argparse
 from collections import deque
 import json
+import math
 import os
 from pathlib import Path
 import queue
@@ -206,11 +207,31 @@ def acquire_tmcc_parameters(native_iq, candidates=None, cancel=None):
     return None
 
 
-def resample_acquisition_iq(capture, cancel):
+def input_resampler(input_rate=576000, target_numerator=64000000, target_denominator=63):
+    """Preserve the complete occupied 1seg band at each supported IQ clock."""
+    from gnuradio import filter
+    if input_rate not in (450000, 500000, 576000):
+        raise ValueError("Unsupported signed-IQ input sample rate")
+    divisor = math.gcd(target_numerator, target_denominator * input_rate)
+    interpolation = target_numerator // divisor
+    decimation = target_denominator * input_rate // divisor
+    options = {}
+    if input_rate == 500000:
+        # The 1seg occupied band extends to approximately +/-214.3 kHz.
+        # Preserve it below this input's 250 kHz Nyquist limit.
+        options['taps'] = filter.firdes.low_pass(interpolation, interpolation * input_rate, 234000, 24000)
+    elif input_rate == 450000:
+        # The measured Hamming response preserves +/-214.3 kHz and rejects
+        # the input's 225 kHz Nyquist edge. No 1seg carriers are removed.
+        options['taps'] = filter.firdes.low_pass(interpolation, interpolation * input_rate, 219500, 7000)
+    return filter.rational_resampler_ccf(interpolation=interpolation, decimation=decimation, **options)
+
+
+def resample_acquisition_iq(capture, cancel, input_rate=576000):
     """Resample a bounded signed-IQ prefix with the production GNU Radio filter."""
     import numpy as np
     from gnuradio import blocks, filter, gr
-    if len(capture) % 2 or len(capture) > 1154560:
+    if input_rate not in (450000, 500000, 576000) or len(capture) % 2 or len(capture) > input_rate * 2 + 8192:
         raise ValueError("Invalid acquisition IQ prefix size")
     if cancel.is_set():
         return None
@@ -221,7 +242,13 @@ def resample_acquisition_iq(capture, cancel):
         source = _complex_capture_source(iq)
         sink = blocks.file_sink(gr.sizeof_gr_complex, "/proc/self/fd/" + str(captured.fileno()), False)
         try:
-            graph.connect(source, filter.rational_resampler_ccc(interpolation=1000, decimation=567), sink)
+            # The direct 450 kHz -> 64 MHz/63 ratio has 1,280 phases and
+            # constructs about 198k taps. Factor it through 576 kHz so no
+            # individual constructor holds up the live IQ reader that long.
+            # Both stages retain the exact native clock and occupied passband.
+            resamplers = ([input_resampler(input_rate, 576000, 1), input_resampler(576000)]
+                          if input_rate == 450000 else [input_resampler(input_rate)])
+            graph.connect(source, *resamplers, sink)
             finished, failures = threading.Event(), []
 
             def wait():
@@ -259,7 +286,7 @@ def resample_acquisition_iq(capture, cancel):
                 sink.close()
 
 
-def build_decoder_chain(source, sink, parameters, native_rate=False):
+def build_decoder_chain(source, sink, parameters, native_rate=False, input_rate=576000):
     """Build the actual receive chain from validated acquisition parameters."""
     from gnuradio import filter, isdbt
     mode, guard = parameters["mode"], parameters["guard_denominator"]
@@ -274,7 +301,7 @@ def build_decoder_chain(source, sink, parameters, native_rate=False):
     tmcc = isdbt.tmcc_decoder_1seg(mode, False)
     chain = [source]
     if not native_rate:
-        chain.append(filter.rational_resampler_ccc(interpolation=1000, decimation=567))
+        chain.append(input_resampler(input_rate))
     chain.extend([isdbt.ofdm_synchronization_1seg(mode, 1 / guard), tmcc,
                   isdbt.frequency_deinterleaver_1seg(mode), isdbt.time_deinterleaver_1seg(mode, interleaving),
                   isdbt.symbol_demapper_1seg(mode, constellation), isdbt.bit_deinterleaver(mode, 1, constellation),
@@ -322,6 +349,9 @@ def emit(event, **fields):
 
 
 def run(arguments):
+    input_rate = int(os.environ.get("TRAIL_MATE_ONESEG_INPUT_RATE", "576000"))
+    if input_rate not in (450000, 500000, 576000):
+        raise ValueError("TRAIL_MATE_ONESEG_INPUT_RATE must be 450000, 500000 or 576000")
     # Isolate upstream native printf output from the binary transport channel.
     output = os.dup(sys.stdout.fileno())
     os.dup2(sys.stderr.fileno(), sys.stdout.fileno())
@@ -346,7 +376,7 @@ def run(arguments):
         os.close(output)
         return 2
     if arguments.check_backend:
-        emit("backend_ready", profile=arguments.profile, input_rate=576000,
+        emit("backend_ready", profile=arguments.profile, input_rate=input_rate,
              native_rate=64000000 / 63, backend_path=str(isdbt.__file__),
              parameter_autodetection=automatic, parameter_observation=tmcc_port)
         os.close(output)
@@ -368,11 +398,16 @@ def run(arguments):
         stop.set()
 
     class IqInput(gr.sync_block):
+        block_bytes = 8192
+        queue_blocks = 1125
+        batch_wait_seconds = .012
+
         def __init__(self):
             gr.sync_block.__init__(self, "Signed IQ8 pipe", in_sig=None, out_sig=[np.complex64])
-            # Automatic acquisition retains live data while probing the prefix.
-            # 2048 * 1280 bytes is bounded to about 2.28 seconds of IQ, not drops.
-            self.queue = queue.Queue(2048 if automatic else 8)
+            # Keep the previous 9,216,000-byte bound while amortizing Python
+            # queue/scheduler calls on live, small pipe writes. A batch waits
+            # no more than 12 ms; EOF and cancellation retain their own paths.
+            self.queue = queue.Queue(self.queue_blocks)
             self.replay = deque()
             self.pending = b""
             self.eof = threading.Event()
@@ -380,24 +415,37 @@ def run(arguments):
             self.reader = threading.Thread(target=self.read_pipe, name="oneseg-iq-input", daemon=True)
 
         def read_pipe(self):
+            pending = bytearray()
+            batch_deadline = None
             try:
                 while not stop.is_set():
-                    if not select.select([sys.stdin.fileno()], [], [], .05)[0]:
-                        continue
-                    data = os.read(sys.stdin.fileno(), 1280)
-                    if not data:
-                        self.eof.set()
+                    timeout = .05 if not pending else max(0, batch_deadline-time.monotonic())
+                    readable = select.select([sys.stdin.fileno()], [], [], timeout)[0]
+                    ended = False
+                    if readable:
+                        data = os.read(sys.stdin.fileno(), self.block_bytes-len(pending))
+                        if data:
+                            if not pending:
+                                batch_deadline = time.monotonic()+self.batch_wait_seconds
+                            pending.extend(data)
+                            self.read_bytes += len(data)
+                        else:
+                            ended = True
+                    if pending and (ended or len(pending) == self.block_bytes or time.monotonic() >= batch_deadline):
+                        data = bytes(pending)
+                        deadline = time.monotonic() + .25
+                        while not stop.is_set():
+                            try:
+                                self.queue.put(data, timeout=.025)
+                                self.high_water = max(self.high_water, self.queue.qsize())
+                                break
+                            except queue.Full:
+                                if time.monotonic() >= deadline:
+                                    fail("IQ decoder queue remained full for 250 ms")
+                        pending.clear()
+                        batch_deadline = None
+                    if ended:
                         return
-                    self.read_bytes += len(data)
-                    deadline = time.monotonic() + .25
-                    while not stop.is_set():
-                        try:
-                            self.queue.put(data, timeout=.025)
-                            self.high_water = max(self.high_water, self.queue.qsize())
-                            break
-                        except queue.Full:
-                            if time.monotonic() >= deadline:
-                                fail("IQ decoder queue remained full for 250 ms")
             except (OSError, ValueError) as error:
                 fail("IQ input: " + str(error))
             finally:
@@ -416,6 +464,22 @@ def run(arguments):
                         if self.pending:
                             fail("Incomplete signed IQ8 pair at end of input")
                         return -1
+            # Fill one native scheduler buffer from already available IQ.
+            # Publishing only one 640-pair pipe read per callback needlessly
+            # monopolizes the GIL on CM0. Never wait to fill a batch: sparse
+            # input and cancellation retain their existing bounded latency.
+            target = min(len(outputs[0]), 8192) * 2
+            chunks = [self.pending]
+            available = len(self.pending)
+            while available < target:
+                try:
+                    data = self.replay.popleft() if self.replay else self.queue.get_nowait()
+                except queue.Empty:
+                    break
+                chunks.append(data)
+                available += len(data)
+            if len(chunks) > 1:
+                self.pending = b"".join(chunks)
             count = min(len(outputs[0]), len(self.pending) // 2)
             iq = np.frombuffer(self.pending, dtype=np.int8, count=count * 2).reshape((-1, 2))
             # LR2021 IQ8 is signed, unlike the unsigned RTL-SDR research input.
@@ -440,10 +504,13 @@ def run(arguments):
                 return -1
             self.tei += int(np.count_nonzero(rows[:, 1] & 0x80))
             view = memoryview(rows.tobytes())
-            deadline = time.monotonic() + .25
+            # The media consumer may legitimately wait up to three seconds
+            # while playing FFmpeg's retained probe prefix. Keep this pipe's
+            # stall budget above that bound; cancellation still polls at 25 ms.
+            deadline = time.monotonic() + 4
             while view and not stop.is_set():
                 if time.monotonic() >= deadline:
-                    fail("TS consumer remained blocked for 250 ms")
+                    fail("TS consumer remained blocked for 4 seconds")
                     return -1
                 if not select.select([], [output], [], .025)[1]:
                     continue
@@ -528,19 +595,25 @@ def run(arguments):
         if automatic:
             source.reader.start()
             ready()
-            emit("acquiring", profile=AUTO_PROFILE, input_rate=576000)
+            emit("acquiring", profile=AUTO_PROFILE, input_rate=input_rate)
             prefix = bytearray()
-            acquisition_deadline = started + 3
-            while len(prefix) < 1152000 and not stop.is_set():
+            # The ready handshake precedes radio reset/configuration. Keep a
+            # bounded startup wait, then give the one-second prefix its own
+            # deadline measured from the first actual IQ block.
+            acquisition_deadline = time.monotonic() + 10
+            while len(prefix) < input_rate * 2 and not stop.is_set():
                 now = time.monotonic()
                 if arguments.seconds and now - started >= arguments.seconds:
                     stop.set()
                     break
                 if now >= acquisition_deadline:
-                    fail("IQ acquisition prefix did not arrive within three seconds")
+                    fail("IQ acquisition prefix did not arrive within three seconds" if prefix
+                         else "No initial IQ data within ten seconds")
                     break
                 try:
                     data = source.queue.get(timeout=.025)
+                    if not prefix and data:
+                        acquisition_deadline = time.monotonic() + 3
                     source.replay.append(data)
                     prefix.extend(data)
                 except queue.Empty:
@@ -554,7 +627,7 @@ def run(arguments):
                 else:
                     # A split pair is retained in replay and completed by live IQ.
                     emit("acquisition_probe", iq_bytes=len(prefix))
-                    native = resample_acquisition_iq(prefix[:len(prefix) // 2 * 2], stop)
+                    native = resample_acquisition_iq(prefix[:len(prefix) // 2 * 2], stop, input_rate)
                     acquired = None if native is None else acquire_tmcc_parameters(native, cancel=stop)
                     if acquired is None and not stop.is_set():
                         fail("No validated 1seg parameters in acquisition prefix", 4)
@@ -563,7 +636,7 @@ def run(arguments):
                         emit("parameters_acquired", profile=AUTO_PROFILE, **configuration)
         if not stop.is_set():
             graph = gr.top_block("Trail Mate parameter-configured 1seg decoder")
-            chain, tmcc = build_decoder_chain(source, sink, configuration)
+            chain, tmcc = build_decoder_chain(source, sink, configuration, input_rate=input_rate)
             graph.connect(*chain)
             monitor = TmccMonitor() if tmcc_port else None
             if monitor is not None:
@@ -574,7 +647,7 @@ def run(arguments):
             if source.reader.ident is None:
                 source.reader.start()
             ready()
-            emit("started", profile=arguments.profile, input_rate=576000, parameter_autodetection=automatic)
+            emit("started", profile=arguments.profile, input_rate=input_rate, parameter_autodetection=automatic)
         next_report = started
         while graph_started and not done.wait(.05) and not stop.is_set():
             now = time.monotonic()

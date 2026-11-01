@@ -213,7 +213,8 @@ int main()
                             { static_cast<PeerContext*>(pointer)->outcomes.push_back({id, status, failure}); },
                             &remote_context);
         peer.setCustomOutcomeSink([](void* pointer, chat::MessageId id, chat::MessageStatus status, chat::delivery::SendFailureKind failure)
-                                  { static_cast<PeerContext*>(pointer)->outcomes.push_back({id, status, failure}); }, &remote_context);
+                                  { static_cast<PeerContext*>(pointer)->outcomes.push_back({id, status, failure}); },
+                                  &remote_context);
         uint32_t now = 1;
         const auto step = [&]
         {

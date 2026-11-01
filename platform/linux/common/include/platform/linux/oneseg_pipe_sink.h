@@ -1,6 +1,7 @@
 #pragma once
 
 #include "platform/linux/oneseg_receive_worker.h"
+#include <chrono>
 
 namespace platform::linux_runtime
 {
@@ -15,6 +16,9 @@ class OneSegPipeSink final : public OneSegIqSink
     {
         void* context = nullptr;
         int (*open)(void*, unsigned channel, uint64_t generation, const std::atomic_bool& cancel) = nullptr;
+        // Automatic acquisition may briefly stop reading IQ while probing.
+        // Zero preserves the ordinary 250 ms per-write bound.
+        unsigned startup_grace_ms = 0;
     };
     explicit OneSegPipeSink(Factory factory) : factory_(factory) {}
     ~OneSegPipeSink() override;
@@ -29,6 +33,7 @@ class OneSegPipeSink final : public OneSegIqSink
     Factory factory_;
     int fd_ = -1;
     uint64_t generation_ = 0, next_pair_ = 0;
+    std::chrono::steady_clock::time_point startup_deadline_{};
     char error_[128]{};
 };
 } // namespace platform::linux_runtime

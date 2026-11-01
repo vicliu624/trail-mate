@@ -34,6 +34,10 @@ int integer(const std::string& value)
 
 void validateDeviceOptions(const DeviceOptions& options)
 {
+    if (options.radio.oneseg_gain_step > 13)
+        throw std::runtime_error("1seg radio gain step must be in 0..13");
+    if (options.radio.oneseg_sample_rate_hz != 450000 && options.radio.oneseg_sample_rate_hz != 500000 && options.radio.oneseg_sample_rate_hz != 576000)
+        throw std::runtime_error("1seg radio sample rate must be 450000, 500000 or 576000");
     if (options.backlight.backend != "sysfs" && options.backlight.backend != "wayland_gamma")
         throw std::runtime_error("Backlight backend must be sysfs or wayland_gamma");
     if ((!options.backlight.gamma.socket.empty() && !options.backlight.gamma.socket.is_absolute()) ||
@@ -202,6 +206,18 @@ DeviceOptions loadDeviceOptions(const std::string& path)
             std::size_t used = 0;
             options.radio.tcxo_voltage = std::stof(value, &used);
             if (used != value.size()) throw std::runtime_error("Invalid TCXO voltage");
+        }
+        else if (key == "radio_oneseg_gain_step")
+        {
+            const int gain = integer(value);
+            if (gain < 0 || gain > 13) throw std::runtime_error("1seg radio gain step must be in 0..13");
+            options.radio.oneseg_gain_step = static_cast<unsigned>(gain);
+        }
+        else if (key == "radio_oneseg_sample_rate_hz")
+        {
+            const int rate = integer(value);
+            if (rate != 450000 && rate != 500000 && rate != 576000) throw std::runtime_error("1seg radio sample rate must be 450000, 500000 or 576000");
+            options.radio.oneseg_sample_rate_hz = static_cast<uint32_t>(rate);
         }
         else if (key == "imu_expected")
         {

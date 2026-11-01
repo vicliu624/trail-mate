@@ -1,4 +1,5 @@
 #include "platform/desktop/sdl_lvgl_host.h"
+#include "platform/desktop/dirty_regions.h"
 
 #include <SDL.h>
 #include <algorithm>
@@ -41,7 +42,7 @@ struct SdlLvglHost::Impl
     bool pressed = false;
     bool keyboard_focus = true;
     bool running = true;
-    bool dirty = true;
+    DirtyRegions dirty;
 
     ~Impl()
     {
@@ -110,10 +111,10 @@ struct SdlLvglHost::Impl
         point.y = std::clamp<int32_t>(point.y, 0, height - 1);
     }
 
-    static void flush(lv_display_t* display, const lv_area_t*, uint8_t*)
+    static void flush(lv_display_t* display, const lv_area_t* area, uint8_t*)
     {
         auto* self = static_cast<Impl*>(lv_display_get_user_data(display));
-        self->dirty = true;
+        self->dirty.add({area->x1, area->y1, area->x2, area->y2}, self->options.width, self->options.height);
         lv_display_flush_ready(display);
     }
 
@@ -254,7 +255,7 @@ void SdlLvglHost::setRotation(unsigned rotation)
             "SDL_RenderSetLogicalSize");
     state.pressed = false;
     state.pointer_samples.clear();
-    state.dirty = true;
+    state.dirty.invalidate();
 }
 
 void SdlLvglHost::setTextObserver(TextEnabled enabled, TextCommit commit, void* context, TextComposition composition)
@@ -289,7 +290,7 @@ bool SdlLvglHost::pump()
             (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_F4 &&
              (event.key.keysym.mod & KMOD_ALT))) state.running = false;
         if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_EXPOSED)
-            state.dirty = true;
+            state.dirty.invalidate();
         if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_FOCUS_LOST)
         {
             if (input_observer_) input_observer_(input_context_, {InputActivity::Kind::Cancel});
@@ -421,9 +422,19 @@ bool SdlLvglHost::pump()
 void SdlLvglHost::present()
 {
     auto& state = *impl_;
-    if (!state.dirty) return;
-    require(SDL_UpdateTexture(state.texture, nullptr, state.pixels.data(), state.options.width * 2) == 0,
-            "SDL_UpdateTexture");
+    if (!state.dirty.pending()) return;
+    const int pitch = state.options.width * 2;
+    if (state.dirty.full())
+        require(SDL_UpdateTexture(state.texture, nullptr, state.pixels.data(), pitch) == 0, "SDL_UpdateTexture");
+    else
+        for (std::size_t i = 0; i < state.dirty.size(); ++i)
+        {
+            const auto& area = state.dirty[i];
+            SDL_Rect rectangle{area.x1, area.y1, area.x2 - area.x1 + 1, area.y2 - area.y1 + 1};
+            const auto offset = static_cast<std::size_t>(area.y1) * state.options.width + area.x1;
+            require(SDL_UpdateTexture(state.texture, &rectangle, state.pixels.data() + offset, pitch) == 0,
+                    "SDL_UpdateTexture");
+        }
     const bool quarter_turn = state.options.rotation == 90 || state.options.rotation == 270;
     const int width = quarter_turn ? state.options.height : state.options.width;
     const int height = quarter_turn ? state.options.width : state.options.height;
@@ -435,7 +446,7 @@ void SdlLvglHost::present()
                              state.options.rotation, nullptr, SDL_FLIP_NONE) == 0,
             "SDL_RenderCopyEx");
     SDL_RenderPresent(state.renderer);
-    state.dirty = false;
+    state.dirty.clear();
 }
 
 void SdlLvglHost::saveScreenshot(const std::string& path)

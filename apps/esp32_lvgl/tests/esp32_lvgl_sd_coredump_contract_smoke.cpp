@@ -527,7 +527,7 @@ int main(int argc, char** argv)
     assert(contains(transmit_radio_body,
                     "wireless_companion::c6_companion().poll()"));
     assert(contains(transmit_radio_body,
-                    "SX1262 transmit timeout len=%u elapsed_ms=%lu"));
+                    "%s transmit timeout len=%u elapsed_ms=%lu"));
     assert(!contains(transmit_radio_body, "readLoraDio1"));
 
     const std::string c6_companion_runtime = read_file(

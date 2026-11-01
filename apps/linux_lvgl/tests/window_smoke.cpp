@@ -79,7 +79,10 @@ int main()
         auto* button = lv_button_create(lv_screen_active());
         lv_obj_set_pos(button, 0, 0);
         lv_obj_set_size(button, options.width, options.height);
-        lv_obj_add_event_cb(button, [](lv_event_t* event) { ++*static_cast<unsigned*>(lv_event_get_user_data(event)); }, LV_EVENT_CLICKED, &clicks);
+        lv_obj_add_event_cb(
+            button, [](lv_event_t* event)
+            { ++*static_cast<unsigned*>(lv_event_get_user_data(event)); },
+            LV_EVENT_CLICKED, &clicks);
         lv_obj_update_layout(button);
         event.type = SDL_MOUSEBUTTONUP;
         SDL_PushEvent(&event);

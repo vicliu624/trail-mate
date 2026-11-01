@@ -5,8 +5,8 @@
 #include "platform/linux/hostlink_uploads.h"
 #include "platform/linux/mesh/linux_reticulum_identity.h"
 #include "signed_route_package_fixture.h"
-#include <unistd.h>
 #include <algorithm>
+#include <unistd.h>
 
 namespace native_track_fixture
 {

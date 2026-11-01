@@ -37,6 +37,8 @@ class OneSegLr2021Rx
     {
         None,
         InvalidChannel,
+        InvalidGain,
+        InvalidSampleRate,
         NotExclusive,
         WireClock,
         Firmware,
@@ -62,9 +64,21 @@ class OneSegLr2021Rx
     // Leaves the chip in standby with the raw-route input configured. The
     // checked stream engine subsequently sets routing/FIFO and starts RX.
     // TCXO, board RF-switch policy and saved packet settings belong to caller.
-    static Result configure(Port& port, unsigned channel)
+    static bool supportedSampleRate(uint32_t rate) { return rate == 450000 || rate == 500000 || rate == kPairRate; }
+
+    static Result configure(Port& port, unsigned channel, unsigned gain_step = 0, uint32_t sample_rate_hz = kPairRate)
     {
         Result result;
+        if (!supportedSampleRate(sample_rate_hz))
+        {
+            result.error = Error::InvalidSampleRate;
+            return result;
+        }
+        if (gain_step > 13)
+        {
+            result.error = Error::InvalidGain;
+            return result;
+        }
         const uint32_t hz = frequencyHz(channel);
         if (!hz)
         {
@@ -76,7 +90,7 @@ class OneSegLr2021Rx
             result.error = Error::NotExclusive;
             return result;
         }
-        if (port.spiClockHz() < kMinimumWireClock)
+        if (port.spiClockHz() < sample_rate_hz * 2u * 8u)
         {
             result.error = Error::WireClock;
             return result;
@@ -94,7 +108,7 @@ class OneSegLr2021Rx
             return result;
         }
         result.restore_required = true;
-        const uint8_t standby = 0, fsk = 2, agc = 0;
+        const uint8_t standby = 0, fsk = 2, agc = static_cast<uint8_t>(gain_step);
         const uint16_t cell = static_cast<uint16_t>(hz / 4000000u);
         const uint8_t calibration[] = {static_cast<uint8_t>(cell >> 8), static_cast<uint8_t>(cell), 0, 0, 0, 0};
         const uint8_t frequency[] = {static_cast<uint8_t>(hz >> 24), static_cast<uint8_t>(hz >> 16),

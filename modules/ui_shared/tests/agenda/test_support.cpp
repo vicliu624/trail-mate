@@ -1,5 +1,17 @@
+#include "ui/app_runtime.h"
 #include "ui/assets/fonts/font_utils.h"
+#include "ui/input/pager_navigation.h"
 #include "ui/widgets/top_bar_power_presenter.h"
+
+lv_group_t* app_g = nullptr;
+
+namespace ui::input::pager
+{
+#if defined(ARDUINO_T_LORA_PAGER) || defined(__linux__)
+// Pager help belongs to the shell, outside this Agenda renderer fixture.
+bool open_help(lv_obj_t*, lv_group_t*) { return false; }
+#endif
+} // namespace ui::input::pager
 
 namespace agenda_test_fonts
 {

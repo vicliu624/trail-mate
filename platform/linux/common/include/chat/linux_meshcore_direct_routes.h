@@ -45,6 +45,7 @@ class DirectRoutes
         for (auto& entry : entries_)
             if (entry.peer == peer) entry.valid = false;
     }
+
   private:
     struct Entry
     {

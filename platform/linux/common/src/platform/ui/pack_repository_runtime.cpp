@@ -1,10 +1,10 @@
 #include "platform/ui/pack_repository_runtime.h"
 
-#include "platform/linux/resource_pack_store.h"
-#include "platform/linux/resource_pack_policy.h"
-#include "platform/linux/runtime_paths.h"
 #include "platform/linux/remote_pack_repository.h"
+#include "platform/linux/resource_pack_policy.h"
+#include "platform/linux/resource_pack_store.h"
 #include "platform/linux/resource_pack_tasks.h"
+#include "platform/linux/runtime_paths.h"
 
 #include <algorithm>
 #include <atomic>
@@ -303,11 +303,14 @@ bool annotate_installed(std::vector<PackageRecord>& packages, std::string& error
     for (const auto& [id, record] : remaining)
     {
         PackageRecord package;
-        package.id = package.display_name = id; package.version = record.version;
-        package.installed = true; package.installed_record = record;
+        package.id = package.display_name = id;
+        package.version = record.version;
+        package.installed = true;
+        package.installed_record = record;
         packages.push_back(std::move(package));
     }
-    std::sort(packages.begin(), packages.end(), [](const auto& left, const auto& right) { return left.display_name < right.display_name; });
+    std::sort(packages.begin(), packages.end(), [](const auto& left, const auto& right)
+              { return left.display_name < right.display_name; });
     return true;
 }
 
@@ -361,7 +364,10 @@ bool build_catalog(std::vector<PackageRecord>& out_packages, std::string& out_er
 } // namespace
 
 CatalogStatus catalog_status() { return ::platform::linux_runtime::remote_pack_catalog_status(); }
-void request_catalog_refresh() { if (::platform::linux_runtime::remote_pack_catalog_enabled()) ::platform::linux_runtime::refresh_remote_pack_catalog(); }
+void request_catalog_refresh()
+{
+    if (::platform::linux_runtime::remote_pack_catalog_enabled()) ::platform::linux_runtime::refresh_remote_pack_catalog();
+}
 
 bool is_supported()
 {
@@ -409,10 +415,14 @@ bool install_package_impl(const PackageRecord& package, std::string& out_error, 
         ready.archive_path = staged->directory();
     }
     if (progress) progress(85);
-    return native::ResourcePackStore(root, [progress] { if (progress) progress(95); },
-                                     [cancelled] { return cancelled && cancelled->load(); }).install(ready, out_error);
+    return native::ResourcePackStore(
+               root, [progress]
+               { if (progress) progress(95); },
+               [cancelled]
+               { return cancelled && cancelled->load(); })
+        .install(ready, out_error);
 }
-}
+} // namespace
 bool install_package(const PackageRecord& package, std::string& out_error) { return install_package_impl(package, out_error, nullptr, {}); }
 
 bool start_install_package(const PackageRecord& package, std::string& out_error)
@@ -477,4 +487,4 @@ void stop_resource_pack_tasks()
     worker.stopping = true;
     if (worker.thread.joinable()) worker.thread.join();
 }
-}
+} // namespace platform::linux_runtime

@@ -108,6 +108,13 @@ if(TRAIL_MATE_LINUX_BUILD_APP)
     target_link_libraries(trailmate_linux_sdl_host PUBLIC
         trailmate_linux_device_options lvgl SDL2::SDL2)
     target_compile_features(trailmate_linux_sdl_host PUBLIC cxx_std_17)
+    option(TRAIL_MATE_LINUX_SDL_RENDER_TESTS "Build the isolated SDL render regression" OFF)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND (BUILD_TESTING OR TRAIL_MATE_LINUX_SDL_RENDER_TESTS))
+        add_executable(trailmate_linux_sdl_pixels_test tests/linux_sdl_pixels_test.cpp)
+        target_compile_options(trailmate_linux_sdl_pixels_test PRIVATE -UNDEBUG)
+        target_link_libraries(trailmate_linux_sdl_pixels_test PRIVATE trailmate_linux_sdl_host ${CMAKE_DL_LIBS})
+        add_test(NAME linux_sdl_pixels COMMAND trailmate_linux_sdl_pixels_test)
+    endif()
     add_executable(trailmate-linux src/main.cpp)
     if(TRAIL_MATE_LINUX_ENABLE_MEDIA AND TRAIL_MATE_LINUX_ENABLE_LR2021)
         target_sources(trailmate-linux PRIVATE

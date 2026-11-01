@@ -6,10 +6,10 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
-#include <string>
-#include <string_view>
 #include <mutex>
 #include <optional>
+#include <string>
+#include <string_view>
 
 namespace platform::linux_runtime
 {
@@ -20,7 +20,11 @@ struct ConfiguredPaths
     std::mutex mutex;
     std::optional<RuntimePaths> paths;
 };
-ConfiguredPaths& configured_paths() { static ConfiguredPaths value; return value; }
+ConfiguredPaths& configured_paths()
+{
+    static ConfiguredPaths value;
+    return value;
+}
 
 std::string sanitize_component(const char* value)
 {
@@ -132,8 +136,7 @@ RuntimePaths xdg_application_paths()
     const auto choose = [&](const char* key, const std::filesystem::path& fallback)
     {
         const char* value = std::getenv(key);
-        return value && value[0] && std::filesystem::path(value).is_absolute() ?
-               std::filesystem::path(value) / "trailmate" : fallback / "trailmate";
+        return value && value[0] && std::filesystem::path(value).is_absolute() ? std::filesystem::path(value) / "trailmate" : fallback / "trailmate";
     };
     RuntimePaths paths;
     paths.settings_root = choose("XDG_STATE_HOME", base / ".local" / "state");

@@ -21,7 +21,7 @@ def run(args):
     args.output.mkdir(parents=True, exist_ok=True)
     report = dict(origin="paced offline IQ / real decoder subprocess; no RF", cases=[])
 
-    def exercise(name, data=None, cancel=None, expected=0, extra=()):
+    def exercise(name, data=None, cancel=None, expected=0, extra=(), startup_delay=0):
         read_fd, write_fd = os.pipe()
         child = subprocess.Popen(command + ["--ready-fd", str(write_fd), *extra], stdin=subprocess.PIPE,
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment, pass_fds=(write_fd,))
@@ -71,6 +71,8 @@ def run(args):
             elif data is None:
                 pass  # Explicit --seconds case: no input and pipe left open.
             else:
+                if startup_delay:
+                    time.sleep(startup_delay)
                 def feed():
                     began = time.monotonic()
                     try:
@@ -143,6 +145,12 @@ def run(args):
     terminal = [event for event in events if event.get("event") == "stopped"]
     assert len(terminal) == 1 and terminal[0]["iq_pairs"] * 2 == len(recording), terminal
     assert terminal[0]["errors"] == []
+    delayed, delayed_events, delayed_entry = exercise("delayed-radio-start", recording, startup_delay=2.5)
+    assert delayed and len(delayed) % 188 == 0 and not delayed_entry["producer_failures"]
+    assert any(event.get("event") == "parameters_acquired" for event in delayed_events)
+    delayed_terminal = [event for event in delayed_events if event.get("event") == "stopped"]
+    assert len(delayed_terminal) == 1 and delayed_terminal[0]["errors"] == []
+    assert delayed_terminal[0]["iq_pairs"] * 2 == len(recording)
     inspected = subprocess.run([str(args.transport_inspector)], input=output, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=5)
     assert inspected.returncode == 0, inspected.stdout
     report["received_programme"] = json.loads(inspected.stdout)

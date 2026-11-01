@@ -3,4 +3,4 @@ namespace platform::ui::lora
 {
 bool acquire();
 void release();
-}
+} // namespace platform::ui::lora

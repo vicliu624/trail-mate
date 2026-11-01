@@ -70,7 +70,8 @@ namespace
 class Monitor
 {
   public:
-    Monitor() : worker_([this] { run(); }) {}
+    Monitor() : worker_([this]
+                        { run(); }) {}
     ~Monitor()
     {
         {
@@ -85,6 +86,7 @@ class Monitor
         std::lock_guard<std::mutex> lock(mutex_);
         return status_;
     }
+
   private:
     void run()
     {
@@ -93,7 +95,8 @@ class Monitor
             const auto next = platform::linux_runtime::read_network_status();
             std::unique_lock<std::mutex> lock(mutex_);
             status_ = next;
-            if (wake_.wait_for(lock, std::chrono::seconds(1), [&] { return stopping_; })) break;
+            if (wake_.wait_for(lock, std::chrono::seconds(1), [&]
+                               { return stopping_; })) break;
         }
     }
     std::mutex mutex_;

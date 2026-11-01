@@ -12,7 +12,10 @@ class SharedUiShellStartup
     bool begin();
     bool tick();
     void setAgenda(AppScreen* app, const ::ui::map::MapMarkerBinding* markers)
-    { calendar_ = app; markers_ = markers; }
+    {
+        calendar_ = app;
+        markers_ = markers;
+    }
 
     [[nodiscard]] bool ready() const noexcept;
 

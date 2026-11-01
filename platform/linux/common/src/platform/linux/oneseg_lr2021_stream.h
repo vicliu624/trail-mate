@@ -10,10 +10,11 @@ namespace platform::linux_runtime
 // Bridge the existing checked packet HAL to the RX-only TV configuration.
 // The caller holds its physical/coordinator mutex for this entire operation.
 inline int run_oneseg_lr2021_stream(const lr2021_iq_hal& packet, OneSegLr2021Rx::Port& port,
-                                    const OneSegIqRequest& request, OneSegIqResult& result)
+                                    const OneSegIqRequest& request, OneSegIqResult& result, unsigned gain_step = 0,
+                                    uint32_t sample_rate_hz = OneSegLr2021Rx::kPairRate, unsigned level_every = 1)
 {
     result = {};
-    if (!OneSegLr2021Rx::frequencyHz(request.channel) || !request.staging ||
+    if ((level_every != 1 && level_every != 4) || !OneSegLr2021Rx::supportedSampleRate(sample_rate_hz) || gain_step > 13 || !OneSegLr2021Rx::frequencyHz(request.channel) || !request.staging ||
         request.staging_bytes < 1280 || !request.accept || !request.cancelled)
     {
         result.capture_error = LR2021_IQ_ARGUMENT;
@@ -29,10 +30,12 @@ inline int run_oneseg_lr2021_stream(const lr2021_iq_hal& packet, OneSegLr2021Rx:
         const lr2021_iq_hal& base;
         OneSegLr2021Rx::Port& port;
         const OneSegIqRequest& request;
+        unsigned gain_step;
+        uint32_t sample_rate_hz;
         lr2021_iq_profile saved{};
         bool setup_attempted = false;
         uint64_t published_bytes = 0;
-    } context{packet, port, request};
+    } context{packet, port, request, gain_step, sample_rate_hz};
     lr2021_iq_hal h{};
     h.context = &context;
     h.lock = [](void* c)
@@ -48,7 +51,7 @@ inline int run_oneseg_lr2021_stream(const lr2021_iq_hal& packet, OneSegLr2021Rx:
         p->frequency_hz = OneSegLr2021Rx::frequencyHz(s.request.channel);
         p->route = OneSegLr2021Rx::kRoute;
         p->input_code = OneSegLr2021Rx::kInputCode;
-        p->route_rate_hz = OneSegLr2021Rx::kPairRate;
+        p->route_rate_hz = s.sample_rate_hz;
         p->rx_path = 0;
         p->gain_step = p->rx_boost = 0;
         return 0;
@@ -58,7 +61,20 @@ inline int run_oneseg_lr2021_stream(const lr2021_iq_hal& packet, OneSegLr2021Rx:
     h.write32 = [](void* c, uint32_t a, uint32_t v)
     { auto& s = *static_cast<Context*>(c); return s.base.write32(s.base.context, a, v); };
     h.read = [](void* c, uint16_t op, uint8_t* p, size_t n)
-    { auto& s = *static_cast<Context*>(c); return s.base.read(s.base.context, op, p, n); };
+    {
+        auto& s = *static_cast<Context*>(c);
+        const int code = s.base.read(s.base.context, op, p, n);
+        if (code || op != 0x011c || n != 2 || s.request.staging_bytes < 2048) return code;
+        const unsigned level = unsigned(p[0]) << 8 | p[1];
+        if (level < 256 && !s.request.cancelled(s.request.context))
+        {
+            // Collect a useful DMA-sized read instead of spinning on tiny
+            // FIFO levels. Urgent/high-water reads never take this wait.
+            s.base.sleep_us(s.base.context, 100);
+            return s.base.read(s.base.context, op, p, n);
+        }
+        return 0;
+    };
     h.write = [](void* c, uint16_t op, const uint8_t* p, size_t n)
     { auto& s = *static_cast<Context*>(c); return s.base.write(s.base.context, op, p, n); };
     h.standby = [](void* c)
@@ -66,7 +82,7 @@ inline int run_oneseg_lr2021_stream(const lr2021_iq_hal& packet, OneSegLr2021Rx:
         auto& s = *static_cast<Context*>(c);
         if (s.setup_attempted) return s.base.standby(s.base.context);
         s.setup_attempted = true;
-        const auto setup = OneSegLr2021Rx::configure(s.port, s.request.channel);
+        const auto setup = OneSegLr2021Rx::configure(s.port, s.request.channel, s.gain_step, s.sample_rate_hz);
         return setup ? 0 : setup.native_error ? setup.native_error
                                               : LR2021_IQ_STATE;
     };
@@ -98,6 +114,13 @@ inline int run_oneseg_lr2021_stream(const lr2021_iq_hal& packet, OneSegLr2021Rx:
     session.fifo_capacity = 1024;
     session.buffer = request.staging;
     session.buffer_size = request.staging_bytes;
+    // At 576 kpair/s, repeated 256-byte DMA transactions leave too little
+    // service margin on CM0. A full FIFO fits in one checked SPI frame.
+    // Preserve the original bounded path for smaller engineering callers.
+    session.max_read = request.staging_bytes >= 2048 ? 1020 : 256;
+    // Optional conservative clock prediction is implemented by the pinned
+    // engine. Every staged block still requires clean sticky FIFO flags.
+    session.level_every = level_every;
     session.cancelled = request.cancelled;
     session.cancel_context = request.context;
     lr2021_iq_result native{};

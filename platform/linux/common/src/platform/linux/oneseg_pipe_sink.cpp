@@ -1,4 +1,5 @@
 #include "platform/linux/oneseg_pipe_sink.h"
+#include <algorithm>
 #include <cerrno>
 #include <chrono>
 #include <cstdio>
@@ -57,7 +58,8 @@ bool OneSegPipeSink::open(unsigned channel, uint64_t generation, const std::atom
 {
     if (fd_ >= 0) return fail("Decoder IQ pipe already open");
     error_[0] = 0;
-    if (channel < 13 || channel > 62 || !generation || !factory_.open) return fail("Invalid decoder IQ pipe configuration");
+    if (channel < 13 || channel > 62 || !generation || !factory_.open || factory_.startup_grace_ms > 30000)
+        return fail("Invalid decoder IQ pipe configuration");
     if (cancel.load()) return false;
     fd_ = factory_.open(factory_.context, channel, generation, cancel);
     if (fd_ < 0) return fail("Decoder did not provide an IQ pipe");
@@ -75,17 +77,22 @@ bool OneSegPipeSink::open(unsigned channel, uint64_t generation, const std::atom
     }
     generation_ = generation;
     next_pair_ = 0;
+    startup_deadline_ = std::chrono::steady_clock::now() + std::chrono::milliseconds(factory_.startup_grace_ms);
     return true;
 }
 bool OneSegPipeSink::write(const uint8_t* data, size_t bytes, uint64_t first_pair,
                            uint64_t generation, const std::atomic_bool& cancel)
 {
-    if (fd_ < 0 || !data || !bytes || bytes > 1280 || bytes % 2 || generation != generation_ ||
+    if (fd_ < 0 || !data || !bytes || bytes > 2048 || bytes % 2 || generation != generation_ ||
         first_pair != next_pair_ || first_pair > std::numeric_limits<uint64_t>::max() - bytes / 2)
         return fail("Invalid or discontinuous decoder IQ data");
     PipeSignalScope signals;
     if (!signals.ready()) return fail("Cannot protect decoder pipe write");
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(250);
+    const auto now = std::chrono::steady_clock::now();
+    const auto normal_deadline = now + std::chrono::milliseconds(250);
+    const auto deadline = now < startup_deadline_
+                              ? std::max(normal_deadline, std::min(now + std::chrono::milliseconds(3000), startup_deadline_))
+                              : normal_deadline;
     size_t offset = 0;
     while (offset < bytes)
     {

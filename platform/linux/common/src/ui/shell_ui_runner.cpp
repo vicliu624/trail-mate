@@ -1,6 +1,6 @@
 #include "ui/shell_ui_runner.h"
-#include "ui/input/pager_navigation.h"
 #include "platform/linux/tmap_creation.h"
+#include "ui/input/pager_navigation.h"
 
 #include <chrono>
 #include <cstdint>

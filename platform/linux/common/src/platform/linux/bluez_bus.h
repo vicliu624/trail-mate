@@ -6,5 +6,5 @@ namespace platform::linux_runtime::detail
 {
 // Returns a dedicated connection; callers may close it without affecting peers.
 GDBusConnection* connectBluezBus(const std::string& address, std::string& error);
-}
+} // namespace platform::linux_runtime::detail
 #endif

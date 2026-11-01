@@ -1,7 +1,7 @@
 #include "ui_presentation/page/page_manifest.h"
 
-#include <cstring>
 #include <array>
+#include <cstring>
 
 namespace ui::presentation
 {

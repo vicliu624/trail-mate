@@ -5,18 +5,23 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <exception>
 #include <limits>
 #include <mutex>
+#include <pthread.h>
+#include <stdexcept>
+#include <sys/mman.h>
 #include <thread>
 
 namespace platform::linux_runtime
 {
 struct OneSegReceiveWorker::Impl
 {
-    static constexpr uint32_t kSlots = 8;
-    static constexpr size_t kBlockBytes = 1280;
+    static constexpr uint32_t kSlots = OneSegReceiveWorker::queue_slots;
+    static constexpr size_t kBlockBytes = OneSegReceiveWorker::max_block_bytes;
+    static_assert(kSlots * kBlockBytes <= 4 * 1024 * 1024);
     static_assert(std::atomic<uint32_t>::is_always_lock_free && std::atomic_bool::is_always_lock_free);
     static_assert(std::atomic<Error>::is_always_lock_free);
     struct Block
@@ -90,9 +95,21 @@ struct OneSegReceiveWorker::Impl
     }
     void consume()
     {
+        (void)pthread_setname_np(pthread_self(), "oneseg-iq-pipe");
         uint64_t next_pair = 0;
         try
         {
+            const char* child = std::getenv("TRAIL_MATE_ONESEG_CAPTURE_CHILD");
+            if (child && !std::strcmp(child, "1"))
+            {
+                cpu_set_t cpus;
+                if (sched_getaffinity(0, sizeof(cpus), &cpus)) throw std::runtime_error("Cannot read capture child consumer affinity");
+                int capture_cpu = CPU_SETSIZE - 1;
+                while (capture_cpu >= 0 && !CPU_ISSET(capture_cpu, &cpus)) --capture_cpu;
+                if (capture_cpu >= 0) CPU_CLR(capture_cpu, &cpus);
+                if (!CPU_COUNT(&cpus) || sched_setaffinity(0, sizeof(cpus), &cpus))
+                    throw std::runtime_error("Cannot isolate capture child consumer");
+            }
             while (!cancel.load(std::memory_order_acquire))
             {
                 const auto read = read_index.load(std::memory_order_relaxed);
@@ -164,6 +181,13 @@ struct OneSegReceiveWorker::Impl
     }
     void run(unsigned channel)
     {
+        // The sub-millisecond hardware FIFO cannot tolerate swap-in of queue
+        // pages. Populate and retain the bounded queue before RX starts.
+        auto unlock = [](Impl* memory)
+        { if (memory) (void)munlock(memory, sizeof(*memory)); };
+        std::unique_ptr<Impl, decltype(unlock)> resident(
+            mlock(this, sizeof(*this)) == 0 ? this : nullptr, unlock);
+        if (!resident) fail(Error::Unavailable, "Cannot lock the 1seg IQ queue in memory");
         bool sink_attempted = false, acquired = false, restore_failed = false;
         std::thread consumer;
         OneSegIqResult result;
@@ -177,8 +201,19 @@ struct OneSegReceiveWorker::Impl
             }
             if (!cancel.load())
             {
-                acquired = radio.acquire();
-                if (!acquired) fail(Error::RadioAcquire, radio.lastError());
+                const auto admission_deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(250);
+                do
+                {
+                    acquired = radio.acquire();
+                    if (acquired || cancel.load()) break;
+                    const char* error = radio.lastError();
+                    if (error && *error) break;
+                    // Foreground acquire is intentionally a try-lock for UI
+                    // callers. This background owner can tolerate a brief
+                    // packet-worker lock without failing initial TV admission.
+                    std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                } while (!cancel.load() && std::chrono::steady_clock::now() < admission_deadline);
+                if (!acquired && !cancel.load()) fail(Error::RadioAcquire, radio.lastError());
             }
             if (!cancel.load())
             {
@@ -252,6 +287,7 @@ struct OneSegReceiveWorker::Impl
     }
     void loop()
     {
+        (void)pthread_setname_np(pthread_self(), "oneseg-capture");
         std::unique_lock<std::mutex> lock(mutex);
         for (;;)
         {

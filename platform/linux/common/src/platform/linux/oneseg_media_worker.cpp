@@ -1,4 +1,5 @@
 #include "platform/linux/oneseg_media_worker.h"
+#include "platform/linux/oneseg_demux_bootstrap.h"
 extern "C"
 {
 #include <libavcodec/avcodec.h>
@@ -481,7 +482,10 @@ bool OneSegMediaWorker::start(Config config)
     { return pid >= 0x10 && pid <= 0x1fff; };
     if (!config.generation || !config.width || !config.height || config.width > max_width || config.height > max_height ||
         !valid_pid(config.video_pid) || !valid_pid(config.audio_pid) || config.video_pid == config.audio_pid ||
-        (config.audio_pid != 0x1fff && !s.audio))
+        (config.audio_pid != 0x1fff && !s.audio) ||
+        (config.programme_number ? (!valid_pid(config.pmt_pid) || config.pmt_pid == 0x1fff ||
+                                    config.pmt_pid == config.video_pid || config.pmt_pid == config.audio_pid)
+                                 : (config.pmt_pid != 0x1fff || config.transport_id)))
     {
         std::lock_guard<std::mutex> lock(s.mutex);
         s.state = {};
@@ -505,6 +509,14 @@ bool OneSegMediaWorker::start(Config config)
     s.published = -1;
     s.consumed_ordinal = 0;
     s.input_offset = 0;
+    if (config.programme_number)
+    {
+        // This packet is internal to this media epoch. Programme discovery,
+        // CRC/error counters and stored RF transport remain received-only.
+        (void)make_oneseg_demux_pat(s.packets[0], config.programme_number, config.pmt_pid, config.transport_id);
+        s.written.store(1, std::memory_order_release);
+        s.high_water = 1;
+    }
     s.video_index = s.audio_index = -1;
     s.detail[0] = 0;
     s.next_pcm_pts = INT64_MIN;
@@ -534,7 +546,7 @@ bool OneSegMediaWorker::start(Config config)
     }
     return true;
 }
-bool OneSegMediaWorker::acceptTs(const uint8_t* data, size_t bytes, uint64_t generation)
+bool OneSegMediaWorker::acceptTs(const uint8_t* data, size_t bytes, uint64_t generation, uint32_t wait_ms)
 {
     auto& s = *impl_;
     if (!s.active.load() || s.cancel.load() || s.eof.load()) return false;
@@ -543,12 +555,24 @@ bool OneSegMediaWorker::acceptTs(const uint8_t* data, size_t bytes, uint64_t gen
         s.fail(Error::Input);
         return false;
     }
-    const uint32_t write = s.written.load(std::memory_order_relaxed), read = s.read.load(std::memory_order_acquire);
-    if (write - read >= Impl::slots)
+    const uint32_t write = s.written.load(std::memory_order_relaxed);
+    uint32_t read = s.read.load(std::memory_order_acquire);
+    // FFmpeg retains packets while probing, then decodes that prefix with
+    // paced audio before it requests more TS. The background producer must
+    // tolerate that startup burst; a persistent consumer stall still fails.
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(std::min(wait_ms, 3000u));
+    while (write - read >= Impl::slots)
     {
-        s.fail(Error::QueueFull);
-        return false;
+        if (s.cancel.load() || s.eof.load()) return false;
+        if (!wait_ms || std::chrono::steady_clock::now() >= deadline)
+        {
+            s.fail(Error::QueueFull);
+            return false;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        read = s.read.load(std::memory_order_acquire);
     }
+    if (s.cancel.load() || s.eof.load()) return false;
     std::memcpy(s.packets[write % Impl::slots].data(), data, bytes);
     s.written.store(write + 1, std::memory_order_release);
     if (write - read + 1 > s.high_water.load()) s.high_water.store(write - read + 1);

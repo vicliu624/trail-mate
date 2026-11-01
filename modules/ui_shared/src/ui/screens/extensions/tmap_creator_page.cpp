@@ -1,11 +1,11 @@
 #include "ui/screens/extensions/tmap_creator_page.h"
 #include "platform/ui/tmap_creation_runtime.h"
 #include "ui/app_runtime.h"
+#include "ui/input/pager_navigation.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
 #include "ui/ui_theme.h"
 #include "ui_lvgl_ux_packs/common/touch_text_editor.h"
-#include "ui/input/pager_navigation.h"
 #include <algorithm>
 #include <array>
 #include <cmath>

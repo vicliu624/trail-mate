@@ -10,8 +10,8 @@
 #include "ui/assets/fonts/font_utils.h"
 #include "ui/assets/images.h"
 #include "ui/callback_app_screen.h"
-#include "ui/screens/fm/fm_page.h"
 #include "ui/page/page_host.h"
+#include "ui/screens/fm/fm_page.h"
 #if defined(ARDUINO_T_DECK_PRO) || defined(TRAIL_MATE_MONO_SCREEN_240X320)
 #define TRAIL_MATE_USE_MONO_SCREEN_240X320 1
 #else

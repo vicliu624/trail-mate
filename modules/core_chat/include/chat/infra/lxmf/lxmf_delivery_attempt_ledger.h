@@ -6,8 +6,8 @@
 #pragma once
 
 #include "chat/domain/chat_types.h"
-#include "chat/infra/reticulum/reticulum_wire.h"
 #include "chat/infra/lxmf/lxmf_memory.h"
+#include "chat/infra/reticulum/reticulum_wire.h"
 
 #include <cstring>
 

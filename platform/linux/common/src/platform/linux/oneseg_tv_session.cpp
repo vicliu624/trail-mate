@@ -1,11 +1,15 @@
 #include "platform/linux/oneseg_tv_session.h"
 #include "platform/linux/oneseg_pcm_output.h"
+#include "platform/linux/oneseg_telemetry.h"
 #include <algorithm>
 #include <chrono>
 #include <condition_variable>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <mutex>
 #include <thread>
+#include <unistd.h>
 
 namespace platform::linux_runtime
 {
@@ -34,7 +38,42 @@ struct OneSegTvSession::Impl
     OneSegDecoderProcess decoder;
     OneSegReceiveWorker receive;
     OneSegServiceTextCache service_text;
+    const bool telemetry_enabled = []
+    {
+        const char* value = std::getenv("TRAIL_MATE_ONESEG_TELEMETRY");
+        return value && std::strcmp(value, "1") == 0;
+    }();
+    Clock::time_point telemetry_due{};
     std::thread owner;
+
+    void logTelemetry(bool force = false)
+    {
+        if (!telemetry_enabled) return;
+        const auto now = Clock::now();
+        if (!force && now < telemetry_due) return;
+        telemetry_due = now + std::chrono::seconds(1);
+        char output[2048];
+        char error_detail[160]{};
+        uint64_t error_generation = 0;
+        int bytes;
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            bytes = format_oneseg_telemetry(output, sizeof(output), state,
+                                            static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count()),
+                                            age(presentation), audio.clock(), static_cast<uint64_t>(getpid()));
+            if (force && state.error != Error::None)
+            {
+                std::snprintf(error_detail, sizeof(error_detail), "%s", state.message);
+                error_generation = state.generation;
+            }
+        }
+        // Optional diagnostic I/O stays on the session owner, outside its state
+        // lock and outside the UI, PCM callback and realtime FIFO producer.
+        if (bytes) (void)std::fwrite(output, 1, static_cast<size_t>(bytes), stderr);
+        if (error_detail[0])
+            std::fprintf(stderr, "[oneseg_error pid=%llu gen=%llu] %s\n", (unsigned long long)getpid(),
+                         (unsigned long long)error_generation, error_detail);
+    }
 
     struct Mapping
     {
@@ -89,7 +128,7 @@ struct OneSegTvSession::Impl
             ++self.callbacks;
             bool accepted = true;
             if (self.armed.load())
-                accepted = generation == self.routed_rf && self.media.acceptTs(data, bytes, self.routed_media);
+                accepted = generation == self.routed_rf && self.media.acceptTs(data, bytes, self.routed_media, 3000);
             --self.callbacks;
             return accepted || !self.armed.load();
         };
@@ -127,10 +166,11 @@ struct OneSegTvSession::Impl
     void stopMedia()
     {
         armed = false;
+        // Wake a producer waiting for media space before draining callbacks.
+        media.requestStop();
         // A callback that saw the old arm either completes or rechecks the gate.
         // The decoder owner remains alive while media state is reconfigured.
         while (callbacks.load()) std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        media.requestStop();
         media.join();
         std::lock_guard<std::mutex> lock(mutex);
         state.media_epoch = 0;
@@ -185,6 +225,7 @@ struct OneSegTvSession::Impl
     }
     void run(unsigned channel, uint16_t target_width, uint16_t target_height)
     {
+        logTelemetry(true);
         service_text.reset();
         bool media_started = false, media_attempted = false, receive_started = false, receive_attempted = false;
         uint16_t desired = 0;
@@ -265,7 +306,8 @@ struct OneSegTvSession::Impl
                             state.media = {};
                         }
                         media_attempted = true;
-                        if (!media.start({epoch, next.video, next.audio, target_width, target_height}))
+                        if (!media.start({epoch, next.video, next.audio, target_width, target_height,
+                                          next.programme, next.pmt, decoded.programmes.transport_id}))
                         {
                             fail(Error::Media, media.snapshot().message);
                             break;
@@ -284,6 +326,7 @@ struct OneSegTvSession::Impl
                     current = {};
                 }
                 publish(rx, decoded, media.snapshot(), media_started);
+                logTelemetry();
                 std::unique_lock<std::mutex> lock(mutex);
                 changed.wait_for(lock, std::chrono::milliseconds(20), [this]
                                  { return stop.load() || selection; });
@@ -326,6 +369,7 @@ struct OneSegTvSession::Impl
             pending = false;
             lock.unlock();
             run(channel, w, h);
+            logTelemetry(true);
             lock.lock();
         }
     }

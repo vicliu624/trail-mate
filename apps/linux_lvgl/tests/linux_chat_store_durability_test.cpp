@@ -76,7 +76,8 @@ int main()
     chat::IChatStore& port = store;
     const auto old_protocol = std::to_string(static_cast<int>(chat::MeshProtocol::Meshtastic));
     sql(("INSERT INTO chat_messages(protocol,channel,peer,from_node,msg_id,timestamp,text,status) VALUES(" + old_protocol +
-         ",0,9,9,5,1700000000,'preserved legacy',0); INSERT INTO chat_unread VALUES(" + old_protocol + ",0,9,1);").c_str());
+         ",0,9,9,5,1700000000,'preserved legacy',0); INSERT INTO chat_unread VALUES(" + old_protocol + ",0,9,1);")
+            .c_str());
     chat::ChatMessage preserved;
     assert(port.getMessageForProtocol(5, chat::MeshProtocol::Meshtastic, &preserved));
     assert(preserved.text == "preserved legacy" && !preserved.has_reticulum_lxmf_hash && !preserved.source_unverified);

@@ -121,10 +121,14 @@ class UploadIo
     // same captured-root and no-follow policy as ordinary file operations.
     int directory(const char* path) const
     {
-        if(!path || !*path) {errno=EINVAL;return -1;}
+        if (!path || !*path)
+        {
+            errno = EINVAL;
+            return -1;
+        }
         std::string ignored;
-        const auto probe=std::string(path)+"/placeholder";
-        return parent(probe.c_str(),ignored);
+        const auto probe = std::string(path) + "/placeholder";
+        return parent(probe.c_str(), ignored);
     }
     enum class ScanStatus
     {
@@ -268,7 +272,9 @@ class UploadIo
     };
     bool stamp(FileStamp& output) const
     {
-        struct stat info{};
+        struct stat info
+        {
+        };
         if (!current() || fstat(fd_, &info) != 0 || !S_ISREG(info.st_mode) || info.st_nlink != 1 || info.st_size < 0) return false;
         output = {info.st_dev, info.st_ino, info.st_size, info.st_mtim, info.st_ctim};
         return true;

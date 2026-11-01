@@ -1,6 +1,6 @@
 #include "ui/agenda_runtime_binding.h"
-#include "platform/linux/waypoint_source.h"
 #include "platform/audio/audio_focus.h"
+#include "platform/linux/waypoint_source.h"
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/screen_runtime.h"
 #include "ui/app_runtime.h"

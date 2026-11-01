@@ -2,7 +2,8 @@
 #include <cassert>
 #ifdef _WIN32
 #include <windows.h>
-template <typename Callable> struct ThreadEntry
+template <typename Callable>
+struct ThreadEntry
 {
     static DWORD WINAPI run(void* context)
     {

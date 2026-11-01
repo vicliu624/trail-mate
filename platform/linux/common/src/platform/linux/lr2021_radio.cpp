@@ -1,6 +1,10 @@
 #include "linux_radiolib_hal.h"
 #include "lr2021_iq.h"
+#include "oneseg_lr2021_dma.h"
 #include "oneseg_lr2021_stream.h"
+#include "platform/linux/oneseg_capture_memory.h"
+#include "platform/linux/oneseg_capture_process.h"
+#include "platform/linux/oneseg_capture_thread.h"
 #include "platform/linux/packet_radio.h"
 #include "platform/shared/radio/fm_lr2021_stream.h"
 #include "platform/shared/radio/lora_receive_config.h"
@@ -9,8 +13,11 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <mutex>
+#include <sys/mman.h>
 #include <thread>
 
 namespace platform::linux_runtime
@@ -153,6 +160,51 @@ class Lr2021Radio final : public IPacketRadio
             result.capture_error = LR2021_IQ_STATE;
             return fail("TV IQ requires the CM0 profile and one acquired LoRa owner");
         }
+        const char* child_marker = std::getenv("TRAIL_MATE_ONESEG_CAPTURE_CHILD");
+        const bool capture_child = child_marker && !std::strcmp(child_marker, "1");
+        const char* helper = std::getenv("TRAIL_MATE_ONESEG_CAPTURE_HELPER");
+        if (helper && *helper && !capture_child)
+        {
+            if (request.cancelled && request.cancelled(request.context))
+            {
+                result.cancelled = true;
+                return true;
+            }
+            lr2021_iq_profile saved{};
+            if (iqSnapshot(&saved))
+            {
+                result.capture_error = LR2021_IQ_IO;
+                return false;
+            }
+            // Keep the foreground lease and driver mutex, but release physical
+            // GPIO/SPI ownership before an exec-launched capture process opens it.
+            hal_.term();
+            bool captured = false;
+            try
+            {
+                captured = run_oneseg_capture_process(helper, std::getenv("TRAIL_MATE_ONESEG_CAPTURE_PROFILE"),
+                                                      request, hardware_.oneseg_sample_rate_hz, result);
+            }
+            catch (...)
+            {
+                result.capture_error = LR2021_IQ_IO;
+            }
+            const int reset = iqReset();
+            const int restored = reset ? reset : iqRestore(&saved);
+            // iqRestore's LoRaReceiveConfig::apply already arms receive.
+            // A second StartRx while receiving is rejected by LR2021 firmware.
+            const bool receiving = !restored;
+            if (!receiving)
+            {
+                result.recovery_error = LR2021_IQ_IO;
+                if (hardware_.bus.reset_gpio >= 0 && hal_.healthy())
+                    hal_.digitalWrite(static_cast<uint32_t>(hardware_.bus.reset_gpio), hal_.GpioLevelLow);
+                return false;
+            }
+            if (!captured) return fail("TV capture process failed: " + std::to_string(result.capture_error));
+            error_.clear();
+            return true;
+        }
         struct Port final : OneSegLr2021Rx::Port
         {
             Lr2021Radio& self;
@@ -169,7 +221,58 @@ class Lr2021Radio final : public IPacketRadio
         { return static_cast<Lr2021Radio*>(c)->iqWrite(0x011e, nullptr, 0); };
         hooks.read_fifo = [](void* c, uint8_t* data, size_t bytes)
         { return static_cast<Lr2021Radio*>(c)->iqFifoRead(data, bytes); };
-        const int code = run_oneseg_lr2021_stream(hooks, port, request, result);
+        OneSegCaptureThread scheduling;
+        // CM0 display/CRTC workers commonly run on CPU3. Keep the tight FIFO
+        // producer on CPU2 when the caller's allowed mask includes it.
+        const int admission = scheduling.start(capture_child ? -1 : 1);
+        if (admission)
+        {
+            result.capture_error = LR2021_IQ_STATE;
+            return fail("1seg capture requires realtime thread scheduling permission: " + std::to_string(admission));
+        }
+        const char* prediction = std::getenv("TRAIL_MATE_ONESEG_FIFO_PREDICTION");
+        const unsigned level_every = capture_child && prediction && !std::strcmp(prediction, "4") ? 4 : 1;
+        const char* dma_option = std::getenv("TRAIL_MATE_ONESEG_DMA");
+        const bool dma = capture_child && dma_option && !std::strcmp(dma_option, "1");
+        OneSegCaptureMemory runtime_resident;
+        if (dma && !runtime_resident.lock())
+        {
+            result.capture_error = LR2021_IQ_STATE;
+            return fail("Cannot lock the DMA capture runtime: " + std::to_string(runtime_resident.error()));
+        }
+        if (dma) std::fprintf(stderr, "[oneseg_resident] runtime_bytes=%zu\n", runtime_resident.bytes());
+        const auto unlock = [](Lr2021Radio* memory)
+        { if (memory) (void)munlock(memory, sizeof(*memory)); };
+        std::unique_ptr<Lr2021Radio, decltype(unlock)> dma_resident(
+            dma && mlock(this, sizeof(*this)) == 0 ? this : nullptr, unlock);
+        if (dma && !dma_resident)
+        {
+            result.capture_error = LR2021_IQ_STATE;
+            return fail("Cannot lock the DMA transport buffers");
+        }
+        if (dma)
+        {
+            hooks.fast = [](void* c, bool enabled) -> int
+            {
+                const char* configured = std::getenv("TRAIL_MATE_ONESEG_DMA_CLOCK");
+                if (configured && std::strcmp(configured, "8350000") && std::strcmp(configured, "8700000") && std::strcmp(configured, "16000000"))
+                    return LR2021_IQ_ARGUMENT;
+                const uint32_t clock = configured && !std::strcmp(configured, "16000000") ? 16000000u : configured && !std::strcmp(configured, "8700000") ? 8700000u
+                                                                                                                                                          : 8350000u;
+                return static_cast<Lr2021Radio*>(c)->hal_.setIqTransferMode(enabled, clock) ? 0 : LR2021_IQ_IO;
+            };
+            // FIFO idle waits have a sub-millisecond deadline. The HAL already
+            // spins for short IQ delays; a userspace timer can wake too late.
+            hooks.sleep_us = [](void* c, unsigned us)
+            { static_cast<Lr2021Radio*>(c)->hal_.delayMicroseconds(us); };
+        }
+        const int code = dma
+                             ? run_oneseg_lr2021_dma(hooks, port, request, result, hardware_.oneseg_gain_step, hardware_.oneseg_sample_rate_hz,
+                                                     iq_dma_staging_.data(), iq_dma_staging_.size())
+                             : run_oneseg_lr2021_stream(hooks, port, request, result, hardware_.oneseg_gain_step, hardware_.oneseg_sample_rate_hz, level_every);
+        const int restored_scheduling = scheduling.finish();
+        if (dma) hal_.dumpIqTransferTrace();
+        if (restored_scheduling) return fail("Cannot restore 1seg capture thread scheduling: " + std::to_string(restored_scheduling));
         if (result.recovery_error || !hal_.healthy())
         {
             if (hardware_.bus.reset_gpio >= 0)
@@ -219,7 +322,10 @@ class Lr2021Radio final : public IPacketRadio
     bool startReceive() override
     {
         std::lock_guard<std::mutex> guard(mutex_);
-        return online_ && check(radio_.startReceive(), "start receive");
+        // Configuration may already have armed RX. LR2021 rejects StartRx
+        // while receiving; restart from standby for a fresh receive generation.
+        return online_ && check(radio_.standby(), "standby before receive") &&
+               check(radio_.startReceive(), "start receive");
     }
     bool supportsFsk() const override { return true; }
     bool supportsFskConfiguration(const FskSettings& settings) const override { return valid_lr2021_fsk_settings(settings); }
@@ -418,8 +524,8 @@ class Lr2021Radio final : public IPacketRadio
     }
     int iqFifoRead(uint8_t* data, size_t bytes)
     {
-        if (!data || !bytes || bytes > 256) return LR2021_IQ_ARGUMENT;
-        std::fill(iq_fifo_tx_.begin(), iq_fifo_tx_.end(), 0);
+        if (!data || !bytes || bytes > iq_fifo_tx_.size() - 2) return LR2021_IQ_ARGUMENT;
+        std::fill_n(iq_fifo_tx_.begin(), bytes + 2, 0);
         iq_fifo_tx_[1] = 1;
         // FIFO payload follows the two command/status bytes in this one frame;
         // unlike register reads, there is no second commandless transaction.
@@ -434,6 +540,28 @@ class Lr2021Radio final : public IPacketRadio
     int iqRead(uint16_t command, uint8_t* data, size_t bytes,
                const uint8_t* arguments = nullptr, size_t argument_bytes = 0)
     {
+        if ((hal_.spiClockHz() == 16000000u || hal_.spiClockHz() == 10000000u || hal_.spiClockHz() == 8350000u || hal_.spiClockHz() == 8700000u) && (command == 0x011b || command == 0x011c) &&
+            data && bytes == 2 && !argument_bytes)
+        {
+            // These hot FIFO queries still require two NSS assertions. The HAL
+            // waits for BUSY before each frame; avoid repeating RadioLib's
+            // generic BUSY/status orchestration around the same transactions.
+            // Driver ownership serializes this scratch with FIFO payload reads.
+            std::fill_n(iq_fifo_tx_.begin(), 4, 0);
+            iq_fifo_tx_[0] = static_cast<uint8_t>(command >> 8);
+            iq_fifo_tx_[1] = static_cast<uint8_t>(command);
+            for (const size_t frame_bytes : {size_t{2}, size_t{4}})
+            {
+                hal_.spiTransfer(iq_fifo_tx_.data(), frame_bytes, iq_fifo_rx_.data());
+                if (!hal_.healthy()) return LR2021_IQ_IO;
+                const unsigned status = static_cast<unsigned>(iq_fifo_rx_[0]) << 8 | iq_fifo_rx_[1];
+                if (!status || (status & 0xf008) || ((status >> 9) & 7) < 2 || ((status >> 9) & 7) > 3 ||
+                    ((status >> 4) & 7) > 2 || (status & 7) > 6) return LR2021_IQ_DATA;
+                iq_fifo_tx_[0] = iq_fifo_tx_[1] = 0;
+            }
+            std::copy_n(iq_fifo_rx_.begin() + 2, bytes, data);
+            return 0;
+        }
         int code = module_.SPIwriteStream(command, arguments, argument_bytes, true, false);
         if (code || !hal_.healthy()) return code ? code : LR2021_IQ_IO;
         const auto width = module_.spiConfig.widths[RADIOLIB_MODULE_SPI_WIDTH_CMD];
@@ -536,7 +664,8 @@ class Lr2021Radio final : public IPacketRadio
     bool online_ = false;
     unsigned users_ = 0;
     lr2021_iq_result iq_result_{};
-    std::array<uint8_t, 258> iq_fifo_tx_{}, iq_fifo_rx_{};
+    std::array<uint8_t, 32768> iq_fifo_tx_{}, iq_fifo_rx_{};
+    std::array<uint8_t, 32768> iq_dma_staging_{};
 };
 } // namespace
 

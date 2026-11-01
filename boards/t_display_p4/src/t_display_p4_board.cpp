@@ -16,13 +16,13 @@
 #include "esp_log.h"
 #include "esp_sleep.h"
 #include "esp_timer.h"
-#include "platform/shared/radio/board_radio_lease.h"
 #include "platform/esp/idf_common/bsp_runtime.h"
 #include "platform/esp/idf_common/gps_runtime.h"
 #include "platform/esp/idf_common/sd_card_runtime_sdfat_adapter.h"
 #include "platform/esp/idf_common/sdmmc_host_runtime.h"
 #include "platform/esp/idf_common/selected_radio.h"
 #include "platform/esp/idf_common/wireless_companion/c6_companion.h"
+#include "platform/shared/radio/board_radio_lease.h"
 #include "platform/ui/device_runtime.h"
 
 namespace
@@ -1901,7 +1901,8 @@ bool TDisplayP4Board::ensureRadioReady() const
     static std::mutex mutex;
     static platform::shared::radio::BoardRadioLease lease;
     const std::lock_guard<std::mutex> lock(mutex);
-    return lease.ensure(radio(), [] { return static_cast<uint32_t>(esp_timer_get_time() / 1000); });
+    return lease.ensure(radio(), []
+                        { return static_cast<uint32_t>(esp_timer_get_time() / 1000); });
 }
 
 void TDisplayP4Board::copyOwnerTag(const char* src, char* dst, size_t dst_len)

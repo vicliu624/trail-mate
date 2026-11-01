@@ -3,8 +3,8 @@
 
 #include <algorithm>
 #include <array>
-#include <cerrno>
 #include <cctype>
+#include <cerrno>
 #include <cstring>
 #include <ctime>
 #include <fcntl.h>
@@ -298,7 +298,9 @@ bool ResourcePackStore::installed(std::vector<::ui::runtime::packs::InstalledPac
                 require(fs::is_regular_file(fs::symlink_status(digest_path)) && fs::file_size(digest_path) <= 65, "Invalid installed archive digest");
                 std::ifstream digest(digest_path);
                 digest >> record.archive_sha256;
-                require(record.archive_sha256.size() == 64 && std::all_of(record.archive_sha256.begin(), record.archive_sha256.end(), [](unsigned char c) { return std::isxdigit(c); }), "Invalid installed archive digest");
+                require(record.archive_sha256.size() == 64 && std::all_of(record.archive_sha256.begin(), record.archive_sha256.end(), [](unsigned char c)
+                                                                          { return std::isxdigit(c); }),
+                        "Invalid installed archive digest");
             }
             std::ifstream timestamp(entry.path() / ".installed-at");
             require(bool(timestamp >> record.installed_at_epoch), "Invalid installed package timestamp");
@@ -369,7 +371,8 @@ bool ResourcePackStore::transact(const ::ui::runtime::packs::PackageRecord* pack
             const auto captured = manifest(saved / "package.ini");
             require(captured.at("id") == id && captured.at("kind") == "package", "Captured package identity changed");
             require(captured.contains("version") && !captured.at("version").empty() &&
-                    (package->version.empty() || captured.at("version") == package->version), "Captured package version changed");
+                        (package->version.empty() || captured.at("version") == package->version),
+                    "Captured package version changed");
             auto checked = *package;
             const auto minimum = captured.find("min_firmware_version");
             checked.min_firmware_version = minimum == captured.end() ? "" : minimum->second;
@@ -389,7 +392,9 @@ bool ResourcePackStore::transact(const ::ui::runtime::packs::PackageRecord* pack
             fs::remove(saved / ".archive-sha256");
             if (!package->archive_sha256.empty())
             {
-                require(package->archive_sha256.size() == 64 && std::all_of(package->archive_sha256.begin(), package->archive_sha256.end(), [](unsigned char c) { return std::isxdigit(c); }), "Invalid package archive digest");
+                require(package->archive_sha256.size() == 64 && std::all_of(package->archive_sha256.begin(), package->archive_sha256.end(), [](unsigned char c)
+                                                                            { return std::isxdigit(c); }),
+                        "Invalid package archive digest");
                 std::ofstream digest(saved / ".archive-sha256");
                 digest << package->archive_sha256 << '\n';
                 digest.close();

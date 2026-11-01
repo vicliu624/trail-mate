@@ -27,6 +27,7 @@ class StagedResourcePack
     StagedResourcePack& operator=(const StagedResourcePack&) = delete;
     std::filesystem::path directory() const { return owner_ / "content"; }
     std::filesystem::path archive() const { return owner_ / "archive.zip"; }
+
   private:
     explicit StagedResourcePack(std::filesystem::path owner) : owner_(std::move(owner)) {}
     friend std::unique_ptr<StagedResourcePack> stage_remote_pack(
@@ -38,4 +39,4 @@ std::unique_ptr<StagedResourcePack> stage_remote_pack(
     const ::ui::runtime::packs::PackageRecord& package, const std::filesystem::path& cache_root,
     const std::filesystem::path& installed_root, std::string& error,
     const std::atomic_bool* cancelled = nullptr, std::function<void(int)> progress = {});
-}
+} // namespace platform::linux_runtime

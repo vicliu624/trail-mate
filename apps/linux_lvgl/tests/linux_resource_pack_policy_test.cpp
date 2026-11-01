@@ -1,6 +1,6 @@
 #include "platform/linux/build_identity.h"
-#include "platform/ui/device_runtime.h"
 #include "platform/linux/resource_pack_policy.h"
+#include "platform/ui/device_runtime.h"
 #include <cassert>
 #include <cstdlib>
 #include <cstring>

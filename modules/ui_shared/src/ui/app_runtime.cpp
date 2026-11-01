@@ -431,7 +431,11 @@ void ui_detach_app(AppScreen* app)
         lv_timer_delete(s_rebuild_timer);
         s_rebuild_timer = nullptr;
     }
-    if (s_interrupted_app == app) { s_interrupted_app = nullptr; s_interrupted_was_menu = true; }
+    if (s_interrupted_app == app)
+    {
+        s_interrupted_app = nullptr;
+        s_interrupted_was_menu = true;
+    }
     if (s_interruption_app == app)
     {
         s_interruption_app = s_interrupted_app = nullptr;

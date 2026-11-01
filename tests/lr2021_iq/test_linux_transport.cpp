@@ -1,5 +1,6 @@
 #include "lr2021_iq.h"
 #include "platform/linux/packet_radio.h"
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <cmath>
@@ -53,10 +54,34 @@ struct Harness
     {
         bool valid = true;
         unsigned terms = 0, inits = 0;
+        uint32_t clock = 1000000;
+        unsigned transfers = 0, invalid_status_at = 0, io_error_at = 0;
+        uint16_t command = 0;
+        uint32_t spiClockHz() const { return clock; }
+        void spiTransfer(uint8_t* tx, size_t bytes, uint8_t* rx)
+        {
+            ++transfers;
+            std::fill_n(rx, bytes, 0);
+            rx[0] = transfers == invalid_status_at ? 0 : 5;
+            rx[1] = transfers == invalid_status_at ? 0 : 0x24;
+            if (bytes == 2)
+            {
+                command = static_cast<uint16_t>(tx[0]) << 8 | tx[1];
+                assert(command == 0x011b || command == 0x011c);
+            }
+            else
+            {
+                assert(bytes == 4 && tx[0] == 0 && tx[1] == 0 && tx[2] == 0 && tx[3] == 0);
+                rx[2] = 0x03;
+                rx[3] = 0x80;
+            }
+            if (transfers == io_error_at) valid = false;
+        }
         bool healthy() const { return valid; }
         void term() { ++terms; }
         void init() { ++inits; }
     } hal_;
+    std::array<uint8_t, 258> iq_fifo_tx_{}, iq_fifo_rx_{};
     struct Radio
     {
         int error = 0;
@@ -167,5 +192,27 @@ int main()
     assert((h.module_.request == std::vector<uint8_t>{6, 0x18}));
     h.module_.write_error = -46;
     assert(h.iqReset() == LR2021_IQ_IO);
-    std::puts("Linux IQ production adapter: BE register transactions, command-width recovery, actual ROM/config, exclusive LoRa snapshot, TCXO/reset and prior config restoration passed");
+    Harness fast;
+    fast.hal_.clock = 16000000;
+    uint8_t level[2] = {0xaa, 0xbb};
+    assert(!fast.iqRead(0x011c, level, sizeof(level)));
+    assert(fast.hal_.transfers == 2 && fast.hal_.command == 0x011c);
+    assert(level[0] == 0x03 && level[1] == 0x80 && fast.module_.reads == 0);
+    assert(!fast.iqRead(0x011b, level, sizeof(level)) && fast.hal_.command == 0x011b);
+    for (unsigned failed = 1; failed <= 2; ++failed)
+    {
+        Harness bad;
+        bad.hal_.clock = 16000000;
+        bad.hal_.invalid_status_at = failed;
+        level[0] = 0xaa;
+        level[1] = 0xbb;
+        assert(bad.iqRead(0x011c, level, sizeof(level)) == LR2021_IQ_DATA);
+        assert(bad.hal_.transfers == failed && level[0] == 0xaa && level[1] == 0xbb);
+        Harness io;
+        io.hal_.clock = 16000000;
+        io.hal_.io_error_at = failed;
+        assert(io.iqRead(0x011b, level, sizeof(level)) == LR2021_IQ_IO);
+        assert(io.hal_.transfers == failed && level[0] == 0xaa && level[1] == 0xbb);
+    }
+    std::puts("Linux IQ production adapter: BE transactions, bounded two-frame FIFO reads with status/IO rejection, ROM/config, TCXO/reset and restoration passed");
 }

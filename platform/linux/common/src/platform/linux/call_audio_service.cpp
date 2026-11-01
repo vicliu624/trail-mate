@@ -48,7 +48,10 @@ class Pcm final : public ICallPcm
     bool captureActive() const override { return input_ && input_->active(); }
     uint64_t captureDropped() const override { return input_ ? input_->dropped_samples() : 0; }
     size_t read(int16_t* data, size_t size) override { return input_ ? input_->read(data, size) : 0; }
-    void discardCapture() override { if (input_) input_->discard_pending(); }
+    void discardCapture() override
+    {
+        if (input_) input_->discard_pending();
+    }
     bool writable() const override { return output_ && !output_->failed() && output_->pending_ms() < std::max<uint32_t>(80, output_->period_ms() * 2); }
     bool write(const int16_t* data, size_t size) override { return output_ && output_->write(data, size); }
     void discardPlayback() override

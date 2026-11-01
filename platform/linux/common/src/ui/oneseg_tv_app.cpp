@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
+#include <cstring>
 
 namespace platform::linux_runtime
 {
@@ -50,6 +51,16 @@ struct OneSegTvApp::Impl
     bool fullscreen = false;
     bool retry_pending = false;
     uint64_t drawn_generation = 0, drawn_epoch = 0, drawn_ordinal = 0;
+    uint32_t status_tick = 0;
+    uint64_t status_generation = 0;
+    unsigned status_programme = 0;
+    const char *status_phase = nullptr, *status_timing = nullptr;
+    std::string status_message, status_notice;
+    bool status_initialized = false;
+    static void setText(lv_obj_t* label, const char* value)
+    {
+        if (std::strcmp(lv_label_get_text(label), value) != 0) lv_label_set_text(label, value);
+    }
     explicit Impl(std::unique_ptr<OneSegTvSession> value) : session(std::move(value))
     {
         saved.load(notice);
@@ -450,7 +461,7 @@ struct OneSegTvApp::Impl
         if (!root) return;
         if (!session)
         {
-            lv_label_set_text(status, "TV receiver unavailable in this runtime mode.");
+            setText(status, "TV receiver unavailable in this runtime mode.");
             for (auto* object : {start_button, channel_down, channel_up, programme, station_down, station_up, scan_button, channel_list, retry_button})
                 lv_obj_add_state(object, LV_STATE_DISABLED);
             return;
@@ -529,15 +540,35 @@ struct OneSegTvApp::Impl
         default:
             break;
         }
-        lv_label_set_text_fmt(status, "%s%s%s\nService %u | IQ pairs %llu | Video %llu | PCM %llu | %s\nParameters: %s%s%s",
-                              phase, state.message[0] ? ": " : "", state.message,
-                              state.decoder.programmes.selected_program, static_cast<unsigned long long>(state.receive.forwarded_pairs),
-                              static_cast<unsigned long long>(state.media.video_frames), static_cast<unsigned long long>(state.media.pcm_samples), timing,
-                              state.automatic_parameters ? "Automatic acquisition" : "OneSegCast mode 3 / GI 1:16 / QPSK 2:3 / TI 4",
-                              notice.empty() ? "" : "\n", notice.c_str());
-        lv_label_set_text_fmt(channel_label, "CH %u", channel);
-        lv_label_set_text_fmt(volume_label, "Volume %u%%", state.volume);
-        lv_label_set_text(start_label, state.active ? "Stop" : "Start");
+        const uint32_t now = lv_tick_get();
+        const bool status_changed = !status_initialized || status_generation != state.generation ||
+                                    status_programme != state.decoder.programmes.selected_program || status_phase != phase || status_timing != timing ||
+                                    status_message != state.message || status_notice != notice;
+        if (status_changed || uint32_t(now - status_tick) >= 1000)
+        {
+            // Counters are diagnostic text, not video. Repainting them at 30 Hz
+            // needlessly competes with the sub-millisecond radio FIFO service.
+            lv_label_set_text_fmt(status, "%s%s%s\nService %u | IQ pairs %llu | Video %llu | PCM %llu | %s\nParameters: %s%s%s",
+                                  phase, state.message[0] ? ": " : "", state.message,
+                                  state.decoder.programmes.selected_program, static_cast<unsigned long long>(state.receive.forwarded_pairs),
+                                  static_cast<unsigned long long>(state.media.video_frames), static_cast<unsigned long long>(state.media.pcm_samples), timing,
+                                  state.automatic_parameters ? "Automatic acquisition" : "OneSegCast mode 3 / GI 1:16 / QPSK 2:3 / TI 4",
+                                  notice.empty() ? "" : "\n", notice.c_str());
+            status_initialized = true;
+            status_tick = now;
+            status_generation = state.generation;
+            status_programme = state.decoder.programmes.selected_program;
+            status_phase = phase;
+            status_timing = timing;
+            status_message = state.message;
+            status_notice = notice;
+        }
+        char caption[40];
+        std::snprintf(caption, sizeof(caption), "CH %u", channel);
+        setText(channel_label, caption);
+        std::snprintf(caption, sizeof(caption), "Volume %u%%", state.volume);
+        setText(volume_label, caption);
+        setText(start_label, state.active ? "Stop" : "Start");
         for (auto* object : {channel_down, channel_up})
         {
             lv_obj_remove_state(object, LV_STATE_DISABLED);
@@ -547,7 +578,7 @@ struct OneSegTvApp::Impl
             else lv_obj_remove_state(object, LV_STATE_DISABLED);
         if (!state.active || state.decoder.programmes.program_count < 2) lv_obj_add_state(programme, LV_STATE_DISABLED);
         else lv_obj_remove_state(programme, LV_STATE_DISABLED);
-        lv_label_set_text(scan_label, scanning() ? "Cancel scan" : "Scan channels");
+        setText(scan_label, scanning() ? "Cancel scan" : "Scan channels");
         if (scanning() || pending_channel || state.phase == Phase::Stopping || state.receive.lease_restore_failed ||
             state.receive.error == OneSegReceiveWorker::Error::RadioRestore)
             lv_obj_add_state(retry_button, LV_STATE_DISABLED);
@@ -604,9 +635,9 @@ struct OneSegTvApp::Impl
             retry_pending = false;
             notice = "Retry ended without a fresh picture";
         }
-        lv_label_set_text(waiting, scanning() ? "Scanning channels - audio muted" : signal_interrupted                                                                ? "Signal interrupted\nRetry / R to reacquire"
-                                                                                : desired_service && displayed.decoder.programmes.selected_program != desired_service ? "Waiting for selected service"
-                                                                                                                                                                      : "No fresh decoded picture");
+        setText(waiting, scanning() ? "Scanning channels - audio muted" : signal_interrupted                                                                ? "Signal interrupted\nRetry / R to reacquire"
+                                                                      : desired_service && displayed.decoder.programmes.selected_program != desired_service ? "Waiting for selected service"
+                                                                                                                                                            : "No fresh decoded picture");
         const auto& table = displayed.decoder.programmes;
         const auto received_name = oneseg_received_channel_name(displayed.service_text, table.selected_program);
         if (!scanning() && visible && table.pmt_valid && table.selected_program &&
@@ -656,6 +687,7 @@ struct OneSegTvApp::Impl
         actions.clear();
         pixels.clear();
         drawn_generation = drawn_epoch = drawn_ordinal = 0;
+        status_initialized = false;
     }
 };
 OneSegTvApp::OneSegTvApp(std::unique_ptr<OneSegTvSession> session) : impl_(std::make_unique<Impl>(std::move(session))) {}
