@@ -1,4 +1,5 @@
 #pragma once
+#include "bounded_fixture_file.h"
 #include "geocaching/protocol/cmp_writer.h"
 #include "track_sharing/manifest_hash.h"
 #include <array>
@@ -51,9 +52,7 @@ struct SignedPackage
 inline SignedPackage make(const std::filesystem::path& image_path, bool attachments = true, bool correct_geometry = true)
 {
     SignedPackage result;
-    std::ifstream stream(image_path, std::ios::binary);
-    assert(stream);
-    result.image = Bytes(std::istreambuf_iterator<char>(stream), {});
+    result.image = read_fixture_bytes(image_path);
     const std::string text = "<kml xmlns=\"http://www.opengis.net/kml/2.2\"><Document><Placemark><description><![CDATA[<img src=\"photos/example.jpg\">]]></description><Point><coordinates>1,2</coordinates></Point></Placemark></Document></kml>";
     result.kml.assign(text.begin(), text.end());
     result.kml_hash = hash(result.kml);

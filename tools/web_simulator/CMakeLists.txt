@@ -125,6 +125,7 @@ target_include_directories(${PREVIEW_TARGET} PRIVATE
   "${REPO_ROOT}/modules/ui_key_verification_runtime/include"
   "${REPO_ROOT}/modules/chat_presentation_adapters/include"
   "${REPO_ROOT}/platform/linux/common/include"
+  "${REPO_ROOT}/platform/linux/common/src"
   "${REPO_ROOT}/modules/ui_map_runtime/include"
   "${REPO_ROOT}/modules/ui_lvgl_ux_packs/include"
   "${REPO_ROOT}/modules/core_chat/generated"

@@ -1,3 +1,4 @@
+#include "bounded_fixture_file.h"
 #include "lvgl.h"
 #include "platform/linux/http_download.h"
 #include "platform/linux/route_image_tasks.h"
@@ -120,8 +121,7 @@ int main(int argc, char** argv)
     assert(wait_image_task() == routes::RouteImageDownloadPhase::Done);
     auto bitmap = [](const std::string& path, uint32_t width, uint32_t height)
     {
-        std::ifstream input(path, std::ios::binary);
-        std::string data((std::istreambuf_iterator<char>(input)), {});
+        const auto data = read_fixture_bytes(path);
         assert(data.size() >= 54 && data[0] == 'B' && data[1] == 'M');
         auto integer = [&](size_t at)
         { uint32_t value = 0; for (unsigned i = 0; i < 4; ++i) value |= uint32_t(uint8_t(data[at + i])) << (8 * i); return value; };
@@ -154,8 +154,8 @@ int main(int argc, char** argv)
     // Binding length alone cannot detect same-size corruption; cache admission must hash.
     std::string original;
     {
-        std::ifstream input(image, std::ios::binary);
-        original.assign(std::istreambuf_iterator<char>(input), {});
+        const auto bytes = read_fixture_bytes(image);
+        original.assign(bytes.begin(), bytes.end());
     }
     auto corrupt = original;
     corrupt.back() ^= 1;

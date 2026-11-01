@@ -1,3 +1,4 @@
+#include "bounded_fixture_file.h"
 #include "geocaching/protocol/cmp_writer.h"
 #include "platform/linux/route_image_tasks.h"
 #include "platform/linux/route_package_images.h"
@@ -21,9 +22,7 @@ using Bytes = std::vector<uint8_t>;
 using Writer = geocaching::protocol::CmpWriter;
 static Bytes read(const fs::path& path)
 {
-    std::ifstream stream(path, std::ios::binary);
-    assert(stream);
-    return Bytes(std::istreambuf_iterator<char>(stream), {});
+    return read_fixture_bytes(path);
 }
 static void write(const fs::path& path, const Bytes& bytes)
 {

@@ -6,12 +6,14 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <filesystem>
-#include <linux/fs.h>
 #include <string>
 #include <sys/file.h>
 #include <sys/stat.h>
-#include <sys/syscall.h>
 #include <unistd.h>
+#if defined(__linux__)
+#include <linux/fs.h>
+#include <sys/syscall.h>
+#endif
 
 namespace platform::linux_runtime
 {
