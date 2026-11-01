@@ -28,7 +28,8 @@ for(const device of ['pager','tdeck','wio-tracker-l2']) {
   const stop=snapshot().find(item=>item.button&&item.text==='Stop recording');
   const menu=snapshot().find(item=>item.button&&item.text==='Menu');
   assert.ok(stop&&menu&&stop.x+stop.w<=menu.x,'Stop recording leaves room for the right-aligned category menu');
-  assert.ok(snapshot().some(item=>!item.button&&/^track-\d+$/.test(item.text)),`${device}: new recording has a readable title without the file extension`);
+  // The recorder includes process and sequence tokens to avoid same-second collisions.
+  assert.ok(snapshot().some(item=>!item.button&&/^track-\d+-[0-9a-f]{8}-[0-9a-f]{16}$/.test(item.text)),`${device}: new recording shows its collision-safe title without the file extension`);
   if(device!=='pager')assert.ok(snapshot().some(item=>item.text==='GPX | Recording'),`${device}: recording card shows file type/status`);
   else {
     const format=snapshot().find(item=>item.text==='GPX | Recording');
