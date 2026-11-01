@@ -1,3 +1,4 @@
+#include "platform/ui/network_runtime.h"
 #include "platform/ui/pack_repository_runtime.h"
 #include "platform/ui/wifi_runtime.h"
 #include <cstdio>
@@ -45,6 +46,9 @@ Status status()
 } // namespace platform::ui::wifi
 namespace ui::runtime::packs
 {
+static std::uint32_t catalog_revision = 1;
+CatalogStatus catalog_status() { return {false, catalog_revision}; }
+void request_catalog_refresh() { ++catalog_revision; }
 bool is_supported() { return true; }
 bool load_installed_packages(std::vector<InstalledPackageRecord>& out, std::string& error)
 {
@@ -90,3 +94,12 @@ bool uninstall_package(const PackageRecord&, std::string& error)
 }
 PackageInstallStatus install_status() { return {}; }
 } // namespace ui::runtime::packs
+
+namespace platform::ui::network
+{
+Status status()
+{
+    const auto link = ::platform::ui::wifi::status();
+    return {link.supported, link.connected};
+}
+} // namespace platform::ui::network

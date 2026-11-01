@@ -68,8 +68,12 @@ add_executable(${PREVIEW_TARGET}
   "${UI}/screens/energy_sweep/energy_sweep_page_runtime.cpp"
   "${UI}/screens/sstv/sstv_page_runtime.cpp"
   "${UI}/screens/extensions/extensions_page_runtime.cpp"
+  "${UI}/screens/extensions/tmap_creator_page.cpp"
   preview_map_tiles.cpp
   "${UI}/widgets/map/map_viewport.cpp"
+  "${UI}/widgets/map/poi_overlay.cpp"
+  "${REPO_ROOT}/modules/ui_map_runtime/src/map_poi/annotation_frame.cpp"
+  "${REPO_ROOT}/modules/ui_map_runtime/src/map_poi/annotation_layout.cpp"
   "${REPO_ROOT}/modules/ui_map_runtime/src/map_tiles/map_tile_geometry.cpp"
   "${REPO_ROOT}/modules/ui_map_runtime/src/map_tiles/map_tile_render_queue.cpp"
   "${UI}/menu/menu_layout.cpp"
@@ -216,6 +220,7 @@ target_sources(${PREVIEW_TARGET} PRIVATE ${CORE_TEAM_SOURCES} ${EXTRA_VIEW_SOURC
   "${REPO_ROOT}/platform/linux/common/src/platform/ui/route_storage.cpp"
   "${REPO_ROOT}/platform/linux/common/src/platform/linux/route_package_images.cpp"
   "${REPO_ROOT}/platform/linux/common/src/platform/linux/runtime_paths.cpp"
+  "${REPO_ROOT}/platform/linux/common/src/platform/linux/radio_power.cpp"
   "${REPO_ROOT}/platform/linux/common/src/platform/ui/firmware_update_runtime.cpp"
   "${REPO_ROOT}/platform/linux/common/src/platform/ui/wireless_companion_runtime.cpp")
 target_sources(${PREVIEW_TARGET} PRIVATE

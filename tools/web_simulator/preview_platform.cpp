@@ -1,8 +1,16 @@
 // Only platform services/data are substituted. No LVGL page layout lives here.
+#include "platform/linux/output_power.h"
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/settings_store.h"
 #include "ui/widgets/foreground_operation_overlay.h"
 #include <string>
+
+namespace platform::linux_runtime
+{
+// The browser fixture owns no compositor output or device power controller.
+OutputPowerSnapshot OutputPowerRuntime::snapshot() const { return {}; }
+bool OutputPowerRuntime::request(bool) { return false; }
+} // namespace platform::linux_runtime
 
 namespace platform::ui::device
 {

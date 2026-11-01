@@ -191,6 +191,23 @@ void calculate_required_tiles(TileContext& c, double lat, double lon, int z, int
     if (c.has_visible_map_data) *c.has_visible_map_data = any;
 }
 void tile_loader_step(TileContext&) {}
+void map_poi_snapshot(TileContext& context, ui::map::MapPoiSnapshot& out)
+{
+    // Bundled browser map tiles are raster fixtures without a POI manifest.
+    out = {};
+    out.header.version = 1;
+    if (!context.anchor || !context.anchor->valid || !context.map_container) return;
+    out.width = static_cast<int16_t>(lv_obj_get_width(context.map_container));
+    out.height = static_cast<int16_t>(lv_obj_get_height(context.map_container));
+    const int32_t x = context.anchor->gps_tile_screen_x + context.anchor->gps_offset_x - context.anchor->gps_global_pixel_x;
+    const int32_t y = context.anchor->gps_tile_screen_y + context.anchor->gps_offset_y - context.anchor->gps_global_pixel_y;
+    out.view_key = uint64_t(uint32_t(x)) << 32 | uint32_t(y);
+    out.compatibility_key = uint64_t(uint8_t(context.anchor->z)) << 8 | source_id;
+}
+void visit_map_annotations(TileContext&, ui::map_poi::AnnotationConsumer, void*)
+{
+    // There are no packaged annotation records in the raster fixture.
+}
 void init_tile_context(TileContext& c, lv_obj_t* obj, MapAnchor* anchor, std::vector<MapTile>* tiles, ui::map_tiles::MapTileRenderQueue* queue, bool* has, bool* visible)
 {
     c = {};
