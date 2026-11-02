@@ -13,7 +13,8 @@ namespace platform::linux_runtime
 {
 // The DMA transfer can run without its caller, but the next transaction still
 // has a bounded FIFO deadline. Admit the capture code/runtime and hot stack
-// before RX, rather than allowing a later cold code page to fault from storage.
+// before RX, including heap-backed GPIO map nodes accessed by every BUSY poll.
+// A locked transport object does not lock its separately allocated containers.
 class OneSegCaptureMemory
 {
   public:
@@ -58,7 +59,8 @@ class OneSegCaptureMemory
                                  std::strstr(line, "/libatomic") || std::strstr(line, "/libpthread") ||
                                  std::strstr(line, "/libm.so");
             const bool stack = marker >= begin && marker < end;
-            if (!image && !runtime && !stack) continue;
+            const bool heap = std::strstr(line, "[heap]");
+            if (!image && !runtime && !stack && !heap) continue;
             uintptr_t start = begin, finish = end;
             if (stack)
             {
