@@ -1,10 +1,10 @@
 #pragma once
 
+#include "platform/linux/linux_gpio_handles.h"
 #include "platform/linux/packet_radio.h"
 #include <Hal.h>
 #include <array>
 #include <chrono>
-#include <map>
 #include <string>
 
 namespace platform::linux_runtime
@@ -58,7 +58,7 @@ class LinuxRadioLibHal final : public RadioLibHal
     unsigned iq_trace_count_ = 0;
     bool iq_trace_enabled_ = false;
     int chip_ = -1;
-    std::map<uint32_t, int> pins_;
+    LinuxGpioHandles pins_;
     std::string error_;
     std::chrono::steady_clock::time_point started_ = std::chrono::steady_clock::now();
     std::chrono::steady_clock::time_point busy_since_{};
