@@ -150,6 +150,11 @@ def acquire_tmcc_parameters(native_iq, candidates=None, cancel=None):
         mode, guard = hypothesis["mode"], hypothesis["guard_denominator"]
         if mode not in (1, 2, 3) or guard not in (4, 8, 16, 32):
             raise ValueError("Invalid OFDM acquisition hypothesis")
+        fft_length = 2 ** (7 + mode)
+        prefix_offset = hypothesis.get("prefix_offset", 0)
+        if (type(prefix_offset) is not int or
+                not 0 <= prefix_offset < fft_length + fft_length // guard):
+            raise ValueError("Invalid OFDM cyclic-prefix offset")
 
         class Collector(gr.basic_block):
             def __init__(self):
@@ -177,7 +182,10 @@ def acquire_tmcc_parameters(native_iq, candidates=None, cancel=None):
                     self.candidate, self.count = None, 0
 
         graph = gr.top_block("Trail Mate blind TMCC acquisition")
-        source = _complex_capture_source(samples)
+        # Probe from the measured CP boundary; arbitrary startup phase can keep
+        # the native TMCC decoder from acquiring an otherwise ideal waveform.
+        # The live replay queue retains the original, untrimmed IQ separately.
+        source = _complex_capture_source(samples[prefix_offset:])
         synchronization = synchronization_block(isdbt, mode, guard, compact=False)
         tmcc = isdbt.tmcc_decoder_1seg(mode, False)
         ports = tmcc.message_ports_out()
