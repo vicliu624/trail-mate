@@ -5,6 +5,7 @@
 #include <map>
 #include <string>
 #include <sys/resource.h>
+#include <thread>
 using namespace platform::linux_runtime;
 static bool locked(const void* pointer)
 {
@@ -22,6 +23,8 @@ static bool locked(const void* pointer)
 }
 int main()
 {
+    std::thread worker([]
+                       {
     rlimit original{};
     assert(!getrlimit(RLIMIT_MEMLOCK, &original));
     auto denied = original;
@@ -38,5 +41,6 @@ int main()
     assert(locked(node)); // GPIO map nodes are accessed on every BUSY poll.
     assert(memory.bytes() && memory.bytes() <= 48 * 1024 * 1024);
     assert(!memory.lock() && memory.error() == EALREADY);
-    std::fprintf(stderr, "Capture runtime memory admission passed, locked=%zu bytes\n", memory.bytes());
+    std::fprintf(stderr, "Capture runtime memory admission passed, locked=%zu bytes\n", memory.bytes()); });
+    worker.join();
 }

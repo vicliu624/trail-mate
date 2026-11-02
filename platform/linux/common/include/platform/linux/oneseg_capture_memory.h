@@ -14,6 +14,7 @@ namespace platform::linux_runtime
 // The DMA transfer can run without its caller, but the next transaction still
 // has a bounded FIFO deadline. Admit the capture code/runtime and hot stack
 // before RX, including heap-backed GPIO map nodes accessed by every BUSY poll.
+// Worker-thread allocator arenas are private anonymous mappings, not [heap].
 // A locked transport object does not lock its separately allocated containers.
 class OneSegCaptureMemory
 {
@@ -48,10 +49,10 @@ class OneSegCaptureMemory
         const long page = sysconf(_SC_PAGESIZE);
         bool executable_found = false, stack_found = false;
         char line[8192], permissions[5];
-        unsigned long begin, end;
+        unsigned long begin, end, inode;
         while (!error_ && std::fgets(line, sizeof(line), maps))
         {
-            if (std::sscanf(line, "%lx-%lx %4s", &begin, &end, permissions) != 3 || permissions[0] != 'r') continue;
+            if (std::sscanf(line, "%lx-%lx %4s %*s %*s %lu", &begin, &end, permissions, &inode) != 4 || permissions[0] != 'r') continue;
             const bool image = std::strstr(line, executable);
             const bool runtime = std::strstr(line, "/libc.so") || std::strstr(line, "/libc-") ||
                                  std::strstr(line, "/libstdc++") || std::strstr(line, "/libgcc_s") ||
@@ -59,8 +60,8 @@ class OneSegCaptureMemory
                                  std::strstr(line, "/libatomic") || std::strstr(line, "/libpthread") ||
                                  std::strstr(line, "/libm.so");
             const bool stack = marker >= begin && marker < end;
-            const bool heap = std::strstr(line, "[heap]");
-            if (!image && !runtime && !stack && !heap) continue;
+            const bool anonymous = inode == 0 && permissions[1] == 'w' && permissions[3] == 'p';
+            if (!image && !runtime && !stack && !anonymous) continue;
             uintptr_t start = begin, finish = end;
             if (stack)
             {
