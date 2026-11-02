@@ -12,7 +12,8 @@ enum class OneSegOfdmStage : uint8_t
     Symbol,
     Tracking,
     Channel,
-    Decoder
+    Decoder,
+    Subcarriers
 };
 struct OneSegOfdmControl
 {
@@ -83,7 +84,7 @@ inline const std::array<OneSegOfdmControl, 34>& oneseg_ofdm_controls()
 }
 inline const char* oneseg_ofdm_stage_name(OneSegOfdmStage stage)
 {
-    constexpr const char* names[] = {"Input / RF", "Filter / resample", "Symbol / CP", "Carrier / phase", "Pilots / equalizer", "Constellation / FEC"};
+    constexpr const char* names[] = {"Input / RF", "Filter / resample", "Symbol / CP", "Carrier / phase", "Pilots / equalizer", "Constellation / FEC", "Subcarriers / OFDM"};
     return names[static_cast<unsigned>(stage)];
 }
 inline const char* oneseg_ofdm_equation(OneSegOfdmStage stage)
@@ -94,7 +95,8 @@ inline const char* oneseg_ofdm_equation(OneSegOfdmStage stage)
         "R[d]=sum x[d+n] conj(x[d+n+N]); CP=N/G",
         "forecast=prior+a_prev; e=observed-prior; a+=beta*e; corrected=forecast+(alpha+beta)*e",
         "H=Ypilot/Xpilot; Xeq=Y conj(H)/(|H|^2+lambda)",
-        "EVM=sqrt(sum |Sestimate-Sreference|^2 / sum |Sreference|^2)"};
+        "EVM=sqrt(sum |Sestimate-Sreference|^2 / sum |Sreference|^2)",
+        "Delta f=Fs/N=1/Tu; sum exp(j2pi(k-l)n/N)/N=delta[k,l]"};
     return equations[static_cast<unsigned>(stage)];
 }
 inline const char* oneseg_ofdm_explanation(OneSegOfdmStage stage)
@@ -105,7 +107,8 @@ inline const char* oneseg_ofdm_explanation(OneSegOfdmStage stage)
         "CP correlation identifies symbol boundaries and fractional carrier offset. Manual mode, guard and interleaving must agree; a wrong but valid experiment may deliberately lose synchronization.",
         "Native forecast projects the pre-update estimate with the previous integrator. The unchanged loop uses e=observed-prior, not observed-forecast. Compare forecast error with corrected residual; units are phase advance per useful symbol, not absolute RF phase.",
         "Pilot averaging trades estimator noise against channel tracking speed. Zero regularization is ZF; positive lambda limits deep-fade noise amplification. Interpret channel phase together with carrier tracking.",
-        "Decision-directed EVM depends on the chosen constellation. Live BER needs known transmitted bits; transport continuity or RS failures are different measurements, not interchangeable BER estimates."};
+        "Decision-directed EVM depends on the chosen constellation. Live BER needs known transmitted bits; transport continuity or RS failures are different measurements, not interchangeable BER estimates.",
+        "Select a carrier and output-symbol row. Actual native and generic reference layouts differ. Mathematical probes are previews; a smooth channel or pilot fit does not establish successful decoding."};
     return notes[static_cast<unsigned>(stage)];
 }
 } // namespace platform::linux_runtime

@@ -92,6 +92,7 @@ struct OneSegDecoderProcess::Impl
     std::array<uint8_t, 4096> bytes{};
     std::array<uint8_t, 4096> diagnostic_text{};
     OneSegOfdmWire ofdm_wire;
+    OneSegCarrierCollector carrier_collector;
     std::array<uint8_t, 188> packet{};
     size_t packet_used = 0;
     uint64_t generation = 0;
@@ -342,15 +343,23 @@ struct OneSegDecoderProcess::Impl
         OneSegSignalMeasurement signal;
         OneSegNativeConfiguration native_configuration;
         OneSegFecStatistics fec;
+        OneSegCarrierChunk carrier;
         for (size_t index = 0; index < count; ++index)
         {
             OneSegPhaseObservation value;
-            const auto result = ofdm_wire.feed(data[index], value, &signal, &native_configuration, &fec);
+            const auto result = ofdm_wire.feed(data[index], value, &signal, &native_configuration, &fec, &carrier);
             if (result == OneSegOfdmWire::Result::Ordinary)
             {
                 if (plain < diagnostic_text.size()) diagnostic_text[plain++] = data[index];
             }
             else if (result == OneSegOfdmWire::Result::Invalid) ++state.rejected_ofdm_records;
+            else if (result == OneSegOfdmWire::Result::Carrier)
+            {
+                const auto now = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count());
+                const auto accepted = carrier_collector.accept(carrier, config.diagnostic_source, now);
+                if (accepted == OneSegCarrierCollector::Result::Rejected) ++state.rejected_ofdm_records;
+                else if (accepted == OneSegCarrierCollector::Result::Burst) state.ofdm_carriers = carrier_collector.latest();
+            }
             else if (result == OneSegOfdmWire::Result::Fec && config.diagnostic_source != OneSegLabSource::Unavailable)
             {
                 const auto now = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count());
@@ -499,6 +508,7 @@ bool OneSegDecoderProcess::open(unsigned channel, uint64_t generation, const std
     s.requested_program = 0;
     s.packet_used = 0;
     s.ofdm_wire = {};
+    s.carrier_collector.reset();
     if (!s.pipe.open(channel, generation, cancel))
     {
         if (!cancel.load() && !s.error_ready.load()) s.fault(s.pipe.lastError());

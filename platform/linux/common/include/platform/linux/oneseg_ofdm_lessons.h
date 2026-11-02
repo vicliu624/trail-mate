@@ -19,7 +19,8 @@ inline const char* oneseg_synthetic_stage_note(OneSegOfdmStage stage)
         "Known nominal symbol framing is assumed; no acquisition/reacquisition is performed. Mode/GI/QAM configure BOTH teaching source and receiver. Inject timing error or a late echo to observe CP mismatch and loss of orthogonality.",
         "Teaching forecast uses previous phase advance and integrator. CP correlation and confirmed integer pilot search provide observations. Purple is known injected phase advance. A small residual alone does not prove the correct integer branch.",
         "Known pilots provide channel estimates. Interpolation, EMA and regularized equalization operate on generated IQ. Echo beyond CP creates ISI that equalization cannot undo. Compare channel shape with reference EVM and uncoded BER.",
-        "Data is compared with known Gray-labelled QAM, not decision references. No TV, TMCC, convolutional/RS coding or interleaving is generated. FEC controls are intentionally disabled; displayed BER is uncoded hard-decision BER."};
+        "Data is compared with known Gray-labelled QAM, not decision references. No TV, TMCC, convolutional/RS coding or interleaving is generated. FEC controls are intentionally disabled; displayed BER is uncoded hard-decision BER.",
+        "Generic known-reference OFDM leaves DC unused and uses fixed reference pilots. It has no native TMCC/AC. Select Actual to inspect computed symbols or a separately labelled layout model."};
     return notes[static_cast<unsigned>(stage)];
 }
 // Working-parameter calculations, never receiver measurements. The caller must

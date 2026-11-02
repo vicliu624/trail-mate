@@ -1,6 +1,7 @@
 #pragma once
 
 #include "platform/linux/oneseg_fec_statistics.h"
+#include "platform/linux/oneseg_ofdm_carrier_observations.h"
 #include "platform/linux/oneseg_ofdm_lab.h"
 #include "platform/linux/oneseg_ofdm_measurements.h"
 #include "platform/linux/oneseg_ofdm_native_configuration.h"
@@ -23,9 +24,10 @@ class OneSegOfdmWire
         Signal,
         Configuration,
         Fec,
+        Carrier,
         Invalid
     };
-    Result feed(uint8_t byte, OneSegPhaseObservation& output, OneSegSignalMeasurement* signal = nullptr, OneSegNativeConfiguration* configuration = nullptr, OneSegFecStatistics* fec = nullptr)
+    Result feed(uint8_t byte, OneSegPhaseObservation& output, OneSegSignalMeasurement* signal = nullptr, OneSegNativeConfiguration* configuration = nullptr, OneSegFecStatistics* fec = nullptr, OneSegCarrierChunk* carrier = nullptr)
     {
         if (byte == 0x1e)
         {
@@ -45,6 +47,13 @@ class OneSegOfdmWire
         {
             active_ = false;
             bytes_[used_] = 0;
+            if (!std::strncmp(bytes_.data(), "TM_CARR1 ", 9) || !std::strncmp(bytes_.data(), "TM_CARR2 ", 9))
+            {
+                OneSegCarrierChunk value;
+                if (!oneseg_parse_carrier_chunk(bytes_.data() + 9, value, bytes_[7] == '2')) return Result::Invalid;
+                if (carrier) *carrier = value;
+                return Result::Carrier;
+            }
             if (!std::strncmp(bytes_.data(), "TM_SIGNAL1 ", 11))
                 return parseSignal(signal) ? Result::Signal : Result::Invalid;
             if (!std::strncmp(bytes_.data(), "TM_CONFIG1 ", 11))

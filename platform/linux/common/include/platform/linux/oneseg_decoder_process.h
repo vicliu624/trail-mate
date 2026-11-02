@@ -1,6 +1,7 @@
 #pragma once
 
 #include "platform/linux/oneseg_fec_statistics.h"
+#include "platform/linux/oneseg_ofdm_carrier_observations.h"
 #include "platform/linux/oneseg_ofdm_lab.h"
 #include "platform/linux/oneseg_ofdm_measurements.h"
 #include "platform/linux/oneseg_ofdm_native_configuration.h"
@@ -52,6 +53,7 @@ class OneSegDecoderProcess final : public OneSegIqSink
         OneSegNativeConfiguration native_configuration;
         std::array<OneSegSignalMeasurement, 5> ofdm_signal{};
         OneSegFecHistory fec;
+        std::shared_ptr<const OneSegCarrierBurst> ofdm_carriers;
         uint64_t rejected_ofdm_records = 0;
         char message[160]{}, stderr_tail[256]{};
     };

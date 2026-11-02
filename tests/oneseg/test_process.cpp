@@ -218,6 +218,26 @@ static void actual_backend(const char* decoder, const char* prefix, const char* 
             assert(native.available && native.valid() && native.source == platform::linux_runtime::OneSegLabSource::RecordedIq);
             assert(native.mode == 3 && native.fft_length == (compact ? 576 : 1024) && native.cp_length == (compact ? 36 : 64) && native.carriers == 432);
             assert(native.channel_average == 1 && native.equalizer_floor == 0 && native.integer_search == 10 && native.offset_confirmation == 4);
+            if (std::getenv("TRAIL_MATE_TEST_CARRIERS"))
+            {
+                assert(state.ofdm_carriers && state.ofdm_carriers->source == platform::linux_runtime::OneSegLabSource::RecordedIq);
+                const auto& burst = *state.ofdm_carriers;
+                for (size_t symbol = 0; symbol < burst.symbols.size(); ++symbol)
+                {
+                    const auto& frame = burst.symbols[symbol];
+                    assert(frame.metadata.valid() && frame.metadata.slot == symbol && frame.metadata.count == 432);
+                    assert(frame.metadata.fft == (compact ? 576 : 1024));
+                    assert(frame.metadata.burst == burst.symbols[0].metadata.burst);
+                    if (symbol) assert(frame.metadata.sequence == burst.symbols[symbol - 1].metadata.sequence + 1);
+                    for (size_t carrier = 0; carrier < frame.metadata.count; ++carrier)
+                    {
+                        const auto& point = frame.values[carrier].values;
+                        const std::complex<double> raw(point[0], point[1]), equalized(point[2], point[3]), h(point[4], point[5]);
+                        assert(std::abs(raw - equalized * h) < 5e-5 * (1 + std::abs(raw)));
+                    }
+                }
+                std::fprintf(stderr, "Actual coherent carrier IPC: four consecutive symbols, 432 carriers each\n");
+            }
             assert(std::abs(native.alpha - state.ofdm_phase.newest().alpha) < 1e-7 && std::abs(native.beta - state.ofdm_phase.newest().beta) < 1e-7);
             for (size_t i = 0; i < state.ofdm_signal.size(); ++i)
             {
@@ -472,6 +492,9 @@ static void synthetic_process(const char* decoder)
         assert(state.ofdm_phase.source == platform::linux_runtime::OneSegLabSource::Synthetic);
         assert(state.ofdm_phase.newest().has_reference && state.ofdm_phase.newest().valid());
         assert(state.rejected_ofdm_records == 0);
+        assert(state.ofdm_carriers && state.ofdm_carriers->source == platform::linux_runtime::OneSegLabSource::Synthetic);
+        for (const auto& symbol : state.ofdm_carriers->symbols)
+            assert(symbol.metadata.valid() && symbol.metadata.layout == 1 && symbol.metadata.count == 432);
         if (!trial)
         {
             clean = state.ofdm_phase.newest().reference_evm;

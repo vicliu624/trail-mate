@@ -25,6 +25,28 @@ def settle(parameters, count=160):
     return row
 
 class Reference(unittest.TestCase):
+    def test_complete_carrier_bursts_keep_generic_mapping_and_known_reference(self):
+        carrier_protocol = module('oneseg_carrier_protocol')
+        for mode in (1, 2, 3):
+            model = lab.OfdmReference(settings(mode=mode, equalizer_floor=.04))
+            seen = []
+            for _ in range(17):
+                model.step()
+                frame = model.carrier_frame
+                if frame is None:
+                    continue
+                seen.append(frame['sequence'])
+                count = 108*2**(mode-1)
+                self.assertEqual(frame['raw'].shape, (count,))
+                self.assertNotIn(0, model.offsets)
+                self.assertEqual(int(model.pilot_mask.sum()), count//12)
+                expected = model.symbol(frame['sequence']-1)[1]
+                np.testing.assert_array_equal(frame['pilot_reference'], expected.astype(np.complex64))
+                y, h = frame['raw'], frame['channel']
+                np.testing.assert_allclose(frame['equalized'], y*h.conj()/(abs(h)**2+.04), rtol=2e-5, atol=2e-5)
+                self.assertEqual(len(carrier_protocol.records(frame, layout=1)), (count+63)//64)
+            self.assertEqual(seen, [1,2,3,4,13,14,15,16])
+
     def test_known_qam_roundtrip_and_determinism(self):
         for order in (4, 16, 64):
             row = settle(settings(constellation=order), 40)

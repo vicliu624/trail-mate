@@ -1,5 +1,6 @@
 #include "ui/oneseg_ofdm_workbench.h"
 #include "platform/linux/oneseg_ofdm_lessons.h"
+#include "ui/oneseg_carrier_lesson.h"
 #include "ui/ui_theme.h"
 #include <algorithm>
 #include <array>
@@ -63,8 +64,9 @@ struct OneSegOfdmWorkbench::Impl
     lv_obj_t* residual_line = nullptr;
     std::array<std::array<lv_point_precise_t, 160>, 3> phase_points{};
     std::array<lv_point_precise_t, 160> residual_points{};
-    std::array<lv_obj_t*, 6> stage_buttons{};
-    OneSegOfdmStage stage = OneSegOfdmStage::Tracking;
+    std::array<lv_obj_t*, 7> stage_buttons{};
+    OneSegOfdmStage stage = OneSegOfdmStage::Subcarriers;
+    std::unique_ptr<OneSegCarrierLesson> carrier_lesson;
     OneSegReceptionSettings reception;
     OneSegOfdmExperiment experiment;
     bool synthetic = false;
@@ -165,8 +167,14 @@ struct OneSegOfdmWorkbench::Impl
     {
         focused_control = nullptr;
         // Focus events during removal must never dereference an old binding.
+        if (carrier_lesson) carrier_lesson->clearControls();
         for (auto& binding : bindings) binding = {};
         lv_obj_clean(fields);
+        if (carrier_lesson)
+        {
+            carrier_lesson->show(stage == OneSegOfdmStage::Subcarriers);
+            if (stage == OneSegOfdmStage::Subcarriers) carrier_lesson->controls(fields);
+        }
         size_t slot = 0;
         for (const auto& control : oneseg_ofdm_controls())
         {
@@ -352,8 +360,11 @@ struct OneSegOfdmWorkbench::Impl
         lv_obj_set_style_border_width(ribbon, 0, 0);
         lv_obj_set_style_pad_column(ribbon, 4, 0);
         lv_obj_set_flex_flow(ribbon, LV_FLEX_FLOW_ROW);
-        for (size_t index = 0; index < stage_buttons.size(); ++index)
+        constexpr OneSegOfdmStage order[]{OneSegOfdmStage::Input, OneSegOfdmStage::Filter, OneSegOfdmStage::Symbol,
+                                          OneSegOfdmStage::Subcarriers, OneSegOfdmStage::Tracking, OneSegOfdmStage::Channel, OneSegOfdmStage::Decoder};
+        for (auto entry : order)
         {
+            const auto index = static_cast<size_t>(entry);
             stage_buttons[index] = button(
                 ribbon, oneseg_ofdm_stage_name(static_cast<OneSegOfdmStage>(index)), [](lv_event_t* event)
                 {
@@ -409,6 +420,7 @@ struct OneSegOfdmWorkbench::Impl
             {
             auto& self = *static_cast<Impl*>(lv_event_get_user_data(event));
             self.experiment = {};
+            if (self.carrier_lesson) self.carrier_lesson->reset();
             lv_dropdown_set_selected(self.rate, 0);
             lv_dropdown_set_selected(self.clock, 1);
             lv_dropdown_set_selected(self.gain, 9);
@@ -638,6 +650,7 @@ struct OneSegOfdmWorkbench::Impl
         residual_axis = label(residual_panel, "RMS unavailable");
         lv_obj_align(phase_axis, LV_ALIGN_BOTTOM_LEFT, 0, 0);
         lv_obj_align(residual_axis, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+        carrier_lesson = std::make_unique<OneSegCarrierLesson>(analysis, phase_panel, residual_panel, group);
         rebuild();
     }
     void update(const OneSegTvSession::Snapshot& state)
@@ -649,6 +662,11 @@ struct OneSegOfdmWorkbench::Impl
         const bool readback_changed = native_configuration.available != state.decoder.native_configuration.available || native_configuration.received_ms != state.decoder.native_configuration.received_ms;
         native_configuration = state.decoder.native_configuration;
         if (readback_changed && focused_control) showLesson(*focused_control);
+        if (stage == OneSegOfdmStage::Subcarriers)
+        {
+            if (lv_obj_is_visible(analysis)) carrier_lesson->update(state, experiment);
+            return;
+        }
         const auto& history = state.decoder.ofdm_phase;
         const auto now = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
         const bool available = history.size >= 2;

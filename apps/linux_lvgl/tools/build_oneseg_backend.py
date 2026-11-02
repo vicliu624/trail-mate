@@ -183,6 +183,14 @@ def cm0_adapter():
     return module
 
 
+def carrier_adapter():
+    path = Path(__file__).with_name("oneseg_carrier_backend.py")
+    spec = importlib.util.spec_from_file_location("trailmate_carrier_adapter", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def build(arguments):
     if sys.version_info < (3, 12) or platform.system() != "Linux":
         raise RuntimeError("Build natively on Linux with Python 3.12 or newer")
@@ -209,6 +217,7 @@ def build(arguments):
     if not source.exists():
         with tarfile.open(archive) as stream:
             stream.extractall(root, filter="data")
+    carrier_adapter().restore(source / "lib/ofdm_synchronization_1seg_impl.cc", source / "lib/ofdm_synchronization_1seg_impl.h")
     cm0_adapter().restore(source / "lib/ofdm_synchronization_1seg_impl.cc", source / "lib/viterbi_decoder_impl.h", source / "lib/CMakeLists.txt")
     repair_source(source / "lib/ofdm_synchronization_1seg_impl.cc")
     adapt_tmcc_source(source / "lib/tmcc_decoder_1seg_impl.cc")
@@ -219,6 +228,7 @@ def build(arguments):
     optimization = None
     if cm0 or getattr(arguments, "compact_fft", False):
         optimization = cm0_adapter().adapt(source / "lib/ofdm_synchronization_1seg_impl.cc", source / "lib/viterbi_decoder_impl.h", source / "lib/CMakeLists.txt", simde=cm0)
+    carriers = carrier_adapter().adapt(source / "lib/ofdm_synchronization_1seg_impl.cc", source / "lib/ofdm_synchronization_1seg_impl.h")
     prefix = root / "prefix"
     environment = os.environ.copy()
     # The upstream project otherwise overrides CMAKE_INSTALL_PREFIX from this.
@@ -245,7 +255,7 @@ def build(arguments):
         raise RuntimeError("CM0 C++ ABI/cancellation contract differs: " + json.dumps(abi))
     manifest = dict(upstream="https://github.com/dragoon2014/gr-isdbt", revision=REVISION,
                     archive_sha256=ARCHIVE_SHA, adapted_source_sha256=sha((source/"lib/ofdm_synchronization_1seg_impl.cc").read_bytes()),
-                    safety_source_sha256=PATCHED_SHA, ofdm_tracking=tracking, fec_statistics=fec, cm0_optimization=optimization,
+                    safety_source_sha256=PATCHED_SHA, ofdm_tracking=tracking, fec_statistics=fec, cm0_optimization=optimization, ofdm_carriers=carriers,
                     tmcc_source_sha256=TMCC_PATCHED_SHA, tmcc_message_schema=1,
                     viterbi_source_sha256=VITERBI_PATCHED_SHA,
                     license="GPL-3.0-or-later", machine=platform.machine(),

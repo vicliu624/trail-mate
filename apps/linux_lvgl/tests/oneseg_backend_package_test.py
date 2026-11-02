@@ -39,7 +39,7 @@ def run(args):
         shutil.copy2(args.decoder, decoder)
         # These sidecars belong to the application, just like its decoder entry.
         for name in ("oneseg_ofdm_dsp.py", "oneseg_ofdm_diagnostics.py",
-                     "oneseg_ofdm_measurements.py", "oneseg_synthetic_ofdm.py"):
+                     "oneseg_ofdm_measurements.py", "oneseg_synthetic_ofdm.py", "oneseg_carrier_protocol.py"):
             shutil.copy2(args.decoder.resolve().parent / name, private / name)
         environment = os.environ.copy()
         for key in ("PYTHONPATH", "LD_LIBRARY_PATH", "TRAIL_MATE_ONESEG_BACKEND_ACTIVE"):

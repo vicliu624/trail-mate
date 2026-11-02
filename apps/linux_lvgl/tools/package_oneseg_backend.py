@@ -56,10 +56,11 @@ def verify_provenance(work, manifest, pinned):
         if cm0 or manifest.get("cm0_optimization") is not None:
             optimization = pinned["cm0_adapter"]().adapt(sync, source / "viterbi_decoder_impl.h",
                                                          source / "CMakeLists.txt", simde=cm0)
+        carriers = pinned["carrier_adapter"]().adapt(sync, source / "ofdm_synchronization_1seg_impl.h")
         expected = dict(revision=pinned["REVISION"], archive_sha256=pinned["ARCHIVE_SHA"],
                         adapted_source_sha256=pinned["sha"](sync.read_bytes()),
                         safety_source_sha256=pinned["PATCHED_SHA"], ofdm_tracking=tracking,
-                        fec_statistics=fec, cm0_optimization=optimization,
+                        fec_statistics=fec, cm0_optimization=optimization, ofdm_carriers=carriers,
                         tmcc_source_sha256=pinned["TMCC_PATCHED_SHA"], tmcc_message_schema=1,
                         viterbi_source_sha256=pinned["VITERBI_PATCHED_SHA"])
         for key, value in expected.items():
@@ -132,7 +133,7 @@ def package(args):
             archive.add(work / "source.tar.gz", arcname="source.tar.gz")
             archive.add(work / "backend-manifest.json", arcname="backend-manifest.json")
             for name in ("build_oneseg_backend.py", "oneseg_sync_lab_backend.py",
-                         "oneseg_fec_backend.py", "oneseg_cm0_backend.py"):
+                         "oneseg_fec_backend.py", "oneseg_cm0_backend.py", "oneseg_carrier_backend.py"):
                 archive.add(Path(__file__).with_name(name), arcname="tools/" + name)
             options = " --cm0" if manifest.get("target") == "cm0-armv7" else (
                 " --compact-fft" if manifest.get("cm0_optimization") else "")
@@ -172,7 +173,7 @@ def package(args):
                                cwd=root, env=dependency_environment)
         if not dependencies.startswith("shlibs:Depends="):
             raise RuntimeError("Missing native shared-library dependency result")
-        version = "1.1.0+git" + pinned["REVISION"][:12] + "-2"
+        version = "1.1.0+git" + pinned["REVISION"][:12] + "-3"
         minor = sys.version_info.minor
         depends = f"{dependencies.split('=', 1)[1]}, gnuradio, python3-numpy, python3 (>= 3.{minor}), python3 (<< 3.{minor + 1})"
         control = stage / "DEBIAN"

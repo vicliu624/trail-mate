@@ -29,6 +29,7 @@ struct RecordedRadio final : rt::IPacketRadio
     std::atomic_bool present{false};
     std::atomic_bool restore_ok{true};
     std::atomic_bool synthetic_iq{false};
+    std::atomic_bool pause_iq{false}; // Explicit outage injection, independent of fixture duration.
     std::atomic_uint acquired{0}, restored{0};
     std::atomic_uint sample_rate{0}, spi_clock{0}, gain_step{0};
     std::atomic_uint64_t scanned_channels{0};
@@ -94,6 +95,8 @@ struct RecordedRadio final : rt::IPacketRadio
         while (!request.cancelled(request.context) &&
                (input.read(reinterpret_cast<char*>(request.staging), 1280) || input.gcount()))
         {
+            while (pause_iq && !request.cancelled(request.context)) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            if (request.cancelled(request.context)) break;
             const size_t bytes = static_cast<size_t>(input.gcount());
             if (!request.accept(request.context, request.staging, bytes, result.validated_bytes / 2)) break;
             result.validated_bytes += bytes;
@@ -469,6 +472,11 @@ static void synthetic_workflow(platform::desktop::SdlLvglHost& host, const std::
         assert(current.decoder.ofdm_phase.source == rt::OneSegLabSource::Synthetic && current.decoder.ofdm_phase.newest().has_reference);
         assert(!current.decoder.rejected_ofdm_records && radio.acquired == acquired);
         assert(label_contains(lv_screen_active(), "SYNTHETIC OFDM"));
+        click("Subcarriers / OFDM");
+        until([&]
+              { return label_contains(lv_screen_active(), "ACTUAL / Synthetic"); });
+        for (unsigned tick = 0; tick < 40; ++tick) pump();
+        capture(host, root, "tv-synthetic-subcarriers.bmp", "ACTUAL GENERIC OFDM FROM GENERATED IQ / NO RF, TV OR FEC");
         const char* stages[]{"Input / RF", "Filter / resample", "Symbol / CP", "Carrier / phase", "Pilots / equalizer", "Constellation / FEC"};
         for (unsigned stage = 0; stage < 6; ++stage)
         {
@@ -555,6 +563,180 @@ static void synthetic_workflow(platform::desktop::SdlLvglHost& host, const std::
     std::filesystem::remove(saved);
     if (had_saved) std::filesystem::rename(preserved, saved);
 }
+static lv_obj_t* carrier_control(const char* caption, const lv_obj_class_t* type)
+{
+    auto* heading = label(lv_screen_active(), caption);
+    assert(heading);
+    auto* cell = lv_obj_get_parent(heading);
+    for (unsigned i = 0; i < lv_obj_get_child_count(cell); ++i)
+    {
+        auto* object = lv_obj_get_child(cell, i);
+        if (lv_obj_check_type(object, type)) return object;
+    }
+    assert(false);
+    return nullptr;
+}
+static void carrier_lesson_fixture(const std::filesystem::path& root)
+{
+    platform::desktop::DeviceOptions options;
+    options.ux_pack = "t_display_p4_touch";
+    options.width = 1232;
+    options.height = 568;
+    platform::desktop::SdlLvglHost host(options);
+    auto* parent = lv_obj_create(lv_screen_active());
+    lv_obj_set_size(parent, lv_pct(100), lv_pct(100));
+    lv_obj_set_flex_flow(parent, LV_FLEX_FLOW_COLUMN);
+    auto* group = lv_group_create();
+    {
+        unsigned applies = 0;
+        rt::OneSegOfdmWorkbench::Callbacks callbacks;
+        callbacks.apply = [&](const auto&, const auto&)
+        { ++applies; };
+        rt::OneSegOfdmWorkbench view(parent, group, callbacks);
+        view.selectStage(rt::OneSegOfdmStage::Subcarriers);
+        auto* video = lv_obj_create(view.videoHost());
+        lv_obj_set_size(video, 320, 240);
+        rt::OneSegTvSession::Snapshot state;
+        state.active = true;
+        state.decoder.generation = 7;
+        state.generation = 7;
+        const auto make_burst = [](bool generic, unsigned burst)
+        {
+            auto result = std::make_shared<rt::OneSegCarrierBurst>();
+            result->source = generic ? rt::OneSegLabSource::Synthetic : rt::OneSegLabSource::LiveReceiver;
+            result->updated_ms = uint64_t(std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count());
+            for (unsigned row = 0; row < 4; ++row)
+            {
+                auto& frame = result->symbols[row];
+                auto& m = frame.metadata;
+                m.sequence = (burst - 1) * (generic ? 12 : 512) + row + 1;
+                m.burst = burst;
+                m.slot = row;
+                m.layout = generic;
+                m.mode = 3;
+                m.fft = generic ? 1024 : 576;
+                m.cp = m.fft / 16;
+                m.count = 432;
+                m.sample_rate = generic ? 64000000. / 63 : 4000000. / 7;
+                m.phase = (row + 2) % 4;
+                m.flags = 1;
+                assert(m.valid());
+                for (unsigned k = 0; k < 432; ++k) frame.values[k].values = {.6f, .2f, .75f, .25f, .8f, 0, 1.33333337f, 0};
+            }
+            return result;
+        };
+        const auto set_burst = [&](auto burst)
+        {
+            state.decoder.ofdm_carriers = burst;
+            state.decoder.ofdm_phase = {};
+            for (const auto& frame : burst->symbols)
+            {
+                rt::OneSegPhaseObservation p;
+                p.symbol = frame.metadata.sequence;
+                p.prior = .1;
+                p.observed = .2;
+                p.integrator = .01;
+                p.prediction = .11;
+                p.alpha = .1;
+                p.beta = .01;
+                p.corrected = .121;
+                p.correction = .021;
+                p.residual = .079;
+                p.has_prediction = true;
+                assert(state.decoder.ofdm_phase.append(p, burst->source, burst->updated_ms));
+            }
+        };
+        const auto refresh = [&]
+        { lv_tick_inc(120); view.update(state); lv_obj_update_layout(parent); lv_refr_now(nullptr); host.present(); };
+        const auto choice = [&](const char* name, unsigned value)
+        { auto* object = carrier_control(name,&lv_dropdown_class); lv_dropdown_set_selected(object,value); lv_obj_send_event(object,LV_EVENT_VALUE_CHANGED,nullptr); refresh(); };
+        const auto spin = [&](const char* name, int value)
+        { auto* object = carrier_control(name,&lv_spinbox_class); lv_spinbox_set_value(object,value); lv_obj_send_event(object,LV_EVENT_VALUE_CHANGED,nullptr); refresh(); };
+        set_burst(make_burst(false, 2));
+        refresh();
+        spin("Carrier index", 6);
+        assert(label_contains(parent, "ACTUAL / Live"));
+        assert(label_contains(parent, "Same output 513"));
+        assert(label_contains(parent, "Pilot fit is self-referenced"));
+        capture(host, root, "subcarriers-native-pilot.bmp", "UI FIXTURE / COHERENT NATIVE SYMBOLS / NO RF");
+        choice("Symbol row", 2);
+        assert(label_contains(parent, "Same output 515"));
+        choice("Symbol row", 0);
+        spin("Carrier index", 7);
+        assert(label_contains(parent, "Payload reference unknown"));
+        choice("Dataset", 1);
+        choice("Lesson", 1);
+        spin("CFO model Hz", 250);
+        assert(label_contains(parent, "epsilon=0.2520"));
+        capture(host, root, "subcarriers-cfo-model.bmp", "MATHEMATICAL FOUR-TONE PREVIEW / NO RF");
+        choice("Lesson", 2);
+        spin("Delay / shift", 100);
+        spin("Echo % amp", 60);
+        assert(label_contains(parent, "CP violated"));
+        capture(host, root, "subcarriers-cp-violation.bmp", "LINEAR ECHO + ADJACENT SYMBOL MODEL / NO RF");
+        choice("Lesson", 3);
+        spin("Delay / shift", -18);
+        assert(!label_contains(parent, "CP violated"));
+        spin("Delay / shift", 18);
+        assert(label_contains(parent, "CP violated"));
+        choice("FFT / mode", 3);
+        assert(label_contains(parent, "receiver FFT 1024"));
+        choice("Dataset", 0);
+        click("Hold");
+        refresh();
+        set_burst(make_burst(false, 3));
+        refresh();
+        assert(label_contains(parent, "Same output 513"));
+        click("Hold");
+        refresh();
+        assert(label_contains(parent, "Same output 1025"));
+        state.decoder.generation = 8;
+        state.generation = 8;
+        state.source.synthetic = true;
+        set_burst(make_burst(true, 2));
+        refresh();
+        spin("Carrier index", 216);
+        assert(label_contains(parent, "ACTUAL / Synthetic"));
+        assert(label_contains(parent, "signed k=1"));
+        capture(host, root, "subcarriers-generic-reference.bmp", "GENERIC KNOWN-REFERENCE OFDM UI FIXTURE / NO RF");
+        state.source.synthetic = false;
+        state.source.archive_path = "fixture-A.tmiq";
+        state.generation = state.decoder.generation = 9;
+        auto recorded = make_burst(false, 2);
+        recorded->source = rt::OneSegLabSource::RecordedIq;
+        set_burst(recorded);
+        refresh();
+        assert(label_contains(parent, "ACTUAL / Recorded IQ"));
+        click("Hold");
+        refresh();
+        state.source.archive_path = "fixture-B.tmiq";
+        refresh();
+        assert(label_contains(parent, "no observed burst"));
+        state.generation = state.decoder.generation = 10;
+        set_burst(recorded);
+        refresh();
+        assert(label_contains(parent, "ACTUAL / Recorded IQ"));
+        view.fullscreen(true);
+        refresh();
+        assert(lv_obj_get_width(video) == 320 && lv_obj_get_height(video) == 240);
+        view.fullscreen(false);
+        refresh();
+        state.decoder.generation = 123; // Receive-worker and outer session counters need not match.
+        refresh();
+        assert(label_contains(parent, "ACTUAL / Recorded IQ"));
+        for (unsigned i = 0; i < 6; ++i)
+        {
+            view.selectStage(static_cast<rt::OneSegOfdmStage>(i));
+            refresh();
+        }
+        view.selectStage(rt::OneSegOfdmStage::Subcarriers);
+        refresh();
+        assert(label_contains(parent, "ACTUAL / Recorded IQ"));
+        assert(applies == 0); // Teaching controls never apply or retune the receiver.
+    }
+    lv_group_delete(group);
+    lv_obj_delete(parent);
+}
 int main(int argc, char** argv)
 {
     assert(argc == 5 || (argc == 6 && !std::strcmp(argv[5], "--full-scan")));
@@ -570,6 +752,12 @@ int main(int argc, char** argv)
     isolated.driver = "none";
     assert(rt::configure_packet_radio(isolated));
     lv_init();
+    if (std::getenv("TRAIL_MATE_TEST_CARRIER_UI"))
+    {
+        carrier_lesson_fixture(root);
+        lv_deinit();
+        return 0;
+    }
     if (std::getenv("TRAIL_MATE_TEST_REDRAW_ONLY"))
     {
         workbench_redraw_fixture(root);
@@ -601,6 +789,7 @@ int main(int argc, char** argv)
                 if (entry.is_directory() && (name == "site-packages" || name == "dist-packages")) python += entry.path().string() + ":";
                 if (entry.is_regular_file() && name.find("libgnuradio-isdbt.so") == 0) libraries += entry.path().parent_path().string() + ":";
             }
+        if (const char* extra = std::getenv("TRAIL_MATE_TEST_RUNTIME_LIBRARY_PATH")) libraries += std::string(extra) + ":";
         config.environment = {"PYTHONPATH=" + python, "LD_LIBRARY_PATH=" + libraries};
         const bool measured_tracking = std::getenv("TRAIL_MATE_TEST_OFDM_TRACKING");
         if (measured_tracking)
@@ -658,6 +847,16 @@ int main(int argc, char** argv)
                     for (const auto& signal : measurements.ofdm_signal)
                         assert(signal.valid() && signal.source == rt::OneSegLabSource::RecordedIq);
                     assert(measurements.rejected_ofdm_records == 0);
+                    if (std::getenv("TRAIL_MATE_TEST_CARRIERS"))
+                    {
+                        until([&]
+                              { return bool(state->snapshot().decoder.ofdm_carriers); });
+                        click("Subcarriers / OFDM");
+                        until([&]
+                              { return label_contains(lv_screen_active(), "ACTUAL / Recorded IQ"); });
+                        for (unsigned tick = 0; tick < 40; ++tick) pump();
+                        capture(host, root, "tv-native-subcarriers.bmp", "COHERENT ACTUAL NATIVE CARRIERS FROM RECORDED IQ / NO RF");
+                    }
                     const char* stages[]{"Input / RF", "Filter / resample", "Symbol / CP", "Carrier / phase", "Pilots / equalizer", "Constellation / FEC"};
                     for (size_t i = 0; i < 6; ++i)
                     {
@@ -681,6 +880,11 @@ int main(int argc, char** argv)
                         }
                     }
                     click("Carrier / phase");
+                }
+                if (state->snapshot().timing != rt::OneSegTvSession::Timing::AudioQueueEstimate)
+                {
+                    const auto s = state->snapshot();
+                    std::fprintf(stderr, "ARM/UI timing diagnostic: timing=%u active=%d iq_pairs=%llu queue=%u ts=%llu frames=%llu video_age=%u pcm=%llu audio_valid=%d audio_starved=%d\n", unsigned(s.timing), s.active, (unsigned long long)s.receive.forwarded_pairs, s.receive.queue_high_water, (unsigned long long)s.decoder.ts_bytes, (unsigned long long)s.presented_frames, s.video_age_ms, (unsigned long long)s.media.pcm_samples, s.audio_clock.valid, s.audio_clock.starved);
                 }
                 assert(state->snapshot().timing == rt::OneSegTvSession::Timing::AudioQueueEstimate);
                 assert(state->snapshot().av_delta_us >= -250000 && state->snapshot().av_delta_us <= 30000);
@@ -766,6 +970,7 @@ int main(int argc, char** argv)
                 click("Fullscreen");
                 until([&]
                       { return label(lv_screen_active(), "Stop") != nullptr; });
+                radio.pause_iq = true;
                 until([&]
                       { return state->snapshot().audio_clock.starved && state->snapshot().iq_age_ms > 2100; });
                 until([&]
@@ -776,6 +981,7 @@ int main(int argc, char** argv)
                       { return label(lv_screen_active(), "Signal interrupted\nRetry / R to reacquire") != nullptr; });
                 capture(host, root, "tv-starved.bmp");
                 const auto lost_generation = state->snapshot().generation;
+                radio.pause_iq = false;
                 click("Retry");
                 until([&]
                       { const auto current = state->snapshot(); return current.generation > lost_generation && current.channel == 14 && current.presented_frames > 0; });

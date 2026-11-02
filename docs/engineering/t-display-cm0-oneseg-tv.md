@@ -20,7 +20,52 @@ across the CM0 panel.
 
 ## Requested OFDM learning workstation (November 2, implementation in progress)
 
-The native workbench currently exposes the six signal-chain stages, direct
+### Complete subcarrier observations (learning-view extension in progress)
+
+The subcarrier extension observes all 108/216/432 active carriers from the same
+native output symbol, retaining the actual pre-equalizer complex value,
+equalized value, channel estimate and pilot scrambling reference. The native
+block exports four consecutive output symbols approximately twice per second.
+Each carries its output sequence, burst slot, actual SP phase, phase-acquisition
+flag, CP-movement flag, FFT/CP lengths, nominal processing rate and equalizer
+floor. These are output-symbol sequences, not decoded 204-symbol TMCC frame
+positions or an assertion that samples were never lost upstream.
+
+Native carrier roles match the pinned `tmcc_decoder_1seg_impl` definitions:
+Mode 3 has 384 data, 36 scattered-pilot, 4 TMCC and 8 AC carriers. SP positions
+follow `k mod 12 = 3*(symbol_phase mod 4)`. The receiver's active-array index,
+shifted FFT index and signed frequency bin are distinct. Mode 3's compact
+receiver uses FFT 576 at 4 MHz / 7; the ordinary receiver uses FFT 1024 at
+64 MHz / 63. Both have approximately 992.063 Hz carrier spacing, 1008 us useful
+duration and a 63 us CP for GI 1/16. The full-channel broadcast FFT is a separate
+quantity and must not be confused with either reduced receiver FFT.
+
+`TM_CARR2` observations use ordered atomic chunks smaller than 4096 bytes, with
+up to 64 carriers per chunk. Values retain their original IEEE754 float32 bits
+in a Base64-encoded little-endian payload, avoiding per-value Python decimal
+formatting. The reader also accepts the earlier 16-carrier decimal `TM_CARR1`.
+The parent validates geometry, source, sequence and every finite component,
+assembles all chunks and publishes only complete immutable four-symbol bursts.
+Duplicate, missing, reordered and mixed-metadata chunks cannot produce a
+partially updated grid. Ordinary MPEG transport output remains separate.
+Tracking observations are also emitted for these native burst symbols, allowing
+an exact join by output sequence when the fine loop updates. A moved CP can
+suppress that update; the UI must show an unavailable association rather than
+substitute the nearest unrelated phase observation.
+
+The generic Synthetic source is explicitly different: its DC bin is unused,
+its fixed reference pilots occupy every twelfth active-array position, and all
+transmitted data symbols are known. It has no native TMCC/AC carriers. Its
+four-symbol bursts follow the slowed virtual-symbol presentation cadence.
+Native scrambling references establish a known transmitted reference only for
+an acquired scattered pilot; they do not reveal unknown data/TMCC payload bits.
+An SP residual fitted using that same pilot is not independent evidence of
+channel-estimation quality. Geometry labels, grid and selected values can use an
+available measured burst. Four-tone waveforms and basis spectra always remain
+explicit mathematical previews, rather than a reconstruction of the RF input.
+
+The native workbench exposes seven primary views: the six receive-chain stages
+and a subcarrier lesson, which is the initial view. It retains direct
 experiment controls and the factory reception preset. Development builds can
 observe actual post-filter IQ, equalized carriers and native channel estimates.
 These observations use a separate, bounded `TM_SIGNAL1` diagnostic frame on
@@ -56,6 +101,39 @@ decision-reference energy over those symbols. The ring is at most 3.375 MiB for
 symbols to reduce Python scheduler overhead without changing decoder input.
 It includes all active native carriers and retains the pilot/TMCC caveat above.
 The initial window contains only the symbols received so far.
+
+The subcarrier lesson keeps the 320 x 240 video viewport and the existing
+Apply/Default/Save/Load and source controls. Nine directly visible lesson controls
+select carrier, symbol row, Actual/ISDB-T-model/generic-model data, mathematical
+lesson, preview CFO, delay/window shift, echo amplitude, receiver FFT model and
+guard ratio. These teaching controls never retune or apply the receiver.
+Clicking the four-row grid selects both a carrier and an output-symbol row.
+The grid can show protocol roles, full-carrier channel amplitude or wrapped
+channel phase. Deep-fade phase is undefined, not displayed as a zero phase.
+Native and generic DC/role mappings remain distinct.
+
+Hold retains an immutable observed burst. Source/session/decoder transitions
+release it; changing a selected archive cannot expose the previous file's data
+as a new observation. Receiver-worker and TV-session generation counters are
+distinct and must not be compared for equality. Selected raw, equalized and
+known-reference points use equal I/Q scale, with a reference-error connector
+only when that reference is known. Matching loop observations are joined by
+output sequence and labelled phase advance per useful symbol.
+
+Four-tone time plots are displayed relative to the selected carrier, avoiding
+aliasing from plotting hundreds of absolute-bin cycles with a small display
+point count. Shading marks CP and the corresponding tail. The spectrum shows
+the finite-N DFT basis, explicitly including integer bin centers and orthogonal
+zeros. Integer CFO permutes bins; fractional CFO spreads a tone between bins.
+The fractional-ICI calculation is made after removing the integer-bin shift.
+The echo/window model uses different adjacent symbols and linear delayed
+samples, so delay beyond CP or a window crossing a symbol boundary introduces
+actual model ISI rather than incorrectly assuming diagonal `Y=HX` everywhere.
+
+Capacity is explicitly a preview using working modulation/code choices:
+`Ndata * log2(M) / (Tu + Tg)`, followed for the native layout by convolutional
+rate and RS factor `188/204`. It is not measured programme bitrate or proof of
+the received TMCC modulation. The generic source has no FEC/TV payload.
 
 The receive worker also provides a development archive/replay API. Recording
 copies forwarded raw IQ8 into a preallocated buffer of at most 32 MiB, outside
@@ -1029,8 +1107,9 @@ lock policy and C++11 ABI 1, matching the inspected CM0 configuration described
 in [the target ABI ledger](linux-armhf-cxx-abi.md). The CM0 application depends on
 this virtual capability, so the constraint also applies to manual package
 installation. Unknown ABI metadata requires rebuilding the backend manifest.
-The package revision is now `-2` to distinguish the instrumented OFDM/FEC payload
-and its corresponding sources from the earlier ABI-described `-1` package.
+The package revision is now `-3` for coherent full-carrier observations. The
+earlier `-2` added OFDM/FEC instrumentation and corresponding sources, following
+the ABI-described `-1` package.
 
 On 2026-10-30, the amd64 host package was built and extracted without installation.
 With private development path variables cleared, the actual decoder imported

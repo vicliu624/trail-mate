@@ -178,6 +178,13 @@ class OfdmReference:
         reference_energy = sum(row[1] for row in self.moments)
         total_bits = sum(row[2] for row in self.moments)
         total_errors = sum(row[3] for row in self.moments)
+        self.carrier_frame = None
+        if self.index % 12 < 4:
+            self.carrier_frame = dict(schema=1,sequence=self.index+1,burst=self.index//12+1,slot=self.index%12,
+                phase=self.index%4,phase_valid=True,cp_moved=False,fft_length=n,cp_length=cp,
+                sample_rate=self.rate,equalizer_floor=p['equalizer_floor'],
+                raw=frequency[self.bins].astype(np.complex64),equalized=equalized.astype(np.complex64),
+                channel=self.channel_state.astype(np.complex64),pilot_reference=reference[1].astype(np.complex64))
         self.index += 1
         self.position += self.length*(1+self.clock)
         for index in list(self.cache):
@@ -208,6 +215,7 @@ def run(arguments):
     dsp = sibling('oneseg_ofdm_dsp')
     measurements = sibling('oneseg_ofdm_measurements')
     protocol = sibling('oneseg_ofdm_diagnostics')
+    carrier_protocol = sibling('oneseg_carrier_protocol')
     model = OfdmReference(dsp.read_settings(OfdmReference.rate))
     if arguments.check_backend: return 0
     stop = threading.Event()
@@ -226,6 +234,9 @@ def run(arguments):
         while not stop.is_set() and (not arguments.seconds or time.monotonic()-began < arguments.seconds):
             phase, truth, data, channel, history = model.step()
             os.write(2, reference_record(protocol, phase, truth))
+            if model.carrier_frame is not None:
+                for record in carrier_protocol.records(model.carrier_frame,layout=1):
+                    os.write(2,record)
             if model.index % 4 == 0:
                 os.write(2, measurements.record(1, model.index, model.rate, float(np.mean(abs(history)**2)), measurements.spectrum(history, model.rate)))
                 chosen = data[np.linspace(0, len(data)-1, min(64, len(data)), dtype=int)]

@@ -664,6 +664,26 @@ def run(arguments):
             except OSError:
                 pass
 
+    class CarrierMonitor(PhaseMonitor):
+        def __init__(self):
+            super().__init__("Native coherent carrier observations")
+            path = Path(__file__).with_name("oneseg_carrier_protocol.py")
+            spec = importlib.util.spec_from_file_location("trailmate_carrier_protocol", path)
+            self.carrier_protocol = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(self.carrier_protocol)
+
+        def accept(self, message):
+            try:
+                for record in self.carrier_protocol.records(pmt.to_python(message)):
+                    if os.write(2, record) != len(record):
+                        raise OSError("Incomplete carrier diagnostic write")
+            except (ValueError, TypeError, KeyError, RuntimeError):
+                if not self.rejected:
+                    emit("ofdm_carriers_rejected", message="Invalid coherent native carrier snapshot")
+                    self.rejected = True
+            except OSError:
+                pass
+
     source, sink = IqInput(), TsOutput()
     graph = None
     done = threading.Event()
@@ -746,6 +766,7 @@ def run(arguments):
             if monitor is not None:
                 graph.msg_connect(tmcc, "tmcc_parameters", monitor, "in")
             phase_monitor = None
+            carrier_monitor = None
             fec_monitor = None
             signal_observers = []
             if os.environ.get("TRAIL_MATE_OFDM_DIAGNOSTICS") == "1":
@@ -759,6 +780,13 @@ def run(arguments):
                 if tracking is not None:
                     phase_monitor = PhaseMonitor()
                     graph.msg_connect(tracking, "ofdm_tracking", phase_monitor, "in")
+                    ports = tracking.message_ports_out()
+                    if any(pmt.symbol_to_string(pmt.vector_ref(ports, i)) == "ofdm_carriers"
+                           for i in range(pmt.length(ports))):
+                        carrier_monitor = CarrierMonitor()
+                        graph.msg_connect(tracking, "ofdm_carriers", carrier_monitor, "in")
+                    else:
+                        emit("ofdm_carriers_unavailable", message="Native backend has no coherent carrier observations")
                     path = Path(__file__).with_name("oneseg_ofdm_measurements.py")
                     spec = importlib.util.spec_from_file_location("trailmate_ofdm_measurements", path)
                     measurements = importlib.util.module_from_spec(spec)

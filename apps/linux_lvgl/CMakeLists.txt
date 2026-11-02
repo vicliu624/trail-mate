@@ -100,7 +100,7 @@ if(TRAIL_MATE_LINUX_BUILD_APP)
         install(PROGRAMS tools/oneseg_decode.py
             DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/trailmate"
             RENAME trailmate-linux-oneseg-decode COMPONENT Runtime)
-        install(FILES tools/oneseg_ofdm_diagnostics.py tools/oneseg_ofdm_dsp.py tools/oneseg_ofdm_measurements.py tools/oneseg_synthetic_ofdm.py
+        install(FILES tools/oneseg_ofdm_diagnostics.py tools/oneseg_ofdm_dsp.py tools/oneseg_ofdm_measurements.py tools/oneseg_synthetic_ofdm.py tools/oneseg_carrier_protocol.py
             DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/trailmate" COMPONENT Runtime)
     endif()
     trailmate_add_linux_ui_shell(trailmate_desktop_ui trailmate_desktop_linux_common
@@ -187,6 +187,10 @@ if(TRAIL_MATE_LINUX_BUILD_APP)
             add_test(NAME oneseg_ofdm_synthetic_ui COMMAND trailmate_oneseg_tv_page_test
                 "${CMAKE_CURRENT_SOURCE_DIR}/tools/oneseg_decode.py" unused-prefix unused-iq "${CMAKE_CURRENT_BINARY_DIR}/synthetic-ofdm-review")
             set_tests_properties(oneseg_ofdm_synthetic_ui PROPERTIES ENVIRONMENT "TRAIL_MATE_TEST_SYNTHETIC_ONLY=1" TIMEOUT 60)
+            add_test(NAME oneseg_ofdm_carrier_ui COMMAND trailmate_oneseg_tv_page_test
+                unused-decoder unused-prefix unused-iq "${CMAKE_CURRENT_BINARY_DIR}/carrier-lesson-review")
+            set_tests_properties(oneseg_ofdm_carrier_ui PROPERTIES
+                ENVIRONMENT "TRAIL_MATE_TEST_CARRIER_UI=1;TRAIL_MATE_TEST_COMPARE_REDRAW=1" TIMEOUT 60)
         endif()
         file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/page-review")
         set(review_pages chat contacts map sky_plot team tracker calculator geocaching energy_sweep extensions settings calendar walkie_talkie)
