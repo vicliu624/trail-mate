@@ -677,6 +677,8 @@ jobs:
         run: |
           /usr/bin/python3 apps/linux_lvgl/tools/build_oneseg_backend.py --work-dir .codex-build/oneseg/gr-isdbt --jobs 2
           /usr/bin/python3 apps/linux_lvgl/tests/oneseg_backend_source_test.py --builder apps/linux_lvgl/tools/build_oneseg_backend.py --archive .codex-build/oneseg/gr-isdbt/source.tar.gz --work-dir .codex-build/oneseg
+          /usr/bin/python3 apps/linux_lvgl/tests/oneseg_cm0_adapter_test.py --builder apps/linux_lvgl/tools/build_oneseg_backend.py --archive .codex-build/oneseg/gr-isdbt/source.tar.gz
+          /usr/bin/python3 apps/linux_lvgl/tests/oneseg_native_geometry_test.py --prefix .codex-build/oneseg/gr-isdbt/prefix --decoder apps/linux_lvgl/tools/oneseg_decode.py
       - name: Build and test production decoder and media boundaries
         run: |
           cmake -S tests/oneseg -B .codex-build/oneseg/linux -G Ninja -DCMAKE_BUILD_TYPE=Debug -DPython3_EXECUTABLE=/usr/bin/python3 -DTRAIL_MATE_TEST_ONESEG_MEDIA=ON -DTRAIL_MATE_ONESEG_BACKEND_PREFIX="$PWD/.codex-build/oneseg/gr-isdbt/prefix"
@@ -690,10 +692,11 @@ jobs:
       - name: Build Linux TV UI and verify bundled content fonts
         run: |
           cmake -S apps/linux_lvgl -B .codex-build/oneseg/ui -G Ninja -DCMAKE_BUILD_TYPE=Debug -DTRAIL_MATE_LINUX_DEVICE_CONFIG="$PWD/boards/t_display_cm0/package.cmake" -DTRAIL_MATE_LINUX_ENABLE_ONESEG_MEDIA=ON -DTRAIL_MATE_LINUX_DEB=OFF -DTRAIL_MATE_ONESEG_GENERATE_BROADCAST_FONT=ON
-          cmake --build .codex-build/oneseg/ui --target trailmate-linux trailmate_broadcast_font_test trailmate_bundled_font_root_test --parallel 2
-          ctest --test-dir .codex-build/oneseg/ui -R '^oneseg_(broadcast_font|bundled_font_(root|override))$' --output-on-failure
+          cmake --build .codex-build/oneseg/ui --target trailmate-linux trailmate_broadcast_font_test trailmate_bundled_font_root_test trailmate_oneseg_tv_page_test --parallel 2
+          ctest --test-dir .codex-build/oneseg/ui -R '^oneseg_(broadcast_font|bundled_font_(root|override)|ofdm_workbench|ofdm_synthetic_ui)$' --output-on-failure
       - name: Package and validate relocated native backend
         run: |
+          /usr/bin/python3 apps/linux_lvgl/tests/oneseg_backend_provenance_test.py --backend-work .codex-build/oneseg/gr-isdbt
           /usr/bin/python3 apps/linux_lvgl/tools/package_oneseg_backend.py --backend-work .codex-build/oneseg/gr-isdbt --output .codex-build/oneseg/backend-package
           package=$(find .codex-build/oneseg/backend-package -maxdepth 1 -name '*.deb' -print -quit)
           test -n "$package"

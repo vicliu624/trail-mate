@@ -100,6 +100,8 @@ if(TRAIL_MATE_LINUX_BUILD_APP)
         install(PROGRAMS tools/oneseg_decode.py
             DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/trailmate"
             RENAME trailmate-linux-oneseg-decode COMPONENT Runtime)
+        install(FILES tools/oneseg_ofdm_diagnostics.py tools/oneseg_ofdm_dsp.py tools/oneseg_ofdm_measurements.py tools/oneseg_synthetic_ofdm.py
+            DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/trailmate" COMPONENT Runtime)
     endif()
     trailmate_add_linux_ui_shell(trailmate_desktop_ui trailmate_desktop_linux_common
         UX_PACK "${TRAIL_MATE_LINUX_UX_PACK}")
@@ -129,7 +131,8 @@ if(TRAIL_MATE_LINUX_BUILD_APP)
         include("${TRAIL_MATE_REPO_ROOT}/cmake/TrailMateBroadcastFonts.cmake")
         trailmate_add_broadcast_font_assets(trailmate-linux)
         target_sources(trailmate-linux PRIVATE
-            "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/ui/oneseg_tv_app.cpp")
+            "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/ui/oneseg_tv_app.cpp"
+            "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/ui/oneseg_ofdm_workbench.cpp")
         target_compile_definitions(trailmate-linux PRIVATE TRAIL_MATE_ONESEG_MEDIA=1
             TRAIL_MATE_ONESEG_DECODER_PATH="${CMAKE_INSTALL_FULL_LIBEXECDIR}/trailmate/trailmate-linux-oneseg-decode")
         target_link_libraries(trailmate-linux PRIVATE trailmate_linux_oneseg_media)
@@ -171,10 +174,19 @@ if(TRAIL_MATE_LINUX_BUILD_APP)
                     "-Wl,--wrap=lv_malloc_core" "-Wl,--wrap=lv_realloc_core" "-Wl,--wrap=lv_free_core")
             endif()
             add_executable(trailmate_oneseg_tv_page_test tests/oneseg_tv_page_test.cpp
-                "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/ui/oneseg_tv_app.cpp")
+                "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/ui/oneseg_tv_app.cpp"
+                "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/ui/oneseg_ofdm_workbench.cpp")
             target_compile_options(trailmate_oneseg_tv_page_test PRIVATE -UNDEBUG)
             target_link_libraries(trailmate_oneseg_tv_page_test PRIVATE
                 trailmate_desktop_ui trailmate_linux_sdl_host trailmate_linux_oneseg_media)
+            add_test(NAME oneseg_ofdm_workbench COMMAND trailmate_oneseg_tv_page_test
+                unused-decoder unused-prefix unused-iq "${CMAKE_CURRENT_BINARY_DIR}/ofdm-workbench-review")
+            set_tests_properties(oneseg_ofdm_workbench PROPERTIES
+                ENVIRONMENT "TRAIL_MATE_TEST_REDRAW_ONLY=1;TRAIL_MATE_TEST_COMPARE_REDRAW=1"
+                TIMEOUT 60)
+            add_test(NAME oneseg_ofdm_synthetic_ui COMMAND trailmate_oneseg_tv_page_test
+                "${CMAKE_CURRENT_SOURCE_DIR}/tools/oneseg_decode.py" unused-prefix unused-iq "${CMAKE_CURRENT_BINARY_DIR}/synthetic-ofdm-review")
+            set_tests_properties(oneseg_ofdm_synthetic_ui PROPERTIES ENVIRONMENT "TRAIL_MATE_TEST_SYNTHETIC_ONLY=1" TIMEOUT 60)
         endif()
         file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/page-review")
         set(review_pages chat contacts map sky_plot team tracker calculator geocaching energy_sweep extensions settings calendar walkie_talkie)

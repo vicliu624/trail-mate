@@ -45,6 +45,14 @@ if mode == "flood":
     os.write(2, b"TEST FIXTURE - NO RF: stderr drained\n")
 os.write(args.ready_fd, b"R")
 os.close(args.ready_fd)
+if mode == "phase-telemetry":
+    print("fixture input-rate="+os.environ.get("TRAIL_MATE_ONESEG_INPUT_RATE", "unset"), file=sys.stderr, flush=True)
+    frame = b"\x1eTM_OFDM1 32 1 1.1 1.05 .05 .05 .2 150 3\x1f"
+    os.write(2, b"fixture before tracking\n"+frame[:17])
+    time.sleep(.005)
+    os.write(2, frame[17:]+frame)
+    os.write(2, b"\x1eTM_OFDM1 33 nan 1 1 0 0 0 0 0\x1f")
+    os.write(2, b"fixture after tracking\n")
 if mode == "die-after-ready":
     time.sleep(.1)
     raise SystemExit(7)

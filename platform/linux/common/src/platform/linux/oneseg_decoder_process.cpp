@@ -2,6 +2,8 @@
 #define _GNU_SOURCE
 #endif
 #include "platform/linux/oneseg_decoder_process.h"
+#include "platform/linux/oneseg_ofdm_environment.h"
+#include "platform/linux/oneseg_ofdm_wire.h"
 #include "platform/linux/oneseg_pipe_sink.h"
 #include <algorithm>
 #include <array>
@@ -68,6 +70,16 @@ struct OneSegDecoderProcess::Impl
     Config config;
     std::vector<std::string> original_reception_environment;
     bool reception_overridden = false;
+    bool source_overridden = false;
+    std::vector<std::string> original_source_environment;
+    OneSegLabSource original_diagnostic_source = OneSegLabSource::Unavailable;
+    void resetInputSource()
+    {
+        if (!source_overridden) return;
+        config.environment = std::move(original_source_environment);
+        config.diagnostic_source = original_diagnostic_source;
+        source_overridden = false;
+    }
     mutable std::mutex mutex;
     std::condition_variable changed;
     Snapshot state;
@@ -78,6 +90,8 @@ struct OneSegDecoderProcess::Impl
     bool ready = false;
     std::array<int, 3> outputs{{-1, -1, -1}}; // Ready, TS, diagnostics; reader owns.
     std::array<uint8_t, 4096> bytes{};
+    std::array<uint8_t, 4096> diagnostic_text{};
+    OneSegOfdmWire ofdm_wire;
     std::array<uint8_t, 188> packet{};
     size_t packet_used = 0;
     uint64_t generation = 0;
@@ -324,6 +338,55 @@ struct OneSegDecoderProcess::Impl
     void diagnostic(const uint8_t* data, size_t count)
     {
         std::lock_guard<std::mutex> lock(mutex);
+        size_t plain = 0;
+        OneSegSignalMeasurement signal;
+        OneSegNativeConfiguration native_configuration;
+        OneSegFecStatistics fec;
+        for (size_t index = 0; index < count; ++index)
+        {
+            OneSegPhaseObservation value;
+            const auto result = ofdm_wire.feed(data[index], value, &signal, &native_configuration, &fec);
+            if (result == OneSegOfdmWire::Result::Ordinary)
+            {
+                if (plain < diagnostic_text.size()) diagnostic_text[plain++] = data[index];
+            }
+            else if (result == OneSegOfdmWire::Result::Invalid) ++state.rejected_ofdm_records;
+            else if (result == OneSegOfdmWire::Result::Fec && config.diagnostic_source != OneSegLabSource::Unavailable)
+            {
+                const auto now = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count());
+                if (!state.fec.append(fec, config.diagnostic_source, now)) ++state.rejected_ofdm_records;
+            }
+            else if (result == OneSegOfdmWire::Result::Configuration && config.diagnostic_source != OneSegLabSource::Unavailable)
+            {
+                if (state.native_configuration.available) ++state.rejected_ofdm_records;
+                else
+                {
+                    native_configuration.available = true;
+                    native_configuration.source = config.diagnostic_source;
+                    native_configuration.received_ms = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count());
+                    state.native_configuration = native_configuration;
+                }
+            }
+            else if (result == OneSegOfdmWire::Result::Signal && config.diagnostic_source != OneSegLabSource::Unavailable)
+            {
+                auto& previous = state.ofdm_signal[signal.kind - 1];
+                if (previous.count && signal.sequence <= previous.sequence) ++state.rejected_ofdm_records;
+                else
+                {
+                    signal.source = config.diagnostic_source;
+                    signal.updated_ms = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count());
+                    previous = signal;
+                }
+            }
+            else if (result == OneSegOfdmWire::Result::Sample && config.diagnostic_source != OneSegLabSource::Unavailable)
+            {
+                const auto now = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count());
+                if (!state.ofdm_phase.append(value, config.diagnostic_source, now)) ++state.rejected_ofdm_records;
+            }
+        }
+        data = diagnostic_text.data();
+        count = plain;
+        if (!count) return;
         constexpr size_t capacity = sizeof(state.stderr_tail) - 1;
         size_t previous = std::strlen(state.stderr_tail);
         if (count >= capacity)
@@ -435,6 +498,7 @@ bool OneSegDecoderProcess::open(unsigned channel, uint64_t generation, const std
     s.service_information.reset();
     s.requested_program = 0;
     s.packet_used = 0;
+    s.ofdm_wire = {};
     if (!s.pipe.open(channel, generation, cancel))
     {
         if (!cancel.load() && !s.error_ready.load()) s.fault(s.pipe.lastError());
@@ -499,9 +563,30 @@ bool OneSegDecoderProcess::finish()
     }
     return !s.error_ready.load(std::memory_order_acquire);
 }
+bool OneSegDecoderProcess::configureExperiment(const OneSegOfdmExperiment& experiment, uint32_t input_rate)
+{
+    auto& s = *impl_;
+    if (s.reader.joinable() || !experiment.valid(input_rate)) return false;
+    s.resetInputSource();
+    if (s.reception_overridden)
+    {
+        s.config.environment = std::move(s.original_reception_environment);
+        s.reception_overridden = false;
+    }
+    auto environment = s.config.environment;
+    const std::string prefix = "TRAIL_MATE_OFDM_";
+    environment.erase(std::remove_if(environment.begin(), environment.end(), [&](const auto& item)
+                                     { return item.compare(0, prefix.size(), prefix) == 0; }),
+                      environment.end());
+    for (auto& entry : oneseg_ofdm_environment(experiment)) environment.push_back(std::move(entry));
+    s.config.environment = std::move(environment);
+    s.config.automatic_parameters = experiment.automatic_waveform;
+    return true;
+}
 bool OneSegDecoderProcess::configureReception(const OneSegReceptionSettings& reception)
 {
     if (impl_->reader.joinable()) return false;
+    impl_->resetInputSource();
     auto& environment = impl_->config.environment;
     if (!reception.enabled)
     {
@@ -525,7 +610,36 @@ bool OneSegDecoderProcess::configureReception(const OneSegReceptionSettings& rec
     environment.push_back(prefix + std::to_string(reception.sample_rate_hz));
     return true;
 }
+bool OneSegDecoderProcess::configureRecordedIq(uint32_t rate)
+{
+    auto& s = *impl_;
+    if (s.reader.joinable() || (rate != 450000 && rate != 500000 && rate != 576000)) return false;
+    if (!configureReception({})) return false;
+    s.original_source_environment = s.config.environment;
+    s.original_diagnostic_source = s.config.diagnostic_source;
+    s.source_overridden = true;
+    s.config.diagnostic_source = OneSegLabSource::RecordedIq;
+    auto& environment = s.config.environment;
+    const std::string rate_key = "TRAIL_MATE_ONESEG_INPUT_RATE=", diagnostic_key = "TRAIL_MATE_OFDM_DIAGNOSTICS=";
+    environment.erase(std::remove_if(environment.begin(), environment.end(), [&](const auto& value)
+                                     { return value.compare(0, rate_key.size(), rate_key) == 0 || value.compare(0, diagnostic_key.size(), diagnostic_key) == 0; }),
+                      environment.end());
+    environment.push_back(rate_key + std::to_string(rate));
+    environment.emplace_back("TRAIL_MATE_OFDM_DIAGNOSTICS=1");
+    return true;
+}
 bool OneSegDecoderProcess::healthy() const { return impl_->ok.load(std::memory_order_acquire); }
+bool OneSegDecoderProcess::configureSynthetic()
+{
+    auto& s = *impl_;
+    if (s.reader.joinable() || !configureReception({})) return false;
+    s.original_source_environment = s.config.environment;
+    s.original_diagnostic_source = s.config.diagnostic_source;
+    s.source_overridden = true;
+    s.config.diagnostic_source = OneSegLabSource::Synthetic;
+    s.config.environment.emplace_back("TRAIL_MATE_OFDM_SYNTHETIC=1");
+    return true;
+}
 const char* OneSegDecoderProcess::lastError() const
 {
     return impl_->error_ready.load(std::memory_order_acquire) ? impl_->state.message : "";

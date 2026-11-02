@@ -154,6 +154,7 @@ static void pipe_isolation()
     assert(std::strstr(full.lastError(), "queue rejected") && !full.finish());
     no_children();
 }
+static void actual_archive_backend(Process::Config options, const char* recorded_iq);
 static void actual_backend(const char* decoder, const char* prefix, const char* recorded_iq = nullptr)
 {
     auto options = config();
@@ -168,7 +169,16 @@ static void actual_backend(const char* decoder, const char* prefix, const char* 
     }
     assert(!python.empty() && !libraries.empty());
     options.environment = {"PYTHONPATH=" + python, "LD_LIBRARY_PATH=" + libraries};
+    const bool compact = std::getenv("TRAIL_MATE_TEST_COMPACT");
+    if (compact) options.environment.emplace_back("TRAIL_MATE_ONESEG_COMPACT_FFT=576");
+    const bool tracking = recorded_iq && std::getenv("TRAIL_MATE_TEST_OFDM_TRACKING");
+    if (tracking)
+    {
+        options.environment.push_back("TRAIL_MATE_OFDM_DIAGNOSTICS=1");
+        options.diagnostic_source = platform::linux_runtime::OneSegLabSource::RecordedIq;
+    }
     Process process(options);
+    if (tracking) assert(process.configureRecordedIq(576000));
     assert(process.open(13, 11, cancel));
     std::array<uint8_t, 1280> zero{};
     if (recorded_iq)
@@ -196,6 +206,30 @@ static void actual_backend(const char* decoder, const char* prefix, const char* 
         assert(state.ts_bytes >= 188 * 50 && state.programmes.pmt_valid && !state.programmes.pat_valid);
         assert(state.programmes.selected_program == 8 && state.programmes.stream_count == 2);
         assert(state.programmes.streams[0].pid == 256 && state.programmes.streams[1].pid == 257);
+        if (tracking)
+        {
+            assert(state.ofdm_phase.size >= 5 && state.rejected_ofdm_records == 0);
+            assert(state.ofdm_phase.source == platform::linux_runtime::OneSegLabSource::RecordedIq);
+            assert(state.fec.size >= 2 && state.fec.newest().valid());
+            assert(state.fec.newest().words + 63 >= state.ts_bytes / 188);
+            for (size_t i = 0; i < state.ofdm_phase.size; ++i)
+                assert(state.ofdm_phase.chronological(i).has_prediction && state.ofdm_phase.chronological(i).valid());
+            const auto& native = state.native_configuration;
+            assert(native.available && native.valid() && native.source == platform::linux_runtime::OneSegLabSource::RecordedIq);
+            assert(native.mode == 3 && native.fft_length == (compact ? 576 : 1024) && native.cp_length == (compact ? 36 : 64) && native.carriers == 432);
+            assert(native.channel_average == 1 && native.equalizer_floor == 0 && native.integer_search == 10 && native.offset_confirmation == 4);
+            assert(std::abs(native.alpha - state.ofdm_phase.newest().alpha) < 1e-7 && std::abs(native.beta - state.ofdm_phase.newest().beta) < 1e-7);
+            for (size_t i = 0; i < state.ofdm_signal.size(); ++i)
+            {
+                const auto& signal = state.ofdm_signal[i];
+                assert(signal.valid() && signal.kind == i + 1 && signal.count >= 32);
+                assert(signal.source == platform::linux_runtime::OneSegLabSource::RecordedIq);
+                std::fprintf(stderr, "Actual signal IPC: kind=%u sequence=%llu points=%zu metric=%.6g\n",
+                             signal.kind, (unsigned long long)signal.sequence, signal.count, signal.metric);
+            }
+            std::fprintf(stderr, "Actual decoder tracking IPC: %zu retained observations, last symbol=%llu\n",
+                         state.ofdm_phase.size, (unsigned long long)state.ofdm_phase.newest().symbol);
+        }
     }
     else
     {
@@ -215,6 +249,7 @@ static void actual_backend(const char* decoder, const char* prefix, const char* 
         assert(absent.child_exit_code == 4 && !absent.ts_bytes && !absent.programmes.pmt_valid);
     }
     no_children();
+    if (tracking) actual_archive_backend(options, recorded_iq);
 }
 class EmptyRadio final : public platform::linux_runtime::IPacketRadio
 {
@@ -259,6 +294,69 @@ class EmptyRadio final : public platform::linux_runtime::IPacketRadio
         return true;
     }
 };
+static void actual_archive_backend(Process::Config options, const char* recorded_iq)
+{
+    using namespace platform::linux_runtime;
+    OneSegIqArchive archive;
+    OneSegIqArchive::Metadata metadata;
+    metadata.rate = 576000;
+    assert(archive.begin(metadata, std::filesystem::file_size(recorded_iq)));
+    std::ifstream input(recorded_iq, std::ios::binary);
+    std::array<uint8_t, 2048> block{};
+    uint64_t first = 0;
+    while (input.read(reinterpret_cast<char*>(block.data()), block.size()) || input.gcount())
+    {
+        const auto count = static_cast<size_t>(input.gcount());
+        assert(archive.append(block.data(), count, first));
+        first += count / 2;
+    }
+    const std::string path = "/tmp/trailmate-native-replay-" + std::to_string(getpid()) + ".tmiq";
+    std::string error;
+    assert(archive.save(path, error));
+    Process process(std::move(options));
+    EmptyRadio radio(process);
+    OneSegReceiveWorker worker(radio, process, []
+                               { assert(false); return false; });
+    OneSegReceiveWorker::Source source;
+    source.archive_path = path;
+    assert(worker.start(13, {}, source));
+    worker.waitUntilFinished();
+    const auto received = worker.snapshot();
+    const auto decoded = process.snapshot();
+    if (received.error != OneSegReceiveWorker::Error::None)
+        std::fprintf(stderr, "Archive replay failed: %s / %s / %s\n", received.message, decoded.message, decoded.stderr_tail);
+    assert(received.phase == OneSegReceiveWorker::Phase::Stopped && received.recorded_source);
+    assert(received.radio.validated_bytes == archive.size() && received.forwarded_pairs == archive.size() / 2);
+    assert(!radio.acquisitions && !radio.restorations);
+    assert(decoded.ts_bytes >= 188 * 50 && decoded.programmes.pmt_valid && decoded.programmes.selected_program == 8);
+    assert(decoded.ofdm_phase.source == OneSegLabSource::RecordedIq && decoded.ofdm_phase.size >= 5);
+    for (const auto& signal : decoded.ofdm_signal) assert(signal.valid() && signal.source == OneSegLabSource::RecordedIq);
+    assert(!decoded.rejected_ofdm_records);
+    std::fprintf(stderr, "Actual paced archive replay: IQ=%llu TS=%llu radio leases=0 tracking=%zu\n",
+                 (unsigned long long)received.radio.validated_bytes, (unsigned long long)decoded.ts_bytes, decoded.ofdm_phase.size);
+    assert(::unlink(path.c_str()) == 0);
+}
+static void source_configuration_scope()
+{
+    auto options = config("phase-telemetry");
+    options.environment.emplace_back("TRAIL_MATE_ONESEG_INPUT_RATE=500000");
+    Process process(options);
+    assert(!process.configureRecordedIq(12345));
+    assert(process.configureRecordedIq(576000));
+    assert(process.open(13, 70, cancel));
+    assert(!process.configureRecordedIq(450000));
+    await([&]
+          { return process.snapshot().ofdm_phase.size == 1; });
+    assert(std::strstr(process.snapshot().stderr_tail, "input-rate=576000"));
+    assert(process.finish());
+    assert(process.configureReception({}));
+    assert(process.open(13, 71, cancel));
+    await([&]
+          { return std::strstr(process.snapshot().stderr_tail, "fixture after tracking"); });
+    assert(std::strstr(process.snapshot().stderr_tail, "input-rate=500000"));
+    assert(process.snapshot().ofdm_phase.size == 0); // Original unavailable source restored.
+    assert(process.finish());
+}
 static void empty_fifo_decoder_failure()
 {
     using Worker = platform::linux_runtime::OneSegReceiveWorker;
@@ -332,19 +430,74 @@ static void reception_rate()
     }
     unsetenv("TRAIL_MATE_ONESEG_TEST_EXPECT_INPUT_RATE");
 }
+static void phase_telemetry()
+{
+    auto options = config("phase-telemetry");
+    options.diagnostic_source = platform::linux_runtime::OneSegLabSource::RecordedIq;
+    Process process(options);
+    for (unsigned generation = 1; generation <= 2; ++generation)
+    {
+        assert(process.open(13, generation, cancel));
+        await([&]
+              { return process.snapshot().rejected_ofdm_records == 2; });
+        const auto state = process.snapshot();
+        assert(state.generation == generation && state.ofdm_phase.size == 1 && state.ts_bytes == 0);
+        assert(state.ofdm_phase.source == platform::linux_runtime::OneSegLabSource::RecordedIq);
+        assert(state.ofdm_phase.newest().symbol == 32 && state.ofdm_phase.newest().frequency_hz == 150);
+        assert(std::strstr(state.stderr_tail, "TM_OFDM1") == nullptr);
+        assert(process.finish());
+        no_children();
+    }
+}
+static void synthetic_process(const char* decoder)
+{
+    auto options = config();
+    options.decoder = decoder;
+    options.environment.clear();
+    Process process(options);
+    platform::linux_runtime::OneSegOfdmExperiment experiment;
+    experiment.synthetic_cfo_hz = 0;
+    experiment.synthetic_snr_db = 100;
+    double clean = 0;
+    for (unsigned trial = 0; trial < 2; ++trial)
+    {
+        experiment.synthetic_snr_db = trial ? 10 : 100;
+        assert(process.configureExperiment(experiment, 64000000 / 63));
+        assert(process.configureSynthetic());
+        assert(process.open(13, trial + 100, cancel));
+        await([&]
+              { const auto s = process.snapshot(); return s.ofdm_phase.size >= 8 && s.ofdm_signal[3].count; });
+        const auto state = process.snapshot();
+        assert(!state.ts_bytes && !state.programmes.pmt_valid && !state.native_configuration.available);
+        assert(state.ofdm_phase.source == platform::linux_runtime::OneSegLabSource::Synthetic);
+        assert(state.ofdm_phase.newest().has_reference && state.ofdm_phase.newest().valid());
+        assert(state.rejected_ofdm_records == 0);
+        if (!trial)
+        {
+            clean = state.ofdm_phase.newest().reference_evm;
+            assert(clean < .01);
+        }
+        else assert(state.ofdm_phase.newest().reference_evm > clean * 5);
+        assert(process.finish());
+        no_children();
+    }
+}
 int main(int argc, char** argv)
 {
-    assert(argc == 2 || argc == 4 || argc == 5);
+    assert(argc == 2 || argc == 3 || argc == 4 || argc == 5);
     fixture = argv[1];
-    if (argc >= 4) actual_backend(argv[2], argv[3], argc == 5 ? argv[4] : nullptr);
+    if (argc == 3) synthetic_process(argv[2]);
+    else if (argc >= 4) actual_backend(argv[2], argv[3], argc == 5 ? argv[4] : nullptr);
     else
     {
+        phase_telemetry();
         reception_rate();
         profile_selection();
         restart_and_transport();
         metadata_transport();
         startup_and_failure();
         pipe_isolation();
+        source_configuration_scope();
         empty_fifo_decoder_failure();
     }
 }

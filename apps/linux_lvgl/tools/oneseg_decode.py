@@ -5,6 +5,7 @@ Select automatic parameter acquisition or the explicit OneSegCast profile.
 No hardware is opened and no RF lock or playback success state is emitted.
 """
 import argparse
+import importlib.util
 from collections import deque
 import json
 import math
@@ -112,6 +113,19 @@ def _complex_capture_source(samples):
         os.close(descriptor)
 
 
+def synchronization_block(isdbt, mode, guard, compact=False):
+    """Choose immutable block geometry at construction; acquisition stays full."""
+    key = "TRAIL_MATE_ONESEG_COMPACT_FFT"
+    previous = os.environ.get(key)
+    if compact and mode == 3: os.environ[key] = "576"
+    else: os.environ.pop(key, None)
+    try:
+        return isdbt.ofdm_synchronization_1seg(mode, 1/guard)
+    finally:
+        if previous is None: os.environ.pop(key, None)
+        else: os.environ[key] = previous
+
+
 def acquire_tmcc_parameters(native_iq, candidates=None, cancel=None):
     """Confirm blind OFDM hypotheses against the actual native TMCC decoder.
 
@@ -164,7 +178,7 @@ def acquire_tmcc_parameters(native_iq, candidates=None, cancel=None):
 
         graph = gr.top_block("Trail Mate blind TMCC acquisition")
         source = _complex_capture_source(samples)
-        synchronization = isdbt.ofdm_synchronization_1seg(mode, 1 / guard)
+        synchronization = synchronization_block(isdbt, mode, guard, compact=False)
         tmcc = isdbt.tmcc_decoder_1seg(mode, False)
         ports = tmcc.message_ports_out()
         if not any(pmt.symbol_to_string(pmt.vector_ref(ports, i)) == "tmcc_parameters"
@@ -227,6 +241,15 @@ def input_resampler(input_rate=576000, target_numerator=64000000, target_denomin
     return filter.rational_resampler_ccf(interpolation=interpolation, decimation=decimation, **options)
 
 
+def ofdm_lab_module():
+    import importlib.util
+    path = Path(__file__).with_name("oneseg_ofdm_dsp.py")
+    spec = importlib.util.spec_from_file_location("trailmate_ofdm_dsp", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def resample_acquisition_iq(capture, cancel, input_rate=576000):
     """Resample a bounded signed-IQ prefix with the production GNU Radio filter."""
     import numpy as np
@@ -248,7 +271,9 @@ def resample_acquisition_iq(capture, cancel, input_rate=576000):
             # Both stages retain the exact native clock and occupied passband.
             resamplers = ([input_resampler(input_rate, 576000, 1), input_resampler(576000)]
                           if input_rate == 450000 else [input_resampler(input_rate)])
-            graph.connect(source, *resamplers, sink)
+            lab = ofdm_lab_module()
+            front = lab.front_end_blocks(lab.read_settings(input_rate), 64000000/63)
+            graph.connect(source, *resamplers, *front, sink)
             finished, failures = threading.Event(), []
 
             def wait():
@@ -286,6 +311,13 @@ def resample_acquisition_iq(capture, cancel, input_rate=576000):
                 sink.close()
 
 
+class DecoderChain(list):
+    """List-compatible chain metadata survives the qualified legacy wrapper."""
+    def __init__(self, source, sample_rate, fft_length):
+        super().__init__([source])
+        self.sample_rate, self.fft_length = sample_rate, fft_length
+
+
 def build_decoder_chain(source, sink, parameters, native_rate=False, input_rate=576000):
     """Build the actual receive chain from validated acquisition parameters."""
     from gnuradio import filter, isdbt
@@ -299,10 +331,17 @@ def build_decoder_chain(source, sink, parameters, native_rate=False, input_rate=
     if interleaving not in tuple(depth * 2 ** (3 - mode) for depth in (0, 1, 2, 4)):
         raise ValueError("Unsupported decoder time interleaving")
     tmcc = isdbt.tmcc_decoder_1seg(mode, False)
-    chain = [source]
+    compact = mode == 3 and os.environ.get("TRAIL_MATE_ONESEG_COMPACT_FFT") == "576"
+    native_sample_rate = 4000000/7 if compact else 64000000/63
+    chain = DecoderChain(source, native_sample_rate, 576 if compact else 2**(7+mode))
     if not native_rate:
-        chain.append(input_resampler(input_rate))
-    chain.extend([isdbt.ofdm_synchronization_1seg(mode, 1 / guard), tmcc,
+        chain.append(input_resampler(input_rate, 4000000, 7) if compact else input_resampler(input_rate))
+    lab = ofdm_lab_module()
+    experiment = lab.read_settings(input_rate)
+    chain.extend(lab.front_end_blocks(experiment, native_sample_rate))
+    synchronization = synchronization_block(isdbt, mode, guard, compact=compact)
+    lab.require_native_controls(experiment, synchronization)
+    chain.extend([synchronization, tmcc,
                   isdbt.frequency_deinterleaver_1seg(mode), isdbt.time_deinterleaver_1seg(mode, interleaving),
                   isdbt.symbol_demapper_1seg(mode, constellation), isdbt.bit_deinterleaver(mode, 1, constellation),
                   isdbt.viterbi_decoder(constellation, rate), isdbt.byte_deinterleaver(),
@@ -349,6 +388,12 @@ def emit(event, **fields):
 
 
 def run(arguments):
+    if os.environ.get("TRAIL_MATE_OFDM_SYNTHETIC") == "1":
+        path = Path(__file__).with_name("oneseg_synthetic_ofdm.py")
+        spec = importlib.util.spec_from_file_location("trailmate_synthetic_ofdm", path)
+        synthetic = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(synthetic)
+        return synthetic.run(arguments)
     input_rate = int(os.environ.get("TRAIL_MATE_ONESEG_INPUT_RATE", "576000"))
     if input_rate not in (450000, 500000, 576000):
         raise ValueError("TRAIL_MATE_ONESEG_INPUT_RATE must be 450000, 500000 or 576000")
@@ -387,6 +432,13 @@ def run(arguments):
     failure_exit = 3
     fault_lock = threading.Lock()
     configuration = dict(mode=3, guard_denominator=16, constellation=4, code_rate_index=1, time_interleaving=4)
+    lab = ofdm_lab_module()
+    experiment = lab.read_settings(input_rate)
+    manual = lab.manual_parameters(experiment)
+    if manual is not None:
+        if automatic:
+            raise ValueError("Manual OFDM settings require manual waveform acquisition")
+        configuration = manual
 
     def fail(message, exit_code=3):
         nonlocal failure_exit
@@ -560,6 +612,50 @@ def run(arguments):
                     emit("tmcc_rejected", message=str(error))
                     self.last_rejection = str(error)
 
+    class PhaseMonitor(gr.basic_block):
+        def __init__(self, name="Native OFDM tracking diagnostics"):
+            import importlib.util
+            path = Path(__file__).with_name("oneseg_ofdm_diagnostics.py")
+            spec = importlib.util.spec_from_file_location("trailmate_ofdm_diagnostics", path)
+            self.protocol = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(self.protocol)
+            gr.basic_block.__init__(self, name, in_sig=None, out_sig=None)
+            self.rejected = False
+            self.configuration_sent = False
+            self.message_port_register_in(pmt.intern("in"))
+            self.set_msg_handler(pmt.intern("in"), self.accept)
+
+        def accept(self, message):
+            try:
+                values = pmt.to_python(message)
+                record = self.protocol.phase_record(values)
+                # Each short record is one atomic pipe write. The TS stream on
+                # stdout is never used for optional tracking observations.
+                os.write(2, record)
+                if not self.configuration_sent and 'configuration' in values:
+                    os.write(2, self.protocol.configuration_record(values['configuration']))
+                    self.configuration_sent = True
+            except (ValueError, TypeError, KeyError, RuntimeError):
+                if not self.rejected:
+                    emit("ofdm_tracking_rejected", message="Invalid native tracking record")
+                    self.rejected = True
+            except OSError:
+                pass  # Parent closure is handled by the existing lifecycle.
+
+    class FecMonitor(PhaseMonitor):
+        def __init__(self):
+            super().__init__("Native RS outcome diagnostics")
+
+        def accept(self, message):
+            try:
+                os.write(2, self.protocol.fec_record(pmt.to_python(message)))
+            except (ValueError, TypeError, KeyError, RuntimeError):
+                if not self.rejected:
+                    emit("ofdm_fec_rejected", message="Invalid native RS outcomes")
+                    self.rejected = True
+            except OSError:
+                pass
+
     source, sink = IqInput(), TsOutput()
     graph = None
     done = threading.Event()
@@ -641,6 +737,37 @@ def run(arguments):
             monitor = TmccMonitor() if tmcc_port else None
             if monitor is not None:
                 graph.msg_connect(tmcc, "tmcc_parameters", monitor, "in")
+            phase_monitor = None
+            fec_monitor = None
+            signal_observers = []
+            if os.environ.get("TRAIL_MATE_OFDM_DIAGNOSTICS") == "1":
+                tracking = None
+                for block in chain:
+                    ports = block.message_ports_out()
+                    if any(pmt.symbol_to_string(pmt.vector_ref(ports, i)) == "ofdm_tracking"
+                           for i in range(pmt.length(ports))):
+                        tracking = block
+                        break
+                if tracking is not None:
+                    phase_monitor = PhaseMonitor()
+                    graph.msg_connect(tracking, "ofdm_tracking", phase_monitor, "in")
+                    path = Path(__file__).with_name("oneseg_ofdm_measurements.py")
+                    spec = importlib.util.spec_from_file_location("trailmate_ofdm_measurements", path)
+                    measurements = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(measurements)
+                    rate = chain.sample_rate
+                    signal_observers = measurements.attach(graph, chain, tracking, configuration, rate,
+                                                            ofdm_lab_module().read_settings(input_rate)['evm_window'], fft_length=chain.fft_length)
+                else:
+                    emit("ofdm_tracking_unavailable", message="Native backend has no tracking diagnostics port")
+                for block in chain:
+                    ports = block.message_ports_out()
+                    if any(pmt.symbol_to_string(pmt.vector_ref(ports, i)) == "fec_statistics" for i in range(pmt.length(ports))):
+                        fec_monitor = FecMonitor()
+                        graph.msg_connect(block, "fec_statistics", fec_monitor, "in")
+                        break
+                if fec_monitor is None:
+                    emit("ofdm_fec_unavailable", message="Native backend has no RS statistics port")
             graph.start()
             graph_started = True
             threading.Thread(target=wait_graph, name="oneseg-native-wait", daemon=True).start()

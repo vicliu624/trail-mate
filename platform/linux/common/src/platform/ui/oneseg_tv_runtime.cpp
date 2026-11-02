@@ -16,6 +16,8 @@ std::unique_ptr<OneSegTvSession> make_oneseg_tv_session(OneSegTvSession::Config 
     const char* helper = std::getenv("TRAIL_MATE_ONESEG_CAPTURE_HELPER");
     const char* dma = std::getenv("TRAIL_MATE_ONESEG_DMA");
     config.reception_tuning = helper && helper[0] == '/' && dma && !std::strcmp(dma, "1");
+    config.diagnostic_source = OneSegLabSource::LiveReceiver;
+    config.ofdm_experiments = true;
     return std::make_unique<OneSegTvSession>(foreground_packet_radio(), std::move(config),
                                              platform::ui::lora::wait_receive_session_released);
 }

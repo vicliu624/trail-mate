@@ -20,6 +20,8 @@ class OneSegTvSession
         unsigned startup_timeout_ms = 15000;
         bool automatic_parameters = true;
         bool reception_tuning = false;
+        OneSegLabSource diagnostic_source = OneSegLabSource::Unavailable;
+        bool ofdm_experiments = false;
     };
     enum class Phase : uint8_t
     {
@@ -53,6 +55,16 @@ class OneSegTvSession
     struct Snapshot
     {
         OneSegReceptionSettings reception;
+        OneSegOfdmExperiment experiment;
+        OneSegReceiveWorker::Source source;
+        uint32_t input_rate_hz = 0;
+        bool iq_exporting = false, iq_export_ok = false;
+        uint64_t iq_export_serial = 0;
+        char iq_export_message[160]{};
+        bool iq_catalog_loading = false;
+        uint64_t iq_catalog_serial = 0;
+        std::vector<std::string> iq_archives;
+        char iq_catalog_message[160]{};
         Phase phase = Phase::Idle;
         Error error = Error::None;
         uint64_t generation = 0, media_epoch = 0, presented_frames = 0;
@@ -74,7 +86,12 @@ class OneSegTvSession
     };
     OneSegTvSession(IPacketRadio&, Config, bool (*handoff)());
     ~OneSegTvSession();
-    bool start(unsigned channel, uint16_t width, uint16_t height, OneSegReceptionSettings reception = {});
+    bool start(unsigned channel, uint16_t width, uint16_t height, OneSegReceptionSettings reception = {}, OneSegOfdmExperiment experiment = {});
+    bool start(unsigned channel, uint16_t width, uint16_t height, OneSegReceptionSettings reception, OneSegOfdmExperiment experiment, OneSegReceiveWorker::Source source);
+    // Requests stop if needed, then filesystem work on the owner after capture
+    // cleanup. Completion is published through the export serial/status.
+    bool requestIqExport(const std::string& absolute_path);
+    bool requestIqCatalog(const std::string& absolute_directory);
     bool receptionTuningAvailable() const;
     void requestStop(uint64_t generation = 0);
     bool selectProgramme(uint64_t generation, uint16_t number);

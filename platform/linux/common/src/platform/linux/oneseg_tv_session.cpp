@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <mutex>
 #include <thread>
 #include <unistd.h>
@@ -21,6 +22,15 @@ struct OneSegTvSession::Impl
     Snapshot state;
     bool reception_tuning = false;
     OneSegReceptionSettings reception;
+    OneSegOfdmExperiment experiment;
+    OneSegReceiveWorker::Source source;
+    std::string iq_export_path;
+    bool iq_export_pending = false;
+    uint64_t iq_export_serial = 0;
+    std::string iq_catalog_directory;
+    bool iq_catalog_pending = false;
+    uint64_t iq_catalog_serial = 0;
+    bool ofdm_experiments = false;
     bool pending = false, shutdown = false;
     uint16_t width = 320, height = 180, selection = 0;
     std::atomic_bool stop{false}, armed{false};
@@ -119,10 +129,14 @@ struct OneSegTvSession::Impl
         result.python = std::move(config.python);
         result.decoder = std::move(config.decoder);
         result.environment = std::move(config.environment);
+        result.diagnostic_source = config.diagnostic_source;
+        if (config.diagnostic_source != OneSegLabSource::Unavailable)
+            result.environment.emplace_back("TRAIL_MATE_OFDM_DIAGNOSTICS=1");
         result.startup_timeout_ms = config.startup_timeout_ms;
         result.automatic_parameters = config.automatic_parameters;
         state.automatic_parameters = config.automatic_parameters;
         reception_tuning = config.reception_tuning;
+        ofdm_experiments = config.ofdm_experiments;
         result.ts_context = this;
         result.accept_ts = [](void* context, const uint8_t* data, size_t bytes, uint64_t generation)
         {
@@ -226,8 +240,52 @@ struct OneSegTvSession::Impl
                               : Phase::Decoding;
         else state.phase = rx.forwarded_pairs ? Phase::ReceivingIq : Phase::Starting;
     }
+    void runSynthetic(unsigned channel)
+    {
+        try
+        {
+            auto training = experiment;
+            training.automatic_waveform = true; // Known framing, no manual TV FEC.
+            if (!decoder.configureExperiment(training, 64000000 / 63) || !decoder.configureSynthetic())
+                fail(Error::Configuration, "Invalid synthetic OFDM configuration");
+            else if (!stop.load() && !decoder.open(channel, state.generation, stop))
+                fail(Error::Decoder, decoder.lastError());
+            else
+            {
+                std::unique_lock<std::mutex> lock(mutex);
+                state.input_rate_hz = 64000000 / 63;
+                while (!stop.load())
+                {
+                    lock.unlock();
+                    const auto decoded = decoder.snapshot();
+                    const bool healthy = decoder.healthy();
+                    lock.lock();
+                    state.decoder = decoded;
+                    state.phase = Phase::Decoding;
+                    if (!healthy) break;
+                    changed.wait_for(lock, std::chrono::milliseconds(20), [this]
+                                     { return stop.load(); });
+                }
+            }
+        }
+        catch (...)
+        {
+            fail(Error::Internal, "Synthetic OFDM model failed");
+        }
+        if (!decoder.finish()) fail(Error::Decoder, decoder.lastError());
+        const auto decoded = decoder.snapshot();
+        std::lock_guard<std::mutex> lock(mutex);
+        state.decoder = decoded;
+        state.active = false;
+        state.phase = state.error == Error::None ? Phase::Stopped : Phase::Error;
+    }
     void run(unsigned channel, uint16_t target_width, uint16_t target_height)
     {
+        if (source.synthetic)
+        {
+            runSynthetic(channel);
+            return;
+        }
         logTelemetry(true);
         service_text.reset();
         bool media_started = false, media_attempted = false, receive_started = false, receive_attempted = false;
@@ -235,10 +293,42 @@ struct OneSegTvSession::Impl
         Mapping current;
         try
         {
+            uint32_t input_rate = reception.sample_rate_hz;
+            if (!source.archive_path.empty() && !stop.load())
+            {
+                // Validate off the UI before applying rate-dependent controls.
+                // Worker independently validates again before decoder admission.
+                OneSegIqArchive archive;
+                std::string error;
+                if (!archive.load(source.archive_path, error))
+                {
+                    fail(Error::Configuration, error.c_str());
+                    stop = true;
+                }
+                else
+                {
+                    input_rate = archive.metadata().rate;
+                    channel = archive.metadata().channel;
+                    std::lock_guard<std::mutex> lock(mutex);
+                    state.channel = channel;
+                }
+            }
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                state.input_rate_hz = !source.archive_path.empty() || reception.enabled ? input_rate : 0;
+            }
+            if (!stop.load())
+            {
+                if (ofdm_experiments && !decoder.configureExperiment(experiment, input_rate))
+                {
+                    fail(Error::Configuration, "Invalid OFDM experiment or decoder still active");
+                    stop = true;
+                }
+            }
             if (!stop.load())
             {
                 receive_attempted = true;
-                receive_started = receive.start(channel, reception);
+                receive_started = receive.start(channel, reception, source);
                 if (!receive_started) fail(Error::Radio, receive.snapshot().message);
             }
             while (receive_started && !stop.load())
@@ -365,8 +455,70 @@ struct OneSegTvSession::Impl
         for (;;)
         {
             changed.wait(lock, [this]
-                         { return pending || shutdown; });
-            if (shutdown && !pending) return;
+                         { return pending || iq_export_pending || iq_catalog_pending || shutdown; });
+            if (shutdown && !pending && !iq_export_pending && !iq_catalog_pending) return;
+            if (iq_export_pending)
+            {
+                const auto path = iq_export_path;
+                iq_export_pending = false;
+                lock.unlock();
+                bool ok = false;
+                std::string error;
+                try
+                {
+                    std::error_code directory_error;
+                    std::filesystem::create_directories(std::filesystem::path(path).parent_path(), directory_error);
+                    if (directory_error) error = "Cannot create IQ recording directory";
+                    else ok = receive.exportRecording(path, error);
+                }
+                catch (...)
+                {
+                    error = "IQ archive export failed";
+                }
+                lock.lock();
+                state.iq_exporting = false;
+                state.iq_export_ok = ok;
+                state.iq_export_serial = ++iq_export_serial;
+                std::snprintf(state.iq_export_message, sizeof(state.iq_export_message), "%s", ok ? "IQ archive saved" : error.c_str());
+                continue;
+            }
+            if (iq_catalog_pending)
+            {
+                const auto directory = iq_catalog_directory;
+                iq_catalog_pending = false;
+                lock.unlock();
+                std::vector<std::string> paths;
+                std::string error;
+                try
+                {
+                    std::error_code ec;
+                    if (std::filesystem::exists(directory, ec))
+                    {
+                        std::filesystem::directory_iterator it(directory, ec), end;
+                        for (unsigned visited = 0; it != end && !ec && visited < 4096; it.increment(ec), ++visited)
+                        {
+                            const auto& item = *it;
+                            if (!item.is_symlink(ec) && item.is_regular_file(ec) && item.path().extension() == ".tmiq" &&
+                                item.path().filename().string().find_first_of("\r\n") == std::string::npos)
+                                paths.push_back(item.path().string());
+                        }
+                    }
+                    if (ec) error = "Cannot read IQ recording directory";
+                    std::sort(paths.rbegin(), paths.rend());
+                    if (paths.size() > 24) paths.resize(24);
+                }
+                catch (...)
+                {
+                    paths.clear();
+                    error = "Cannot list IQ recordings";
+                }
+                lock.lock();
+                state.iq_archives = std::move(paths);
+                state.iq_catalog_loading = false;
+                state.iq_catalog_serial = ++iq_catalog_serial;
+                std::snprintf(state.iq_catalog_message, sizeof(state.iq_catalog_message), "%s", error.c_str());
+                continue;
+            }
             const unsigned channel = state.channel;
             const uint16_t w = width, h = height;
             pending = false;
@@ -381,18 +533,30 @@ struct OneSegTvSession::Impl
 OneSegTvSession::OneSegTvSession(IPacketRadio& radio, Config config, bool (*handoff)())
     : impl_(std::make_unique<Impl>(radio, std::move(config), handoff)) {}
 OneSegTvSession::~OneSegTvSession() = default;
-bool OneSegTvSession::start(unsigned channel, uint16_t width, uint16_t height, OneSegReceptionSettings reception)
+bool OneSegTvSession::start(unsigned channel, uint16_t width, uint16_t height, OneSegReceptionSettings reception, OneSegOfdmExperiment experiment)
+{
+    return start(channel, width, height, reception, experiment, {});
+}
+bool OneSegTvSession::start(unsigned channel, uint16_t width, uint16_t height, OneSegReceptionSettings reception, OneSegOfdmExperiment experiment, OneSegReceiveWorker::Source source)
 {
     auto& s = *impl_;
     std::lock_guard<std::mutex> lock(s.mutex);
-    if (s.state.active || s.shutdown) return false;
+    if (s.state.active || s.state.iq_exporting || s.state.iq_catalog_loading || s.shutdown) return false;
+    if (source.synthetic && (!source.archive_path.empty() || source.recording_capacity)) return false;
+    if (source.recording_capacity > OneSegIqArchive::maximum_bytes || source.recording_capacity % 2 ||
+        (source.recording_capacity && !source.archive_path.empty()) ||
+        (!source.archive_path.empty() && (source.archive_path.front() != '/' || source.archive_path.size() > 4096 || source.archive_path.find('\0') != std::string::npos))) return false;
     if (!reception.enabled && s.reception_tuning)
     {
         reception = s.reception;
         reception.enabled = true;
     }
     if (reception.enabled && (!s.reception_tuning || !reception.valid())) return false;
+    if (source.recording_capacity && !reception.enabled) return false;
+    if ((s.ofdm_experiments || source.synthetic) && !experiment.valid(source.synthetic ? 64000000 / 63 : reception.sample_rate_hz, source.synthetic)) return false;
     s.reception = reception;
+    s.experiment = experiment;
+    s.source = std::move(source);
     if (channel < 13 || channel > 62 || !width || !height || width > OneSegMediaWorker::max_width || height > OneSegMediaWorker::max_height)
     {
         const uint64_t generation = s.state.generation;
@@ -414,10 +578,15 @@ bool OneSegTvSession::start(unsigned channel, uint16_t width, uint16_t height, O
     s.state = {};
     s.state.generation = generation ? generation : 1;
     s.state.reception = s.reception;
+    s.state.experiment = s.experiment;
+    s.state.source = s.source;
+    s.state.iq_export_serial = s.iq_export_serial;
+    s.state.iq_catalog_serial = s.iq_catalog_serial;
     s.state.volume = volume;
     s.state.automatic_parameters = automatic;
     s.state.channel = channel;
     s.state.active = true;
+    if (s.ofdm_experiments) s.state.automatic_parameters = experiment.automatic_waveform;
     s.state.phase = Phase::Starting;
     s.width = width;
     s.height = height;
@@ -426,6 +595,36 @@ bool OneSegTvSession::start(unsigned channel, uint16_t width, uint16_t height, O
     s.iq_progress = s.video_progress = s.presentation = {};
     s.stop = false;
     s.pending = true;
+    s.changed.notify_one();
+    return true;
+}
+bool OneSegTvSession::requestIqExport(const std::string& path)
+{
+    auto& s = *impl_;
+    std::lock_guard<std::mutex> lock(s.mutex);
+    if (s.pending || s.state.iq_exporting || s.state.iq_catalog_loading || s.shutdown || path.empty() || path.front() != '/' ||
+        path.size() > 4096 || path.find('\0') != std::string::npos || !s.state.receive.recorded_bytes) return false;
+    if (s.state.active && !s.state.source.recording_capacity) return false;
+    s.iq_export_path = path;
+    s.state.iq_exporting = s.iq_export_pending = true;
+    s.state.iq_export_ok = false;
+    std::snprintf(s.state.iq_export_message, sizeof(s.state.iq_export_message), "%s", "Saving IQ archive on background owner");
+    if (s.state.active)
+    {
+        s.stop = true;
+        s.state.phase = Phase::Stopping;
+    }
+    s.changed.notify_one();
+    return true;
+}
+bool OneSegTvSession::requestIqCatalog(const std::string& directory)
+{
+    auto& s = *impl_;
+    std::lock_guard<std::mutex> lock(s.mutex);
+    if (s.state.active || s.pending || s.state.iq_exporting || s.state.iq_catalog_loading || s.shutdown ||
+        directory.empty() || directory.front() != '/' || directory.size() > 4096 || directory.find('\0') != std::string::npos) return false;
+    s.iq_catalog_directory = directory;
+    s.state.iq_catalog_loading = s.iq_catalog_pending = true;
     s.changed.notify_one();
     return true;
 }

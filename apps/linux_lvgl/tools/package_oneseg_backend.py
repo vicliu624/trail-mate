@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Package a native pinned gr-isdbt build without installing or accessing RF."""
 import argparse
+import io
 import json
 import os
 from pathlib import Path
@@ -10,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import sysconfig
+import tarfile
 import tempfile
 
 
@@ -25,19 +27,50 @@ def cm0_abi_compatible(architecture, abi):
             abi.get("default_lock_policy") == "mutex" and abi.get("cxx11_abi") == 1)
 
 
+def verify_provenance(work, manifest, pinned):
+    archive = work / "source.tar.gz"
+    if pinned["sha"](archive.read_bytes()) != pinned["ARCHIVE_SHA"]:
+        raise RuntimeError("Backend source archive verification failed")
+    with tempfile.TemporaryDirectory(prefix="trailmate-backend-provenance-") as temporary:
+        root = Path(temporary)
+        with tarfile.open(archive) as stream:
+            stream.extractall(root, filter="data")
+        source = root / ("gr-isdbt-" + pinned["REVISION"]) / "lib"
+        sync = source / "ofdm_synchronization_1seg_impl.cc"
+        pinned["repair_source"](sync)
+        pinned["adapt_tmcc_source"](source / "tmcc_decoder_1seg_impl.cc")
+        pinned["repair_viterbi_source"](source / "viterbi_decoder_impl.cc")
+        tracking = pinned["lab_adapter"]().adapt(sync, source / "ofdm_synchronization_1seg_impl.h")
+        fec = pinned["fec_adapter"]().adapt(source / "reed_solomon_dec_isdbt_impl.cc",
+                                             source / "reed_solomon_dec_isdbt_impl.h")
+        optimization = None
+        cm0 = manifest.get("target") == "cm0-armv7"
+        if cm0 or manifest.get("cm0_optimization") is not None:
+            optimization = pinned["cm0_adapter"]().adapt(sync, source / "viterbi_decoder_impl.h",
+                                                         source / "CMakeLists.txt", simde=cm0)
+        expected = dict(revision=pinned["REVISION"], archive_sha256=pinned["ARCHIVE_SHA"],
+                        adapted_source_sha256=pinned["sha"](sync.read_bytes()),
+                        safety_source_sha256=pinned["PATCHED_SHA"], ofdm_tracking=tracking,
+                        fec_statistics=fec, cm0_optimization=optimization,
+                        tmcc_source_sha256=pinned["TMCC_PATCHED_SHA"], tmcc_message_schema=1,
+                        viterbi_source_sha256=pinned["VITERBI_PATCHED_SHA"])
+        for key, value in expected.items():
+            if manifest.get(key) != value:
+                raise RuntimeError("Backend provenance mismatch: " + key)
+        # Receipts must also describe the source tree used for this build.
+        built = work / ("gr-isdbt-" + pinned["REVISION"]) / "lib"
+        for path in source.iterdir():
+            if path.is_file() and path.read_bytes() != (built / path.name).read_bytes():
+                raise RuntimeError("Backend build source differs: " + path.name)
+
+
 def package(args):
     if platform.system() != "Linux":
         raise RuntimeError("Build the backend package natively on its target Linux distribution")
     work = args.backend_work.resolve()
     manifest = json.loads((work / "backend-manifest.json").read_text())
     pinned = runpy.run_path(str(Path(__file__).with_name("build_oneseg_backend.py")))
-    for key, expected in (("revision", pinned["REVISION"]), ("archive_sha256", pinned["ARCHIVE_SHA"]),
-                          ("adapted_source_sha256", pinned["PATCHED_SHA"]),
-                          ("tmcc_source_sha256", pinned["TMCC_PATCHED_SHA"]),
-                          ("tmcc_message_schema", 1),
-                          ("viterbi_source_sha256", pinned["VITERBI_PATCHED_SHA"])):
-        if manifest.get(key) != expected:
-            raise RuntimeError("Backend provenance mismatch: " + key)
+    verify_provenance(work, manifest, pinned)
     if manifest["machine"] != platform.machine() or manifest["python"].split(".")[:2] != list(map(str, sys.version_info[:2])):
         raise RuntimeError("Backend machine/Python ABI differs from the packaging interpreter")
     architecture = command(["dpkg", "--print-architecture"])
@@ -83,6 +116,28 @@ def package(args):
         docs.mkdir(parents=True)
         shutil.copy2(work / ("gr-isdbt-" + pinned["REVISION"]) / "COPYING", docs / "copyright")
         (docs / "backend-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+        # Ship the exact modified sources and their build controls with every binary.
+        with tarfile.open(docs / "corresponding-source.tar.gz", "w:gz") as archive:
+            archive.add(work / ("gr-isdbt-" + pinned["REVISION"]),
+                        arcname="gr-isdbt-" + pinned["REVISION"],
+                        filter=lambda item: None if "__pycache__" in Path(item.name).parts else item)
+            archive.add(work / "source.tar.gz", arcname="source.tar.gz")
+            archive.add(work / "backend-manifest.json", arcname="backend-manifest.json")
+            for name in ("build_oneseg_backend.py", "oneseg_sync_lab_backend.py",
+                         "oneseg_fec_backend.py", "oneseg_cm0_backend.py"):
+                archive.add(Path(__file__).with_name(name), arcname="tools/" + name)
+            options = " --cm0" if manifest.get("target") == "cm0-armv7" else (
+                " --compact-fft" if manifest.get("cm0_optimization") else "")
+            instructions = ("Build on the matching Linux distribution, architecture and Python version\n"
+                            "recorded in backend-manifest.json. Install GNU Radio development headers,\n"
+                            "CMake, GCC, Python development headers, pybind11 and GSL; CM0 also needs\n"
+                            "SIMDe headers and the qualified VOLK prefix. Preserve its configured path.\n"
+                            "From this extracted directory run:\n"
+                            "python3 tools/build_oneseg_backend.py --work-dir . --jobs 2" + options + "\n").encode()
+            item = tarfile.TarInfo("BUILD.txt")
+            item.size = len(instructions)
+            item.mode = 0o644
+            archive.addfile(item, io.BytesIO(instructions))
         # Check the actual decoder from a relocated path with private-path overrides removed.
         decoder = private.parent / "trailmate-linux-oneseg-decode"
         shutil.copy2(Path(__file__).with_name("oneseg_decode.py"), decoder)
@@ -102,11 +157,14 @@ def package(args):
         (root / "debian").mkdir()
         (root / "debian/control").write_text("Source: trailmate-oneseg-backend\nSection: libs\nPriority: optional\nMaintainer: Trail Mate contributors\n\nPackage: trailmate-oneseg-backend\nArchitecture: any\nDescription: Native Trail Mate 1seg decoder backend\n")
         (root / "debian/shlibs.local").write_text("libgnuradio-isdbt 1.0.0 trailmate-oneseg-backend\n")
+        dependency_environment = os.environ.copy()
+        dependency_environment.pop("LD_LIBRARY_PATH", None)
         dependencies = command(["dpkg-shlibdeps", "-O", "-xtrailmate-oneseg-backend",
-                                "-l" + str(private / "lib"), *["-e" + str(p) for p in binaries]], cwd=root)
+                                "-l" + str(private / "lib"), *["-e" + str(p) for p in binaries]],
+                               cwd=root, env=dependency_environment)
         if not dependencies.startswith("shlibs:Depends="):
             raise RuntimeError("Missing native shared-library dependency result")
-        version = "1.1.0+git" + pinned["REVISION"][:12] + "-1"
+        version = "1.1.0+git" + pinned["REVISION"][:12] + "-2"
         minor = sys.version_info.minor
         depends = f"{dependencies.split('=', 1)[1]}, gnuradio, python3-numpy, python3 (>= 3.{minor}), python3 (<< 3.{minor + 1})"
         control = stage / "DEBIAN"

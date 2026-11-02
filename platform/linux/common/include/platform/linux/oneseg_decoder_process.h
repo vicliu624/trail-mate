@@ -1,5 +1,9 @@
 #pragma once
 
+#include "platform/linux/oneseg_fec_statistics.h"
+#include "platform/linux/oneseg_ofdm_lab.h"
+#include "platform/linux/oneseg_ofdm_measurements.h"
+#include "platform/linux/oneseg_ofdm_native_configuration.h"
 #include "platform/linux/oneseg_receive_worker.h"
 #include "platform/linux/oneseg_service_information.h"
 #include "platform/shared/radio/transport_stream_programs.h"
@@ -25,6 +29,7 @@ class OneSegDecoderProcess final : public OneSegIqSink
         // Must copy into a bounded queue and return promptly; false aborts RX.
         void* ts_context = nullptr;
         bool (*accept_ts)(void*, const uint8_t*, size_t, uint64_t generation) = nullptr;
+        OneSegLabSource diagnostic_source = OneSegLabSource::Unavailable;
     };
     enum class Phase : uint8_t
     {
@@ -43,12 +48,20 @@ class OneSegDecoderProcess final : public OneSegIqSink
         bool forced_kill = false;
         platform::shared::radio::TransportStreamPrograms::Snapshot programmes;
         OneSegServiceInformation::Snapshot service_information;
+        OneSegPhaseHistory ofdm_phase;
+        OneSegNativeConfiguration native_configuration;
+        std::array<OneSegSignalMeasurement, 5> ofdm_signal{};
+        OneSegFecHistory fec;
+        uint64_t rejected_ofdm_records = 0;
         char message[160]{}, stderr_tail[256]{};
     };
     explicit OneSegDecoderProcess(Config config);
     ~OneSegDecoderProcess() override;
     bool open(unsigned channel, uint64_t generation, const std::atomic_bool& cancel) override;
     bool configureReception(const OneSegReceptionSettings&) override;
+    bool configureRecordedIq(uint32_t rate) override;
+    bool configureSynthetic();
+    bool configureExperiment(const OneSegOfdmExperiment&, uint32_t input_rate);
     bool write(const uint8_t*, size_t, uint64_t first_pair, uint64_t generation,
                const std::atomic_bool& cancel) override;
     bool finish() override;

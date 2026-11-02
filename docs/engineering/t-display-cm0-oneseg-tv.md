@@ -18,7 +18,262 @@ Preserve the decoded picture's aspect ratio without upscaling. Fullscreen hides
 surrounding information but retains this viewport; it must not stretch video
 across the CM0 panel.
 
-## Reception controls and timing model
+## Requested OFDM learning workstation (November 2, implementation in progress)
+
+The native workbench currently exposes the six signal-chain stages, direct
+experiment controls and the factory reception preset. Development builds can
+observe actual post-filter IQ, equalized carriers and native channel estimates.
+These observations use a separate, bounded `TM_SIGNAL1` diagnostic frame on
+stderr; MPEG transport remains on stdout. Each observation contains at most 64
+points, is emitted at most twice per second per signal kind, carries a sequence
+number and inherits the explicitly configured Live/Recorded/Synthetic source.
+The UI retains the last observation with an age indication after reception ends.
+
+The spectrum is a Hann-window periodogram, normalized by the squared sum of the
+window, with linear bin power averaged before conversion to dB. Its horizontal
+axis uses the effective post-resampling sample rate. It is a view of post-filter
+samples, not a raw antenna spectrum or a calibrated RF power measurement.
+The cyclic-prefix view measures
+`rho(d) = |sum(conj(x[d+j])*x[d+N+j])| / sqrt(E1*E2)` over the configured guard
+length, sampling candidate offsets across one symbol. A periodicity peak alone
+does not establish decoder lock. The constellation uses actual equalized native
+carriers with equal I/Q scale. Its decision-directed EVM includes pilot/TMCC
+carriers and is labelled accordingly; it is not known-reference transmitter EVM
+or BER. Channel amplitude is `20*log10(|H[k]|)` at sampled active carrier indices.
+
+Offline verification has passed the 46-test core suite, numerical tone/CP/EVM
+reference checks, and the actual native decoder-to-C++ diagnostic path for all
+five signal kinds while retaining valid programme transport. Native page tests
+also cover recording, replay, synthetic experiments, parameter lessons and
+profiles. Official CM0 deployment and verification under presentation load are
+still pending.
+
+The EVM control counts complete OFDM symbols. A bounded owned ring retains the
+most recent N symbols; decision arithmetic runs only at the 2 Hz display cadence.
+Displayed EVM is the square root of the ratio of summed error energy to summed
+decision-reference energy over those symbols. The ring is at most 3.375 MiB for
+1024 symbols with 432 carriers. Diagnostic sinks batch scalar IQ and complete
+symbols to reduce Python scheduler overhead without changing decoder input.
+It includes all active native carriers and retains the pilot/TMCC caveat above.
+The initial window contains only the symbols received so far.
+
+The receive worker also provides a development archive/replay API. Recording
+copies forwarded raw IQ8 into a preallocated buffer of at most 32 MiB, outside
+the hardware FIFO callback. Filling it stops recording the prefix while reception
+continues. Export is permitted only after reception stops and only when the
+capture result attests the configured sample rate. Filesystem work belongs on
+the background owner; it is not permitted in the FIFO producer or LVGL callback.
+The `.tmiq` format has a 64-byte little-endian version-1 header, IQ8 payload length,
+sample rate, channel, requested SPI clock/gain, creation time, full-buffer flag
+and payload CRC32. Publication uses an exclusive staging file and atomic
+non-replacing rename. Loading checks the fixed size limit, metadata, exact file
+length and CRC before the decoder receives any samples.
+
+Archive replay uses its stored sample clock, has bounded cancellation waits,
+and bypasses physical radio capability checks, handoff and leases. Looping is
+explicit; crossing a recording boundary can introduce a real signal discontinuity.
+The decoder scopes the archive input rate and Recorded IQ diagnostic source to
+that generation, restoring its prior live configuration before the next live
+start. The native page exposes Live receiver / Recorded IQ selection, a saved
+archive selector, explicit looping, Record IQ, Save IQ and a retained-byte count
+on its main status strip. RF rate/clock/gain and channel/scan controls are disabled
+for recorded input; digital processing controls still apply. Archive playback
+does not update the remembered live station. The Default action restores the
+factory processing/RF settings and returns to Live receiver with recording off.
+
+Record IQ starts a fresh live generation with a 16 MiB RAM buffer. Save IQ
+submits stop and export as one background session request; actual filesystem
+writes follow radio/decoder cleanup. The request survives page exit. Saved files
+are published under `<sd_root>/recordings/oneseg/`. Catalog reads are background
+operations while reception is stopped, with at most 4096 directory entries
+examined and 24 recent filenames exposed. No payload is loaded on the UI thread.
+Automatic restoration of a remembered live channel takes priority over catalog
+enumeration, preserving the normal startup path.
+
+Each of the 22 processing controls now has a focus/value-change lesson with an
+equation, numerical working-parameter preview, expected observable effect and
+limitations. Examples include `20*log10(G)` for digital gain, normalized loop
+alpha/beta, nominal Mode/GI timing, EMA pilot-noise variance and lag, regularized
+equalizer noise gain, and the EVM window's nominal duration. These calculations
+are explicitly labelled PREVIEW and do not replace measured plots or native
+configuration acknowledgment. Units sit beside numeric values so full control
+names remain readable. Auto waveform mode disables the unused manual controls;
+an incompatible manual interleaving depth remains visibly invalid and blocks
+manual application, while automatic acquisition ignores that unused pairing.
+
+The native phase plot now separates observed, one-step forecast and corrected
+phase advance. The forecast is read directly from the block's pre-update state:
+`forecast = prior + previous_integrator`. The qualified update remains unchanged:
+`integrator += beta*e; corrected = prior + integrator + alpha*e`, where
+`e = observed - prior`. Consequently `corrected = forecast + (alpha+beta)*e`;
+the native error is not the same quantity as `observed - forecast`. The error
+panel overlays forecast error and corrected residual with a common vertical
+scale, zero reference and separate sampled RMS values. A correction can worsen
+the displayed error; the UI does not force improvement or smooth the trace.
+
+`TM_OFDM2` carries forecast, pre-update integrator and actual alpha/beta along
+with the original observations. Values are validated against the native update
+identities. `TM_OFDM1` remains readable and is explicitly labelled legacy prior
+with forecast unavailable. These values are normalized phase advances per useful
+symbol, not absolute RF phase or an unambiguous RF oscillator error. Telemetry
+is decimated at native output-symbol indices divisible by 32; skipped CP-change
+updates can create gaps. Each forecast is for its native update, not a forecast
+across the entire gap between displayed points.
+
+A separate bounded `TM_CONFIG1` frame reports actual native Mode, FFT/CP/carrier
+dimensions, nominal processing rate, carrier/timing coefficients, integer search,
+confirmation count, channel averaging, equalizer floor and clock state at the
+first diagnostic observation. A persistent native flag ensures readback is sent
+at the first eligible record even if output symbol 32 skips its loop update.
+Readback is stamped with source/generation and cleared for a new decoder. It
+is not RF lock. Clock state at first readback has already evolved and must not
+be mistaken for the requested initial ppm seed. Selected native-control lessons
+show PREVIEW alongside ACTUAL readback. Focusing initial clock or clock bandwidth
+switches the signal panel to the native sampling-ppm history.
+
+Offline checks include malformed/legacy frames, pinned-source upgrade integrity,
+real native forecast identities, actual default/nondefault readback, and full
+programme transport. With identical input and other nondefault loop settings,
+25 ppm versus zero initial seed produced distinct first clock states (about
+23.38 versus 0.042 ppm), demonstrating initialization and subsequent adaptation.
+Remaining native quality views and official CM0 deployment are still pending;
+these checks do not complete the workstation.
+
+The production Synthetic OFDM source is a separate, seeded known-framing teaching
+receiver. It generates QAM/comb pilots, IFFT and cyclic prefixes, then applies
+AWGN, carrier offset/drift, IQ imbalance, a complex delayed echo, timing and
+sampling offsets, and an explicitly defined eight-tone phase-modulation model.
+Processing includes IQ correction, optional mean32 DC removal and Kaiser FIR,
+CP fractional-CFO observation, confirmed integer pilot search, pilot interpolation,
+EMA/regularized equalization, and receiver carrier/clock states. Observations and
+reference errors come from those generated complex samples, not decorative traces.
+This is generic OFDM, not gr-isdbt execution, blind synchronization, TV, TMCC or
+convolutional/RS FEC. Mode/GI/QAM configure both teaching source and receiver;
+unused automatic-waveform/FEC/interleaving controls are disabled.
+
+Twelve source controls supplement the 22 receiver controls. SNR, CFO and drift
+remain directly visible in the RF-control row while synthetic is selected; the
+stage controls expose injected IQ gain/phase, echo amplitude/delay/phase, timing,
+clock offset, phase-modulation RMS and reference seed. Native RF controls are
+unavailable in this mode. The video area reports virtual time, reference EVM and
+uncoded Gray-labelled hard-decision BER. A purple truth trace distinguishes the
+injected phase advance from model observation/forecast/correction. Native live
+EVM remains separately labelled decision-directed and pilot-inclusive.
+
+The trainer advances one virtual OFDM symbol per wall-clock iteration (at most
+20 updates/s). Nominal virtual symbol time follows FFT/GI at `64 MHz / 63`, not
+wall time. Its clock model is limited to +/-1000 ppm. Its mean32 DC removal and
+windowed-sinc FIR are declared teaching implementations, not claims of identical
+GNU Radio internals. Injected SNR describes expected AWGN power before IQ/DC
+impairments; the phase-modulation model is not a calibrated oscillator-noise mask.
+No radio lease, hardware handoff, IQ capture, TS or audio presentation is used.
+Stop, restart and changing source are handled by the ordinary decoder lifecycle.
+
+The signal-view selector in the channel stage switches between amplitude and
+unwrapped phase of the actual complex channel estimate. Phase is unwrapped before
+display decimation. It includes residual carrier/timing reference and is not
+absolute propagation phase; deep fades make phase unreliable. The same view is
+available for the explicitly labelled teaching model.
+
+The native RS decoder publishes cumulative attempted, clean, corrected and
+uncorrectable codeword counts, reported corrected symbols and maximum corrections
+in a word. These come directly from the RS return status, before its existing
+uncorrectable-packet drop path; the decoding and packet-output decisions remain
+unchanged. A pinned-source adaptation also bounds the optional output-pointer
+access when only the TS output is connected. Reports are emitted for the first
+word and each 64th word, so live totals can lag by up to 63 attempts.
+
+The decoder stage switches between I/Q and the per-report uncorrectable-word
+fraction. Outcome counters include warm-up. RS(204,188) corrects at most eight
+byte-symbol errors, and reported symbol corrections can include shortened zero
+padding. They are not bit BER. The upstream optional float output historically
+called BER is a smoothed byte-correction ratio and is deliberately not used.
+Synthetic decoder view instead offers known-reference uncoded BER, without
+fabricating native FEC outcomes. Transport continuity, PSI CRC and media decoder
+errors remain separate counters. Legacy backends without RS diagnostics show
+unavailable rather than zero errors.
+
+The controlled native RS test encodes 64 generated words and injects 0, 1, 8 or
+9 byte errors. It verifies 16 clean, 32 corrected, 16 uncorrectable, 144 reported
+corrections, maximum eight, and 48 byte-exact output packets. Recorded-RF native
+integration checks confirm all five signal kinds, RS readback and unchanged
+programme transport. These remain offline checks, not new live RF qualification.
+
+Version-2 experiment profiles store the synthetic parameters and source hint;
+version-1 profiles still load with the built-in teaching defaults and Live source
+hint. Loading is explicit
+preview, and factory startup/reset remains Live receiver, 450 kpair/s, 8.7 MHz
+SPI, gain 9 and qualified receiver-loop values. Model/reference diagnostic frames
+are accepted as references only for the Synthetic source, preventing reference
+truth from being presented as a live or recorded RF measurement.
+The `oneseg_ofdm_workbench` native CTest checks all control lessons, manual/auto
+availability, invalid-depth recovery, panel bounds, and 40 exact comparisons of
+normal painting with a full redraw. Those tests use explicitly labelled synthetic
+diagnostic fixtures; they do not constitute live RF acceptance.
+
+The user clarified that this feature is an extensive OFDM learning and experiment
+workstation for radio amateurs. Parameter coverage, observable signal effects and
+the mathematics behind the receiver take priority over reducing the entry barrier.
+The existing three-control Tune overlay and ideal FIFO plot do not satisfy this
+request. The following requirements describe the replacement, not completed work.
+
+The user accepted the proposed dense workstation layout on November 2. Preserve
+its video area, always-visible RF defaults, direct signal-chain parameter groups,
+and bottom phase prediction/correction/residual plots when implementing the native
+page. The reviewed prototype uses explicitly synthetic teaching data; acceptance
+of its layout does not qualify native phase telemetry or live receiver behavior.
+
+The qualified reception baseline must remain the factory and initial default:
+
+| Setting | Baseline |
+| --- | --- |
+| IQ sample rate | 450,000 complex pairs/s |
+| Requested SPI clock | 8,700,000 Hz |
+| Receiver gain | Step 9 |
+| Waveform acquisition | Automatic |
+| Synchronization and tracking | Preserve the qualified backend's actual defaults |
+
+Keep this baseline as a versioned preset independent of editable experiment
+profiles. Provide one-action restoration of the complete baseline. Experiment
+saving must not silently replace the baseline or its startup selection. These
+defaults have successful playback evidence; continuous RF endurance remains a
+separate acceptance claim.
+
+Display orientation is fixed at the physically verified 270 degrees. It is not
+an OFDM experiment parameter and must not have an adjustable control in this
+workstation. Keep it separate from reception presets and experiment profiles;
+restoring or loading those profiles must not change display orientation.
+
+The main page must use the CM0's 1232 x 568 workspace efficiently. Video, active
+signal-chain stage, its primary controls and measured diagnostics should remain
+visible together. Use the bottom region for useful time histories and mathematical
+context instead of large blank margins. Parameter access belongs on the main
+workspace, without a nested Tune entry. Signal-chain stage selection may change
+the visible parameter group without hiding the experiment workspace itself.
+
+Cover front-end capture, filtering/resampling, symbol/CP synchronization, carrier
+and phase tracking, FFT/pilots/channel estimation, equalization, constellation and
+error quality, and the relationship to TMCC/FEC/transport output. Expose meaningful
+algorithm controls with their real units, defaults, valid ranges and dependencies.
+Hardware capabilities must be respected; do not invent settings that the actual
+device or algorithm cannot apply.
+
+Phase visualization specifically means OFDM signal phase prediction, correction
+and residual, not FIFO timing prediction. Connect plots to the actual receiver
+tracking state. Distinguish measured quantities, prior estimates, applied
+corrections and residual errors, with symbol/time alignment, units, phase wrapping
+conventions and data age. If the receiver measures phase advance per useful
+symbol rather than absolute carrier phase, label that distinction explicitly.
+Do not present a separately invented predictor as the receiver's actual algorithm.
+
+Each parameter should link its role in the signal chain to its governing equation,
+the observable signal effect and practical interpretation. Show the real tracking
+loop equations and coefficients alongside their measured effect. Data that the
+backend does not provide must remain explicitly unavailable until implemented;
+theoretical curves are not substitutes for measured phase traces. Recorded-IQ
+experiments and simulations must be visibly distinguished from live reception.
+
+## Existing reception controls and timing model
 
 The TV page includes a **Tune** panel, also opened with `T`. It keeps the
 320 x 240 picture viewport and presents station information alongside the video.
@@ -719,6 +974,15 @@ ABI and ELF machine type. `dpkg-shlibdeps` derives native shared-library
 dependencies; Python minor-version bounds prevent installing an incompatible
 binding. Packaging does not install anything or access a radio.
 
+The packager reconstructs the expected synchronization, phase diagnostics, RS
+statistics and optional CM0 optimizations from the hash-pinned upstream archive.
+It checks both manifest receipts and the actual build sources. Each binary package
+includes `corresponding-source.tar.gz` under its documentation directory, containing
+the modified upstream tree, original archive, exact adapter/build tools, manifest
+and build instructions. The relocated package test also supplies the application
+decoder's DSP, diagnostics, measurement and synthetic-source sidecars; the backend
+package does not own those application files.
+
 Build and package on a Linux environment matching the deployment distribution,
 architecture, GNU Radio ABI and Python ABI:
 
@@ -740,11 +1004,21 @@ absent, existing system/private-development backend behavior remains available;
 missing modules still produce real startup errors.
 
 `--cm0` requires native armhf Raspbian Trixie, explicitly selects ARMv7-A /
-VFPv3-D16 hard float and checks the actual compiled C++ ABI plus always-lock-free
+NEON hard float and checks the actual compiled C++ ABI plus always-lock-free
 bool atomics. This is a board target selection, not a private libstdc++ macro
 override. Generic host validation omits this option. The manifest records the
 target and CPU flags. An incompatible architecture or distribution is rejected
 before source download or build-directory creation.
+
+The CM0 build enables SIMDe's NEON implementation for the existing SSE2 Viterbi
+algorithm and supports the qualified optional Mode 3 FFT length of 576. This
+geometry is selected only by `TRAIL_MATE_ONESEG_COMPACT_FFT=576`; Modes 1 and 2
+retain their original geometry, and automatic acquisition always uses the full
+FFT. The decoder carries the actual FFT length and sample rate with its chain
+so CP observations remain correct after temporary environment overrides. The
+`--compact-fft` host build supports offline geometry/replay verification without
+enabling ARM SIMD. Neither build option changes the qualified receiver defaults
+of 450000 IQ pairs/s, 8700000 Hz SPI and gain step 9.
 
 Backend provenance now includes the C++ ABI measured by preprocessing
 `ext/concurrence.h` with the actual backend translation unit's compile command.
@@ -755,7 +1029,8 @@ lock policy and C++11 ABI 1, matching the inspected CM0 configuration described
 in [the target ABI ledger](linux-armhf-cxx-abi.md). The CM0 application depends on
 this virtual capability, so the constraint also applies to manual package
 installation. Unknown ABI metadata requires rebuilding the backend manifest.
-The package revision is now `-1` to distinguish the ABI-described payload.
+The package revision is now `-2` to distinguish the instrumented OFDM/FEC payload
+and its corresponding sources from the earlier ABI-described `-1` package.
 
 On 2026-10-30, the amd64 host package was built and extracted without installation.
 With private development path variables cleared, the actual decoder imported

@@ -35,6 +35,7 @@ struct State
     std::atomic_bool sink_finished{false};
     std::atomic_uint acquire_attempts{0};
     unsigned busy_attempts = 0;
+    uint32_t nominal_rate = 576000;
     bool supported = true, present = true, acquire_ok = true, restore_ok = true;
     bool open_ok = true, write_ok = true, finish_ok = true, blocked_sink = false, throw_sink = false;
     enum Flow
@@ -113,7 +114,7 @@ class Radio final : public IPacketRadio
         }
         while (!request.cancelled(request.context)) std::this_thread::sleep_for(1ms);
         result.cancelled = true;
-        result.nominal_rate_hz = 576000;
+        result.nominal_rate_hz = s.nominal_rate;
         return true;
     }
 };
@@ -170,6 +171,47 @@ void prepare_receive_session_worker() { ++prepares; }
 } // namespace platform::ui::lora
 int main()
 {
+    {
+        State state;
+        Radio radio(state);
+        Sink sink(state);
+        Worker worker(radio, sink, barrier);
+        OneSegReceptionSettings reception;
+        reception.enabled = true;
+        Worker::Source source;
+        source.recording_capacity = 2048;
+        state.nominal_rate = 450000;
+        assert(worker.start(13, reception, source));
+        await([&]
+              { return worker.snapshot().forwarded_pairs == 2560; });
+        std::string error;
+        const std::string path = "/tmp/trailmate-worker-iq-" + std::to_string(getpid()) + ".tmiq";
+        assert(!worker.exportRecording(path, error));
+        worker.requestStop();
+        worker.waitUntilFinished();
+        assert(worker.snapshot().recorded_bytes == 2048 && worker.snapshot().recording_full);
+        assert(worker.exportRecording(path, error));
+        OneSegIqArchive archive;
+        assert(archive.load(path, error) && archive.size() == 2048);
+        for (size_t i = 0; i < archive.size(); ++i) assert(archive.data()[i] == 0x42);
+        assert(archive.metadata().rate == 450000 && archive.metadata().gain == 9);
+        assert(::unlink(path.c_str()) == 0);
+        state.nominal_rate = 0;
+        assert(worker.start(13, reception, source));
+        await([&]
+              { return worker.snapshot().forwarded_pairs == 2560; });
+        worker.requestStop();
+        worker.waitUntilFinished();
+        assert(!worker.exportRecording(path, error) && error.find("sample rate") != std::string::npos);
+        // The source API rejects unsupported archive decoders before hardware.
+        source.recording_capacity = 0;
+        source.archive_path = "/not-present.tmiq";
+        const auto leases = state.acquired.load();
+        assert(worker.start(13, reception, source));
+        worker.waitUntilFinished();
+        assert(worker.snapshot().error == Worker::Error::InvalidBlock && state.acquired == leases);
+        barrier_calls = 0;
+    }
     {
         rlimit original{};
         assert(!getrlimit(RLIMIT_MEMLOCK, &original));

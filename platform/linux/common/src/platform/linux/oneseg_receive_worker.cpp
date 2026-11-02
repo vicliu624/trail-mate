@@ -1,4 +1,5 @@
 #include "platform/linux/oneseg_receive_worker.h"
+#include "platform/linux/oneseg_iq_replay.h"
 #include "platform/linux/oneseg_lr2021_rx.h"
 #include "platform/linux/packet_radio.h"
 #include <array>
@@ -37,6 +38,10 @@ struct OneSegReceiveWorker::Impl
     std::condition_variable wake, done;
     Snapshot state;
     OneSegReceptionSettings reception;
+    Source source;
+    OneSegIqArchive archive;
+    std::atomic_uint64_t recorded_bytes{0};
+    std::atomic_bool recording_full{false};
     bool active = false, pending = false, shutdown = false;
     std::atomic_bool cancel{false}, producer_done{false};
     std::atomic<Error> fault{Error::None};
@@ -101,7 +106,7 @@ struct OneSegReceiveWorker::Impl
         try
         {
             const char* child = std::getenv("TRAIL_MATE_ONESEG_CAPTURE_CHILD");
-            if (child && !std::strcmp(child, "1"))
+            if (source.archive_path.empty() && child && !std::strcmp(child, "1"))
             {
                 cpu_set_t cpus;
                 if (sched_getaffinity(0, sizeof(cpus), &cpus)) throw std::runtime_error("Cannot read capture child consumer affinity");
@@ -132,6 +137,16 @@ struct OneSegReceiveWorker::Impl
                     break;
                 }
                 next_pair += block.bytes / 2;
+                if (source.recording_capacity)
+                {
+                    if (!archive.append(block.data.data(), block.bytes, block.first_pair))
+                    {
+                        fail(Error::InvalidBlock, "IQ recording discontinuity");
+                        break;
+                    }
+                    recorded_bytes.store(archive.size(), std::memory_order_relaxed);
+                    recording_full.store(archive.metadata().full, std::memory_order_relaxed);
+                }
                 read_index.store(read + 1, std::memory_order_release);
                 std::lock_guard<std::mutex> lock(mutex);
                 state.forwarded_pairs = next_pair;
@@ -188,20 +203,42 @@ struct OneSegReceiveWorker::Impl
         { if (memory) (void)munlock(memory, sizeof(*memory)); };
         std::unique_ptr<Impl, decltype(unlock)> resident(
             mlock(this, sizeof(*this)) == 0 ? this : nullptr, unlock);
-        if (!resident) fail(Error::Unavailable, "Cannot lock the 1seg IQ queue in memory");
+        if (!resident && source.archive_path.empty()) fail(Error::Unavailable, "Cannot lock the 1seg IQ queue in memory");
         bool sink_attempted = false, acquired = false, restore_failed = false;
         std::thread consumer;
         OneSegIqResult result;
         try
         {
-            if (!cancel.load() && (!handoff || !handoff())) fail(Error::ReceiveBusy);
+            const bool replay = !source.archive_path.empty();
+            if (replay)
+            {
+                std::string error;
+                if (!archive.load(source.archive_path, error)) fail(Error::InvalidBlock, error.c_str());
+                else if (archive.metadata().channel != channel) fail(Error::InvalidBlock, "Recorded channel does not match the selected channel");
+            }
+            else
+            {
+                archive.clear();
+                if (source.recording_capacity)
+                {
+                    OneSegIqArchive::Metadata metadata;
+                    metadata.rate = reception.sample_rate_hz;
+                    metadata.spi = reception.spi_clock_hz;
+                    metadata.gain = reception.gain_step;
+                    metadata.channel = channel;
+                    metadata.created_ms = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+                    if (!archive.begin(metadata, source.recording_capacity)) fail(Error::InvalidBlock, "Invalid recording capacity");
+                }
+            }
+            if (!replay && !cancel.load() && (!handoff || !handoff())) fail(Error::ReceiveBusy);
             if (!cancel.load())
             {
                 sink_attempted = true;
-                if ((!sink.configureReception(reception) || !sink.open(channel, session_generation, cancel)) && !cancel.load())
+                const bool configured = replay ? sink.configureRecordedIq(archive.metadata().rate) : sink.configureReception(reception);
+                if ((!configured || !sink.open(channel, session_generation, cancel)) && !cancel.load())
                     fail(Error::SinkOpen, sink.lastError());
             }
-            if (!cancel.load())
+            if (!replay && !cancel.load())
             {
                 const auto admission_deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(250);
                 do
@@ -235,9 +272,9 @@ struct OneSegReceiveWorker::Impl
                 };
                 request.accept = [](void* c, const uint8_t* p, size_t n, uint64_t first)
                 { return static_cast<Impl*>(c)->push(p, n, first); };
-                const bool completed = radio.streamOneSegIq(request, result);
+                const bool completed = replay ? replay_oneseg_iq(archive, request, result, source.loop) : radio.streamOneSegIq(request, result);
                 if (result.recovery_error) fail(Error::RadioRestore, radio.lastError());
-                else if (!completed || result.capture_error || result.sink_rejected || !cancel.load())
+                else if (!completed || result.capture_error || result.sink_rejected || (!replay && !cancel.load()))
                     fail(Error::RadioStream, radio.lastError());
             }
         }
@@ -311,18 +348,30 @@ OneSegReceiveWorker::OneSegReceiveWorker(IPacketRadio& radio, OneSegIqSink& sink
 OneSegReceiveWorker::~OneSegReceiveWorker() = default;
 bool OneSegReceiveWorker::start(unsigned channel, OneSegReceptionSettings reception)
 {
+    return start(channel, reception, {});
+}
+bool OneSegReceiveWorker::start(unsigned channel, OneSegReceptionSettings reception, Source source)
+{
     auto& s = *impl_;
     std::lock_guard<std::mutex> lock(s.mutex);
     if (s.active || s.shutdown) return false;
+    if (source.synthetic) return false;
+    if (source.recording_capacity > OneSegIqArchive::maximum_bytes || source.recording_capacity % 2 ||
+        (source.recording_capacity && (!source.archive_path.empty() || !reception.enabled)) ||
+        (!source.archive_path.empty() && (source.archive_path.front() != '/' || source.archive_path.find('\0') != std::string::npos))) return false;
     if (reception.enabled && !reception.valid()) return false;
     s.reception = reception;
+    s.source = std::move(source);
+    s.recorded_bytes = 0;
+    s.recording_full = false;
     const uint64_t generation = s.state.generation + 1;
     s.state = {};
     s.state.channel = channel;
     s.state.generation = generation ? generation : 1;
+    s.state.recorded_source = !s.source.archive_path.empty();
     s.detail[0] = 0;
     s.high_water = 0;
-    if (!OneSegLr2021Rx::frequencyHz(channel) || !s.radio.supportsOneSegIq() || !s.radio.hardwareCandidatePresent())
+    if (!OneSegLr2021Rx::frequencyHz(channel) || (s.source.archive_path.empty() && (!s.radio.supportsOneSegIq() || !s.radio.hardwareCandidatePresent())))
     {
         s.state.error = OneSegLr2021Rx::frequencyHz(channel) ? Error::Unavailable : Error::InvalidChannel;
         s.state.phase = Phase::Error;
@@ -355,8 +404,26 @@ OneSegReceiveWorker::Snapshot OneSegReceiveWorker::snapshot() const
     auto& s = *impl_;
     std::lock_guard<std::mutex> lock(s.mutex);
     auto result = s.state;
+    result.recorded_bytes = s.recorded_bytes.load(std::memory_order_relaxed);
+    result.recording_full = s.recording_full.load(std::memory_order_relaxed);
     result.queue_high_water = s.high_water.load(std::memory_order_relaxed);
     return result;
+}
+bool OneSegReceiveWorker::exportRecording(const std::string& path, std::string& error)
+{
+    auto& s = *impl_;
+    std::lock_guard<std::mutex> lock(s.mutex);
+    if (s.active || !s.source.recording_capacity)
+    {
+        error = "Stop the recorded generation before exporting IQ";
+        return false;
+    }
+    if (!s.state.radio.nominal_rate_hz || s.state.radio.nominal_rate_hz != s.archive.metadata().rate)
+    {
+        error = "Capture did not attest the recorded sample rate";
+        return false;
+    }
+    return s.archive.save(path, error);
 }
 void OneSegReceiveWorker::waitUntilFinished()
 {

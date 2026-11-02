@@ -6,6 +6,7 @@ system install, cross-ABI assumption or hardware access. Requires Python 3.12+.
 """
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -30,8 +31,18 @@ def sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def lab_adapter():
+    path = Path(__file__).with_name("oneseg_sync_lab_backend.py")
+    spec = importlib.util.spec_from_file_location("trailmate_sync_lab_adapter", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def repair_source(path):
     data = path.read_bytes()
+    if lab_adapter().is_instrumented_source(data):
+        return
     if sha(data) == PATCHED_SHA:
         return
     if sha(data) != ORIGINAL_SHA:
@@ -156,6 +167,22 @@ def probe_cxx_abi(build_dir):
                 atomic_bool_lock_free=int(macros["__GCC_ATOMIC_BOOL_LOCK_FREE"]))
 
 
+def fec_adapter():
+    path = Path(__file__).with_name("oneseg_fec_backend.py")
+    spec = importlib.util.spec_from_file_location("trailmate_fec_adapter", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def cm0_adapter():
+    path = Path(__file__).with_name("oneseg_cm0_backend.py")
+    spec = importlib.util.spec_from_file_location("trailmate_cm0_adapter", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def build(arguments):
     if sys.version_info < (3, 12) or platform.system() != "Linux":
         raise RuntimeError("Build natively on Linux with Python 3.12 or newer")
@@ -182,15 +209,22 @@ def build(arguments):
     if not source.exists():
         with tarfile.open(archive) as stream:
             stream.extractall(root, filter="data")
+    cm0_adapter().restore(source / "lib/ofdm_synchronization_1seg_impl.cc", source / "lib/viterbi_decoder_impl.h", source / "lib/CMakeLists.txt")
     repair_source(source / "lib/ofdm_synchronization_1seg_impl.cc")
     adapt_tmcc_source(source / "lib/tmcc_decoder_1seg_impl.cc")
     repair_viterbi_source(source / "lib/viterbi_decoder_impl.cc")
+    tracking = lab_adapter().adapt(source / "lib/ofdm_synchronization_1seg_impl.cc",
+                                   source / "lib/ofdm_synchronization_1seg_impl.h")
+    fec = fec_adapter().adapt(source / "lib/reed_solomon_dec_isdbt_impl.cc", source / "lib/reed_solomon_dec_isdbt_impl.h")
+    optimization = None
+    if cm0 or getattr(arguments, "compact_fft", False):
+        optimization = cm0_adapter().adapt(source / "lib/ofdm_synchronization_1seg_impl.cc", source / "lib/viterbi_decoder_impl.h", source / "lib/CMakeLists.txt", simde=cm0)
     prefix = root / "prefix"
     environment = os.environ.copy()
     # The upstream project otherwise overrides CMAKE_INSTALL_PREFIX from this.
     environment.pop("PYBOMBS_PREFIX", None)
-    cpu_flags = ["-march=armv7-a", "-mfpu=vfpv3-d16", "-mfloat-abi=hard"] if cm0 else []
-    target_configuration = []
+    cpu_flags = ["-march=armv7-a", "-mfpu=neon", "-mfloat-abi=hard"] if cm0 else []
+    target_configuration = ["-DTRAIL_MATE_SIMDE_VITERBI="+("ON" if cm0 else "OFF")]
     if cm0:
         for language in ("C", "CXX"):
             inherited = environment.get("CFLAGS" if language == "C" else "CXXFLAGS", "")
@@ -198,7 +232,7 @@ def build(arguments):
                                         " ".join([inherited, *cpu_flags]).strip())
     commands = [
         ["cmake", "-S", str(source), "-B", str(root / "build"), "-G", "Unix Makefiles",
-         "-DCMAKE_BUILD_TYPE=RelWithDebInfo", "-DCMAKE_INSTALL_PREFIX=" + str(prefix),
+         "-DCMAKE_BUILD_TYPE="+("Release" if cm0 else "RelWithDebInfo"), "-DCMAKE_INSTALL_PREFIX=" + str(prefix),
          "-DENABLE_PYTHON=ON", "-DENABLE_DOXYGEN=OFF", "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
          "-DPYTHON_EXECUTABLE=" + sys.executable, *target_configuration],
         ["cmake", "--build", str(root / "build"), "--parallel", str(arguments.jobs)],
@@ -210,7 +244,8 @@ def build(arguments):
                 abi["cxx11_abi"] != 1 or abi["atomic_bool_lock_free"] != 2):
         raise RuntimeError("CM0 C++ ABI/cancellation contract differs: " + json.dumps(abi))
     manifest = dict(upstream="https://github.com/dragoon2014/gr-isdbt", revision=REVISION,
-                    archive_sha256=ARCHIVE_SHA, adapted_source_sha256=PATCHED_SHA,
+                    archive_sha256=ARCHIVE_SHA, adapted_source_sha256=sha((source/"lib/ofdm_synchronization_1seg_impl.cc").read_bytes()),
+                    safety_source_sha256=PATCHED_SHA, ofdm_tracking=tracking, fec_statistics=fec, cm0_optimization=optimization,
                     tmcc_source_sha256=TMCC_PATCHED_SHA, tmcc_message_schema=1,
                     viterbi_source_sha256=VITERBI_PATCHED_SHA,
                     license="GPL-3.0-or-later", machine=platform.machine(),
@@ -229,6 +264,7 @@ if __name__ == "__main__":
     parser.add_argument("--work-dir", type=Path, required=True)
     parser.add_argument("--jobs", type=int, default=3)
     parser.add_argument("--cm0", action="store_true", help="Select and qualify the native Raspbian CM0 ARMv7 target")
+    parser.add_argument("--compact-fft", action="store_true", help="Build the qualified optional Mode3 FFT576 geometry for offline host qualification")
     args = parser.parse_args()
     if not 1 <= args.jobs <= 32:
         parser.error("--jobs must be between one and 32")

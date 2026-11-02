@@ -8,6 +8,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tarfile
 import tempfile
 
 
@@ -16,6 +17,16 @@ def run(args):
         root = Path(temporary)
         subprocess.run(["dpkg-deb", "--extract", str(args.package.resolve()), str(root)], check=True)
         private = root / "usr/libexec/trailmate"
+        docs = root / "usr/share/doc/trailmate-oneseg-backend"
+        manifest = json.loads((docs / "backend-manifest.json").read_text())
+        with tarfile.open(docs / "corresponding-source.tar.gz") as source:
+            names = set(source.getnames())
+            for name in ("BUILD.txt", "source.tar.gz", "backend-manifest.json",
+                         "tools/build_oneseg_backend.py", "tools/oneseg_sync_lab_backend.py",
+                         "tools/oneseg_fec_backend.py", "tools/oneseg_cm0_backend.py",
+                         "gr-isdbt-" + manifest["revision"] + "/COPYING"):
+                assert name in names, "Missing corresponding source: " + name
+            assert json.load(source.extractfile("backend-manifest.json")) == manifest
         version = subprocess.check_output(["dpkg-deb", "-f", str(args.package.resolve()), "Version"], text=True).strip()
         subprocess.run(["dpkg", "--compare-versions", version, "ge", "1.1.0"], check=True)
         provides = subprocess.check_output(["dpkg-deb", "-f", str(args.package.resolve()), "Provides"], text=True)
@@ -26,6 +37,10 @@ def run(args):
             if not path.is_symlink():
                 assert not path.stat().st_mode & 0o022, path
         shutil.copy2(args.decoder, decoder)
+        # These sidecars belong to the application, just like its decoder entry.
+        for name in ("oneseg_ofdm_dsp.py", "oneseg_ofdm_diagnostics.py",
+                     "oneseg_ofdm_measurements.py", "oneseg_synthetic_ofdm.py"):
+            shutil.copy2(args.decoder.resolve().parent / name, private / name)
         environment = os.environ.copy()
         for key in ("PYTHONPATH", "LD_LIBRARY_PATH", "TRAIL_MATE_ONESEG_BACKEND_ACTIVE"):
             environment.pop(key, None)
@@ -44,7 +59,9 @@ def run(args):
         os.close(write_fd)
         try:
             assert select.select([read_fd], [], [], 15)[0], "Relocated decoder handshake timed out"
-            assert os.read(read_fd, 1) == b"R", "Private ready descriptor did not survive exec"
+            if os.read(read_fd, 1) != b"R":
+                output, diagnostics = child.communicate(timeout=15)
+                raise AssertionError("Private ready descriptor did not survive exec: " + diagnostics.decode(errors="replace"))
             assert child.poll() is None
             child.send_signal(signal.SIGTERM)
             output, diagnostics = child.communicate(timeout=15)

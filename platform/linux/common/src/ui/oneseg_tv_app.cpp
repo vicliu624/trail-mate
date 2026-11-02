@@ -2,7 +2,7 @@
 #include "platform/linux/oneseg_channel_name.h"
 #include "platform/linux/oneseg_channel_store.h"
 #include "platform/linux/oneseg_event_schedule.h"
-#include "platform/linux/oneseg_reception_store.h"
+#include "platform/linux/oneseg_ofdm_profiles.h"
 #include "platform/linux/oneseg_session_scan_port.h"
 #include "platform/linux/runtime_paths.h"
 #include "platform/ui/screen_runtime.h"
@@ -10,6 +10,7 @@
 #include "ui/app_runtime.h"
 #include "ui/assets/fonts/font_utils.h"
 #include "ui/input/pager_navigation.h"
+#include "ui/oneseg_ofdm_workbench.h"
 #include "ui/ui_theme.h"
 #include "ui/widgets/top_bar.h"
 #include <algorithm>
@@ -33,13 +34,24 @@ struct OneSegTvApp::Impl
     uint64_t save_attempt_generation = 0;
     unsigned save_attempt_service = 0;
     OneSegReceptionSettings reception;
-    const std::filesystem::path reception_path = resolve_paths().settings_root / "settings" / "oneseg-reception.txt";
-    lv_obj_t *tuning_panel = nullptr, *tuning_rate = nullptr, *tuning_clock = nullptr, *tuning_gain = nullptr,
-             *tuning_model = nullptr, *tuning_live = nullptr, *tuning_graph = nullptr,
-             *tuning_arrival = nullptr, *tuning_drain = nullptr, *tuning_limit = nullptr;
-    std::array<lv_point_precise_t, 33> arrival_points{}, drain_points{};
-    std::array<lv_point_precise_t, 2> limit_points{};
-    uint32_t tuning_tick = 0;
+    OneSegOfdmExperiment experiment;
+    OneSegReceiveWorker::Source iq_source;
+    bool recorded_selected = false, iq_catalog_pending = true;
+    bool offlineSource() const { return recorded_selected || iq_source.synthetic; }
+    unsigned live_channel = 13;
+    uint64_t iq_export_serial = 0;
+    uint64_t iq_catalog_serial = 0;
+    std::filesystem::path iq_directory = resolve_paths().sd_root / "recordings" / "oneseg";
+    std::vector<std::filesystem::path> iq_archives;
+    lv_obj_t *source_bar = nullptr, *source_selector = nullptr, *archive_selector = nullptr,
+             *record_button = nullptr, *record_caption = nullptr, *iq_save_button = nullptr, *iq_count = nullptr, *iq_loop = nullptr;
+    std::unique_ptr<OneSegOfdmWorkbench> workbench;
+    const std::filesystem::path profile_directory = resolve_paths().settings_root / "settings" / "oneseg-experiments";
+    OneSegOfdmProfiles profiles{profile_directory};
+    OneSegOfdmProfile queued_profile;
+    bool profile_save_pending = false;
+    lv_obj_t* experiment_list = nullptr;
+    std::vector<std::string> experiment_ids;
     std::string save_attempt_name;
     lv_obj_t* broadcast = nullptr;
     std::string broadcast_text;
@@ -75,10 +87,11 @@ struct OneSegTvApp::Impl
     {
         saved.load(notice);
         if (const auto* last = saved.lastChannel()) channel = last->channel;
-        load_oneseg_reception(reception_path, reception);
+        reception = oneseg_factory_profile().reception;
     }
     static void hidden(lv_obj_t* object, bool value)
     {
+        if (!object) return;
         if (value) lv_obj_add_flag(object, LV_OBJ_FLAG_HIDDEN);
         else lv_obj_remove_flag(object, LV_OBJ_FLAG_HIDDEN);
     }
@@ -153,7 +166,6 @@ struct OneSegTvApp::Impl
     void toggleDetails()
     {
         if (scanning()) return;
-        hidden(tuning_panel, true);
         const bool opening = lv_obj_has_flag(details_panel, LV_OBJ_FLAG_HIDDEN);
         hidden(menu_panel, true);
         hidden(details_panel, !opening);
@@ -273,7 +285,6 @@ struct OneSegTvApp::Impl
     }
     void toggleMenu()
     {
-        hidden(tuning_panel, true);
         hidden(details_panel, true);
         hidden(menu_panel, !lv_obj_has_flag(menu_panel, LV_OBJ_FLAG_HIDDEN));
         updateChannelList();
@@ -281,6 +292,7 @@ struct OneSegTvApp::Impl
     }
     void scan()
     {
+        if (offlineSource()) return;
         if (!session) return;
         if (scanning())
         {
@@ -337,197 +349,217 @@ struct OneSegTvApp::Impl
     }
     bool startReception(unsigned target)
     {
+        if (recorded_selected && iq_source.archive_path.empty())
+        {
+            notice = "Select a saved IQ archive first";
+            return false;
+        }
         auto value = reception;
         value.enabled = session && session->receptionTuningAvailable();
-        return session && session->start(target, 320, 240, value);
+        const bool accepted = session && session->start(target, 320, 240, value, experiment, iq_source);
+        if (accepted && recorded_selected) notice = "Recorded IQ input; RF controls are disabled";
+        if (accepted && iq_source.synthetic) notice = "Known-reference OFDM model / virtual time / no RF, TV or FEC";
+        return accepted;
     }
-    OneSegReceptionSettings draftReception() const
+    void archiveOptions()
     {
-        OneSegReceptionSettings value;
-        value.enabled = true;
-        value.sample_rate_hz = lv_dropdown_get_selected(tuning_rate) ? 500000 : 450000;
-        constexpr uint32_t clocks[] = {8350000, 8700000, 16000000};
-        value.spi_clock_hz = clocks[std::min<unsigned>(2, lv_dropdown_get_selected(tuning_clock))];
-        value.gain_step = lv_dropdown_get_selected(tuning_gain);
-        return value;
-    }
-    void refreshModel()
-    {
-        if (!tuning_model) return;
-        const auto value = draftReception();
-        char buffer[384];
-        std::snprintf(buffer, sizeof(buffer),
-                      "PREVIEW / IDEAL MODEL\nRin = 2 fs = %.3f MB/s   Rspi = fspi / 8 = %.4f MB/s\n"
-                      "Net drain %.4f MB/s   Bus use %.1f%%\n1024 B FIFO fills in %.3f ms without reads",
-                      value.inputBytesPerSecond() / 1e6, value.spiBytesPerSecond() / 1e6,
-                      value.drainBytesPerSecond() / 1e6, value.utilization() * 100, value.fifoFillUs() / 1000);
-        setText(tuning_model, buffer);
-        lv_obj_update_layout(tuning_graph);
-        const double width = std::max<int32_t>(1, lv_obj_get_content_width(tuning_graph) - 1);
-        constexpr double height = 112;
-        for (size_t index = 0; index < arrival_points.size(); ++index)
+        if (!archive_selector || !session || session->snapshot().active || session->snapshot().iq_exporting) return;
+        const auto previous = iq_source.archive_path;
+        iq_archives.clear();
+        std::string options;
+        unsigned selected = 0;
+        for (const auto& filename : session->snapshot().iq_archives)
         {
-            const double time_us = double(index) / (arrival_points.size() - 1) * 1500;
-            const double arrival = std::clamp(320 + time_us * value.inputBytesPerSecond() / 1e6, 0.0, 1152.0);
-            const double drain = std::clamp(320 - time_us * value.drainBytesPerSecond() / 1e6, 0.0, 1152.0);
-            const auto x = static_cast<lv_value_precise_t>(width * index / (arrival_points.size() - 1));
-            arrival_points[index] = {x, static_cast<lv_value_precise_t>(height * (1 - arrival / 1152))};
-            drain_points[index] = {x, static_cast<lv_value_precise_t>(height * (1 - drain / 1152))};
+            const std::filesystem::path path(filename);
+            if (iq_archives.size() == 24) break;
+            const auto name = path.filename().string();
+            if (name.find_first_of("\r\n") != std::string::npos) continue;
+            if (!options.empty()) options += '\n';
+            if (path.string() == previous) selected = static_cast<unsigned>(iq_archives.size());
+            options += name;
+            iq_archives.push_back(path);
         }
-        limit_points = {{{0, static_cast<lv_value_precise_t>(height / 9)},
-                         {static_cast<lv_value_precise_t>(width), static_cast<lv_value_precise_t>(height / 9)}}};
-        lv_line_set_points(tuning_arrival, arrival_points.data(), arrival_points.size());
-        lv_line_set_points(tuning_drain, drain_points.data(), drain_points.size());
-        lv_line_set_points(tuning_limit, limit_points.data(), limit_points.size());
+        lv_dropdown_set_options(archive_selector, options.empty() ? "No saved IQ archives" : options.c_str());
+        lv_dropdown_set_selected(archive_selector, selected);
+        if (recorded_selected) iq_source.archive_path = iq_archives.empty() ? "" : iq_archives[selected].string();
     }
-    void selectReception(const OneSegReceptionSettings& value)
+    void selectIqSource(bool recorded)
     {
-        lv_dropdown_set_selected(tuning_rate, value.sample_rate_hz == 500000 ? 1 : 0);
-        lv_dropdown_set_selected(tuning_clock, value.spi_clock_hz == 8350000 ? 0 : value.spi_clock_hz == 8700000 ? 1
-                                                                                                                 : 2);
-        lv_dropdown_set_selected(tuning_gain, value.gain_step);
-        refreshModel();
-    }
-    void toggleTuning()
-    {
-        if (!tuning_panel || scanning()) return;
-        const bool opening = lv_obj_has_flag(tuning_panel, LV_OBJ_FLAG_HIDDEN);
-        hidden(menu_panel, true);
-        hidden(details_panel, true);
-        hidden(tuning_panel, !opening);
-        if (opening) selectReception(reception);
-        lv_group_focus_obj(opening ? tuning_rate : start_button);
+        if (!session || scanning() || session->snapshot().iq_exporting) return;
+        if (!offlineSource()) live_channel = channel;
+        iq_source.synthetic = false;
+        recorded_selected = recorded;
+        iq_source.recording_capacity = 0;
+        iq_source.archive_path = recorded && !iq_archives.empty() ? iq_archives[std::min<size_t>(lv_dropdown_get_selected(archive_selector), iq_archives.size() - 1)].string() : "";
+        if (!recorded) channel = live_channel;
+        pending_channel = desired_service = 0;
+        session->requestStop();
+        iq_catalog_pending = true;
+        notice = recorded ? "Recorded IQ selected; choose archive then Start" : "Live receiver selected; factory RF controls available";
         refresh();
-        lv_obj_scroll_to_view(opening ? tuning_panel : video, LV_ANIM_OFF);
     }
-    void applyReception()
+    void recordIq()
     {
-        if (!session || !session->receptionTuningAvailable() || scanning())
-        {
-            notice = "Tuning requires the real DMA capture backend";
-            refresh();
-            return;
-        }
-        const auto value = draftReception();
-        if (!save_oneseg_reception(reception_path, value))
-        {
-            notice = "Unable to save reception settings; parameters unchanged";
-            refresh();
-            return;
-        }
-        reception = value;
+        if (!session || offlineSource() || scanning() || !session->receptionTuningAvailable()) return;
         const auto state = session->snapshot();
+        if (state.iq_exporting) return;
+        if (state.active && state.source.recording_capacity)
+        {
+            iq_source.recording_capacity = 0;
+            pending_channel = 0;
+            session->requestStop();
+            notice = "Recording stopped; Save IQ exports the retained prefix";
+        }
+        else
+        {
+            iq_source.recording_capacity = 16 * 1024 * 1024;
+            pending_channel = channel;
+            if (state.active) session->requestStop();
+            notice = "Recording raw IQ to a 16 MiB RAM buffer; no disk writes during reception";
+        }
+        refresh();
+    }
+    void saveIq()
+    {
+        if (!session || scanning() || session->snapshot().iq_exporting) return;
+        iq_source.recording_capacity = 0;
+        pending_channel = 0;
+        const auto name = "iq-" + std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count()) + ".tmiq";
+        notice = session->requestIqExport((iq_directory / name).string()) ? "Stopping capture before saving IQ archive" : "No IQ recording is available to save";
+        refresh();
+    }
+    void selectSyntheticSource()
+    {
+        if (!session || scanning() || session->snapshot().iq_exporting) return;
+        if (!offlineSource()) live_channel = channel;
+        recorded_selected = false;
+        iq_source = {};
+        iq_source.synthetic = true;
+        iq_catalog_pending = false;
+        pending_channel = desired_service = 0;
+        session->requestStop();
+        notice = "Synthetic OFDM: known framing, no RF, TV or FEC. Apply working parameters to run.";
+        refresh();
+    }
+    void buildIqControls()
+    {
+        const auto dropdown = [&](int width, const char* options)
+        {
+            auto* object = lv_dropdown_create(source_bar);
+            lv_obj_set_size(object, width, 28);
+            lv_obj_set_style_text_font(object, &lv_font_montserrat_12, 0);
+            lv_dropdown_set_options(object, options);
+            lv_group_add_obj(app_g, object);
+            lv_obj_add_event_cb(object, key, LV_EVENT_KEY, this);
+            return object;
+        };
+        source_selector = dropdown(132, "Live receiver\nRecorded IQ\nSynthetic OFDM");
+        archive_selector = dropdown(190, "No saved IQ archives");
+        lv_obj_add_event_cb(
+            source_selector, [](lv_event_t* event)
+            { auto& self = *static_cast<Impl*>(lv_event_get_user_data(event)); const auto selected = lv_dropdown_get_selected(self.source_selector); if (selected == 2) self.selectSyntheticSource(); else self.selectIqSource(selected == 1); },
+            LV_EVENT_VALUE_CHANGED, this);
+        lv_obj_add_event_cb(
+            archive_selector, [](lv_event_t* event)
+            {
+            auto& self = *static_cast<Impl*>(lv_event_get_user_data(event));
+            const auto index = lv_dropdown_get_selected(self.archive_selector);
+            if (self.recorded_selected && index < self.iq_archives.size()) self.iq_source.archive_path = self.iq_archives[index].string(); },
+            LV_EVENT_VALUE_CHANGED, this);
+        iq_loop = lv_checkbox_create(source_bar);
+        lv_checkbox_set_text(iq_loop, "Loop");
+        lv_obj_set_style_text_font(iq_loop, &lv_font_montserrat_12, 0);
+        lv_group_add_obj(app_g, iq_loop);
+        lv_obj_add_event_cb(
+            iq_loop, [](lv_event_t* event)
+            { auto& self = *static_cast<Impl*>(lv_event_get_user_data(event)); self.iq_source.loop = lv_obj_has_state(self.iq_loop, LV_STATE_CHECKED); },
+            LV_EVENT_VALUE_CHANGED, this);
+        const auto button = [&](const char* caption, lv_event_cb_t action)
+        {
+            auto* object = lv_button_create(source_bar);
+            lv_obj_set_size(object, 80, 28);
+            lv_obj_set_style_pad_all(object, 2, 0);
+            lv_obj_set_style_radius(object, 4, 0);
+            lv_obj_set_style_bg_color(object, ::ui::theme::surface_alt(), 0);
+            lv_obj_set_style_bg_color(object, ::ui::theme::surface_alt(), LV_STATE_DISABLED);
+            lv_obj_set_style_text_color(object, ::ui::theme::text(), 0);
+            lv_obj_set_style_text_opa(object, LV_OPA_50, LV_STATE_DISABLED);
+            lv_obj_set_style_border_width(object, 1, 0);
+            lv_obj_set_style_border_color(object, ::ui::theme::border(), 0);
+            auto* label = text(object, caption);
+            lv_obj_set_style_text_font(label, &lv_font_montserrat_12, 0);
+            lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+            lv_obj_center(label);
+            lv_group_add_obj(app_g, object);
+            lv_obj_add_event_cb(object, action, LV_EVENT_CLICKED, this);
+            lv_obj_add_event_cb(object, key, LV_EVENT_KEY, this);
+            return object;
+        };
+        record_button = button("Record IQ", [](lv_event_t* event)
+                               { static_cast<Impl*>(lv_event_get_user_data(event))->recordIq(); });
+        record_caption = lv_obj_get_child(record_button, 0);
+        iq_save_button = button("Save IQ", [](lv_event_t* event)
+                                { static_cast<Impl*>(lv_event_get_user_data(event))->saveIq(); });
+        iq_count = text(source_bar, "0.0 MiB");
+        lv_obj_set_width(iq_count, 76);
+        lv_obj_set_style_text_font(iq_count, &lv_font_montserrat_12, 0);
+        lv_label_set_long_mode(iq_count, LV_LABEL_LONG_CLIP);
+        archiveOptions();
+    }
+    void applyWorkbench(const OneSegReceptionSettings& hardware, const OneSegOfdmExperiment& settings)
+    {
+        if (!session || scanning()) return;
+        reception = hardware;
+        experiment = settings;
         pending_channel = channel;
+        const auto state = session->snapshot();
         desired_service = state.decoder.programmes.selected_program;
-        notice = "Saved parameters; reacquiring after receiver release";
+        notice = "Applying experiment after receiver release";
         if (state.active) session->requestStop(state.generation);
         refresh();
     }
-    void refreshTuning(const OneSegTvSession::Snapshot& state)
+    void saveExperiment(const OneSegReceptionSettings& hardware, const OneSegOfdmExperiment& settings)
     {
-        if (!tuning_panel || lv_obj_has_flag(tuning_panel, LV_OBJ_FLAG_HIDDEN) ||
-            uint32_t(lv_tick_get() - tuning_tick) < 1000) return;
-        tuning_tick = lv_tick_get();
-        char buffer[384];
-        char active[96], age[40];
-        if (state.reception.enabled)
-            std::snprintf(active, sizeof(active), "Active %.0f kpair/s / %.2f MHz / gain %u",
-                          double(state.reception.sample_rate_hz) / 1000, double(state.reception.spi_clock_hz) / 1e6, state.reception.gain_step);
-        else std::snprintf(active, sizeof(active), "Active: device profile (tuning unavailable)");
-        if (state.iq_age_ms == UINT32_MAX) std::snprintf(age, sizeof(age), "unavailable");
-        else std::snprintf(age, sizeof(age), "%u ms", state.iq_age_ms);
-        const auto& transport = state.decoder.programmes;
-        std::snprintf(buffer, sizeof(buffer),
-                      "MEASURED / CURRENT SESSION\n%s\nFrames %llu   TS %.1f kB   Capture error %d\n"
-                      "CC %llu   CRC %llu   Decode %llu\nIQ age %s   Max service interval %llu us%s",
-                      active,
-                      (unsigned long long)state.media.video_frames, double(state.decoder.ts_bytes) / 1000,
-                      state.receive.radio.capture_error, (unsigned long long)transport.continuity_errors,
-                      (unsigned long long)transport.crc_errors, (unsigned long long)state.media.decode_errors,
-                      age, (unsigned long long)state.receive.radio.max_service_gap_us,
-                      state.receive.radio.max_service_gap_us ? "" : " (available after capture stops)");
-        setText(tuning_live, buffer);
+        if (!session || scanning() || !settings.valid(iq_source.synthetic ? 64000000 / 63 : hardware.sample_rate_hz, iq_source.synthetic)) return;
+        const auto number = std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+        queued_profile = {};
+        queued_profile.id = "experiment-" + number;
+        queued_profile.name = "Experiment " + number;
+        queued_profile.reception = hardware;
+        queued_profile.experiment = settings;
+        queued_profile.synthetic = iq_source.synthetic;
+        profile_save_pending = true;
+        const auto state = session->snapshot();
+        if (state.active)
+        {
+            pending_channel = channel;
+            session->requestStop(state.generation);
+        }
+        notice = "Saving experiment after capture stops";
+        refresh();
     }
-    void buildTuning()
+    void profileOptions()
     {
-        tuning_panel = lv_obj_create(root);
-        lv_obj_set_size(tuning_panel, lv_pct(100), LV_SIZE_CONTENT);
-        lv_obj_set_flex_flow(tuning_panel, LV_FLEX_FLOW_COLUMN);
-        lv_obj_set_style_bg_color(tuning_panel, ::ui::theme::surface(), 0);
-        lv_obj_set_style_border_width(tuning_panel, 0, 0);
-        lv_obj_set_style_pad_all(tuning_panel, 10, 0);
-        text(tuning_panel, "RECEPTION LAB / SPI + DMA");
-        text(tuning_panel, "Test baseline: 450 kpair/s, 8.7 MHz, gain 9. Occasional capture timeouts remain under investigation.");
-        const auto dropdown = [&](const char* caption, const char* options)
+        if (!experiment_list) return;
+        experiment_ids = {"default"};
+        std::string options = "Factory default / 450k / 8.7M / gain 9";
+        std::error_code error;
+        std::vector<std::string> ids;
+        if (std::filesystem::is_directory(profile_directory, error))
+            for (const auto& entry : std::filesystem::directory_iterator(profile_directory, error))
+            {
+                if (ids.size() >= 16) break;
+                if (entry.path().extension() == ".profile" && entry.path().stem() != "default") ids.push_back(entry.path().stem().string());
+            }
+        std::sort(ids.begin(), ids.end());
+        for (const auto& id : ids)
         {
-            text(tuning_panel, caption);
-            auto* value = lv_dropdown_create(tuning_panel);
-            lv_obj_set_width(value, lv_pct(100));
-            lv_dropdown_set_options(value, options);
-            lv_group_add_obj(app_g, value);
-            lv_obj_add_event_cb(value, key, LV_EVENT_KEY, this);
-            lv_obj_add_event_cb(
-                value, [](lv_event_t* event)
-                { static_cast<Impl*>(lv_event_get_user_data(event))->refreshModel(); },
-                LV_EVENT_VALUE_CHANGED, this);
-            return value;
-        };
-        tuning_rate = dropdown("IQ sample rate", "450 kpair/s (baseline)\n500 kpair/s");
-        tuning_clock = dropdown("SPI clock request", "8.35 MHz\n8.7 MHz (baseline)\n16 MHz");
-        tuning_gain = dropdown("Receiver gain step / 0 = chip AGC", "0 / AGC\n1\n2\n3\n4\n5\n6\n7\n8\n9 (baseline)\n10\n11\n12\n13");
-        auto* workspace = lv_obj_create(tuning_panel);
-        lv_obj_set_size(workspace, lv_pct(100), LV_SIZE_CONTENT);
-        lv_obj_set_flex_flow(workspace, LV_FLEX_FLOW_ROW_WRAP);
-        lv_obj_set_style_pad_all(workspace, 0, 0);
-        lv_obj_set_style_border_width(workspace, 0, 0);
-        lv_obj_set_style_bg_opa(workspace, LV_OPA_TRANSP, 0);
-        auto* knobs = lv_obj_create(workspace);
-        auto* analysis = lv_obj_create(workspace);
-        for (auto* object : {knobs, analysis})
-        {
-            lv_obj_set_height(object, LV_SIZE_CONTENT);
-            lv_obj_set_flex_flow(object, LV_FLEX_FLOW_COLUMN);
-            lv_obj_set_style_pad_all(object, 8, 0);
-            lv_obj_set_style_border_width(object, 0, 0);
-            lv_obj_set_style_bg_color(object, ::ui::theme::surface_alt(), 0);
+            OneSegOfdmProfile profile;
+            if (!profiles.load(id, profile)) continue;
+            experiment_ids.push_back(id);
+            options += '\n' + profile.name;
         }
-        lv_obj_set_width(knobs, lv_pct(36));
-        lv_obj_set_width(analysis, lv_pct(62));
-        for (auto* object : {tuning_rate, tuning_clock, tuning_gain})
-        {
-            // Move each caption with its dropdown into the parameter column.
-            auto* caption = lv_obj_get_child(tuning_panel, lv_obj_get_index(object) - 1);
-            lv_obj_set_parent(caption, knobs);
-            lv_obj_set_parent(object, knobs);
-        }
-        tuning_model = text(analysis, "");
-        lv_obj_set_style_text_font(tuning_model, &lv_font_montserrat_12, 0);
-        tuning_graph = lv_obj_create(analysis);
-        lv_obj_set_size(tuning_graph, lv_pct(100), 114);
-        lv_obj_set_style_pad_all(tuning_graph, 0, 0);
-        lv_obj_set_style_bg_color(tuning_graph, ::ui::theme::page_bg(), 0);
-        lv_obj_remove_flag(tuning_graph, LV_OBJ_FLAG_SCROLLABLE);
-        tuning_arrival = lv_line_create(tuning_graph);
-        tuning_drain = lv_line_create(tuning_graph);
-        tuning_limit = lv_line_create(tuning_graph);
-        lv_obj_set_style_line_color(tuning_arrival, lv_color_hex(0xf2ad63), 0);
-        lv_obj_set_style_line_color(tuning_drain, lv_color_hex(0x2f7ddb), 0);
-        lv_obj_set_style_line_color(tuning_limit, lv_color_hex(0xe86868), 0);
-        for (auto* line : {tuning_arrival, tuning_drain, tuning_limit}) lv_obj_set_style_line_width(line, 2, 0);
-        auto* legend = text(analysis, "Time 0 - 1.5 ms / FIFO starts at 320 B\nAmber: no reads  Blue: ideal DMA  Red: 1024 B limit\nModel excludes command overhead and scheduling jitter. Gain has no calibrated dB model.");
-        lv_obj_set_style_text_font(legend, &lv_font_montserrat_12, 0);
-        tuning_live = text(analysis, "Waiting for session measurements");
-        lv_obj_set_style_text_font(tuning_live, &lv_font_montserrat_12, 0);
-        auto* apply = button("Apply & save", [](Impl& value)
-                             { value.applyReception(); });
-        auto* reset = button("Reset baseline", [](Impl& value)
-                             { value.selectReception({}); });
-        auto* done = button("Close tuning", [](Impl& value)
-                            { value.toggleTuning(); });
-        for (auto* object : {apply, reset, done}) lv_obj_set_parent(object, knobs);
-        if (!session || !session->receptionTuningAvailable()) lv_obj_add_state(apply, LV_STATE_DISABLED);
-        selectReception(reception);
-        hidden(tuning_panel, true);
+        lv_dropdown_set_options(experiment_list, options.c_str());
     }
     void toggle()
     {
@@ -537,6 +569,11 @@ struct OneSegTvApp::Impl
         {
             pending_channel = desired_service = 0;
             session->requestStop(state.generation);
+        }
+        else if (state.iq_catalog_loading)
+        {
+            pending_channel = channel;
+            notice = "Starting after archive directory read completes";
         }
         else startReception(channel);
         refresh();
@@ -574,7 +611,7 @@ struct OneSegTvApp::Impl
     }
     void stepChannel(int direction)
     {
-        if (scanning()) return;
+        if (scanning() || offlineSource()) return;
         const unsigned target = static_cast<unsigned>(std::clamp(static_cast<int>(channel) + direction, 13, 62));
         if (target == channel) return;
         const bool receiving = session && session->snapshot().active;
@@ -585,6 +622,7 @@ struct OneSegTvApp::Impl
     }
     void stepStation(int direction)
     {
+        if (offlineSource()) return;
         const auto& entries = saved.channels();
         if (entries.empty() || !session || scanning()) return;
         const auto state = session->snapshot();
@@ -617,11 +655,12 @@ struct OneSegTvApp::Impl
     }
     void setFullscreen()
     {
-        hidden(tuning_panel, true);
         hidden(details_panel, true);
         fullscreen = !fullscreen;
+        if (workbench) workbench->fullscreen(fullscreen);
         hidden(bar.container, fullscreen);
         hidden(status, fullscreen);
+        hidden(source_bar, fullscreen);
         hidden(broadcast, fullscreen);
         // Focused viewing keeps the requested 320x240 viewport unchanged.
         lv_obj_set_flex_align(root, fullscreen ? LV_FLEX_ALIGN_CENTER : LV_FLEX_ALIGN_START,
@@ -633,11 +672,6 @@ struct OneSegTvApp::Impl
         const uint32_t value = lv_event_get_key(event);
         if (value == LV_KEY_ESC)
         {
-            if (self.tuning_panel && !lv_obj_has_flag(self.tuning_panel, LV_OBJ_FLAG_HIDDEN))
-            {
-                self.toggleTuning();
-                return;
-            }
             if (self.scanning())
             {
                 self.scanner->cancel();
@@ -668,7 +702,7 @@ struct OneSegTvApp::Impl
         else if (value == 'f' || value == 'F') self.setFullscreen();
         else if (value == 'm' || value == 'M') self.toggleMenu();
         else if (value == 'r' || value == 'R') self.retry();
-        else if (value == 't' || value == 'T') self.toggleTuning();
+        else if ((value == 't' || value == 'T') && self.workbench) self.workbench->selectStage(OneSegOfdmStage::Tracking);
     }
     void refresh()
     {
@@ -683,17 +717,49 @@ struct OneSegTvApp::Impl
         refreshScan();
         const bool menu_open = !lv_obj_has_flag(menu_panel, LV_OBJ_FLAG_HIDDEN);
         const bool details_open = !lv_obj_has_flag(details_panel, LV_OBJ_FLAG_HIDDEN);
-        const bool tuning_open = tuning_panel && !lv_obj_has_flag(tuning_panel, LV_OBJ_FLAG_HIDDEN);
-        hidden(controls, tuning_open);
-        hidden(status, fullscreen || tuning_open);
-        hidden(viewing, menu_open || details_open || tuning_open);
-        hidden(broadcast, fullscreen || menu_open || details_open || tuning_open);
-        hidden(video, menu_open || details_open || tuning_open);
+        if (workbench) hidden(workbench->object(), menu_open || details_open);
+        hidden(controls, false);
+        hidden(status, fullscreen);
+        hidden(viewing, menu_open || details_open);
+        hidden(broadcast, fullscreen || menu_open || details_open);
+        hidden(video, menu_open || details_open);
         auto state = session->snapshot();
-        refreshTuning(state);
+        hidden(source_bar, fullscreen);
+        if (recorded_selected && !state.source.archive_path.empty() && state.active) channel = state.channel;
+        if (state.iq_export_serial != iq_export_serial)
+        {
+            iq_export_serial = state.iq_export_serial;
+            notice = state.iq_export_message;
+            iq_catalog_pending = true;
+        }
+        if (state.iq_catalog_serial != iq_catalog_serial)
+        {
+            iq_catalog_serial = state.iq_catalog_serial;
+            archiveOptions();
+            if (state.iq_catalog_message[0]) notice = state.iq_catalog_message;
+        }
+        if (iq_catalog_pending && !state.active && !state.iq_exporting && !state.iq_catalog_loading)
+            if (session->requestIqCatalog(iq_directory.string()))
+            {
+                iq_catalog_pending = false;
+                state = session->snapshot();
+            }
+        if (profile_save_pending && !state.active)
+        {
+            notice = profiles.save(queued_profile, true) ? "Experiment saved; factory preset unchanged" : "Unable to save experiment";
+            profile_save_pending = false;
+            profileOptions();
+        }
+        if (workbench)
+        {
+            workbench->update(state);
+            workbench->setRecordedSource(offlineSource());
+            workbench->setSyntheticSource(iq_source.synthetic);
+            if (!notice.empty()) workbench->notice(notice.c_str());
+        }
         refreshBroadcast(state);
         refreshDetails(state);
-        if (pending_channel && !state.active)
+        if (pending_channel && !state.active && !state.iq_exporting && !state.iq_catalog_loading)
         {
             const unsigned target = pending_channel;
             pending_channel = 0;
@@ -761,6 +827,8 @@ struct OneSegTvApp::Impl
             break;
         }
         const uint32_t now = lv_tick_get();
+        if (state.source.synthetic && state.active && state.error == OneSegTvSession::Error::None && state.phase != Phase::Stopping)
+            phase = "Synthetic OFDM / no TV programme";
         const bool status_changed = !status_initialized || status_generation != state.generation ||
                                     status_programme != state.decoder.programmes.selected_program || status_phase != phase || status_timing != timing ||
                                     status_message != state.message || status_notice != notice;
@@ -768,12 +836,9 @@ struct OneSegTvApp::Impl
         {
             // Counters are diagnostic text, not video. Repainting them at 30 Hz
             // needlessly competes with the sub-millisecond radio FIFO service.
-            lv_label_set_text_fmt(status, "%s%s%s\nService %u | IQ pairs %llu | Video %llu | PCM %llu | %s\nParameters: %s%s%s",
-                                  phase, state.message[0] ? ": " : "", state.message,
-                                  state.decoder.programmes.selected_program, static_cast<unsigned long long>(state.receive.forwarded_pairs),
-                                  static_cast<unsigned long long>(state.media.video_frames), static_cast<unsigned long long>(state.media.pcm_samples), timing,
-                                  state.automatic_parameters ? "Automatic acquisition" : "OneSegCast mode 3 / GI 1:16 / QPSK 2:3 / TI 4",
-                                  notice.empty() ? "" : "\n", notice.c_str());
+            lv_label_set_text_fmt(status, "%s%s%s | CH %u / Service %u | %s",
+                                  phase, state.message[0] ? ": " : "", state.message, channel,
+                                  state.decoder.programmes.selected_program, notice.empty() ? timing : notice.c_str());
             status_initialized = true;
             status_tick = now;
             status_generation = state.generation;
@@ -784,17 +849,19 @@ struct OneSegTvApp::Impl
             status_notice = notice;
         }
         char caption[40];
-        std::snprintf(caption, sizeof(caption), "CH %u", channel);
+        if (iq_source.synthetic) std::snprintf(caption, sizeof(caption), "Model");
+        else std::snprintf(caption, sizeof(caption), "CH %u", channel);
         setText(channel_label, caption);
         std::snprintf(caption, sizeof(caption), "Volume %u%%", state.volume);
         setText(volume_label, caption);
         setText(start_label, state.active ? "Stop" : "Start");
         for (auto* object : {channel_down, channel_up})
         {
-            lv_obj_remove_state(object, LV_STATE_DISABLED);
+            if (offlineSource()) lv_obj_add_state(object, LV_STATE_DISABLED);
+            else lv_obj_remove_state(object, LV_STATE_DISABLED);
         }
         for (auto* object : {station_down, station_up})
-            if (saved.channels().empty()) lv_obj_add_state(object, LV_STATE_DISABLED);
+            if (offlineSource() || saved.channels().empty()) lv_obj_add_state(object, LV_STATE_DISABLED);
             else lv_obj_remove_state(object, LV_STATE_DISABLED);
         if (!state.active || state.decoder.programmes.program_count < 2) lv_obj_add_state(programme, LV_STATE_DISABLED);
         else lv_obj_remove_state(programme, LV_STATE_DISABLED);
@@ -807,9 +874,23 @@ struct OneSegTvApp::Impl
             for (auto* object : {start_button, channel_down, channel_up, programme, station_down, station_up, channel_list})
                 lv_obj_add_state(object, LV_STATE_DISABLED);
         else lv_obj_remove_state(start_button, LV_STATE_DISABLED);
+        const auto enable = [](lv_obj_t* object, bool enabled)
+        { if (enabled) lv_obj_remove_state(object, LV_STATE_DISABLED); else lv_obj_add_state(object, LV_STATE_DISABLED); };
+        enable(source_selector, !scanning() && !state.iq_exporting);
+        enable(archive_selector, recorded_selected && !state.active && !state.iq_exporting && !state.iq_catalog_loading && !iq_archives.empty());
+        enable(iq_loop, recorded_selected && !state.active && !state.iq_exporting);
+        enable(record_button, !offlineSource() && !scanning() && !state.iq_exporting && session->receptionTuningAvailable());
+        enable(iq_save_button, !state.iq_exporting && !state.iq_catalog_loading && !scanning() && state.receive.recorded_bytes > 0);
+        if (state.iq_exporting || state.iq_catalog_loading) enable(start_button, false);
+        if (offlineSource()) enable(scan_button, false);
+        else enable(scan_button, state.automatic_parameters && !state.iq_exporting);
+        setText(record_caption, state.active && state.source.recording_capacity ? state.receive.recording_full ? "Buffer full" : "Stop rec" : "Record IQ");
+        char recorded[64];
+        std::snprintf(recorded, sizeof(recorded), "%.1f MiB%s", double(state.receive.recorded_bytes) / (1024 * 1024), state.iq_exporting ? " saving" : "");
+        setText(iq_count, recorded);
         if (scanning()) lv_obj_add_state(details_button, LV_STATE_DISABLED);
         else lv_obj_remove_state(details_button, LV_STATE_DISABLED);
-        const bool fresh = !scanning() && !menu_open && !details_open && !tuning_open && state.active && state.error == OneSegTvSession::Error::None && state.media_epoch &&
+        const bool fresh = !scanning() && !menu_open && !details_open && state.active && state.error == OneSegTvSession::Error::None && state.media_epoch &&
                            state.phase != Phase::Stopping && state.iq_age_ms < 2000 && state.video_age_ms < 2000;
         OneSegMediaWorker::FrameInfo frame;
         if (fresh && session->copyLatestFrame(state.generation, state.media_epoch, pixels.data(), pixels.size(), frame))
@@ -855,12 +936,24 @@ struct OneSegTvApp::Impl
             retry_pending = false;
             notice = "Retry ended without a fresh picture";
         }
-        setText(waiting, scanning() ? "Scanning channels - audio muted" : signal_interrupted                                                                ? "Signal interrupted\nRetry / R to reacquire"
-                                                                      : desired_service && displayed.decoder.programmes.selected_program != desired_service ? "Waiting for selected service"
-                                                                                                                                                            : "No fresh decoded picture");
+        if (state.source.synthetic)
+        {
+            char model[400];
+            if (state.decoder.ofdm_phase.size && state.decoder.ofdm_phase.newest().has_reference)
+            {
+                const auto& r = state.decoder.ofdm_phase.newest();
+                std::snprintf(model, sizeof(model), "SYNTHETIC OFDM\nKnown framing / no TV or FEC\nVirtual time %.3f s\nInjected SNR %.1f dB\nReference EVM %.2f%%\nUncoded BER %.4g / %.0f bits\nNo RF transmission or reception", r.virtual_time, r.synthetic_snr, r.reference_evm * 100, r.reference_ber, r.reference_bits);
+            }
+            else std::snprintf(model, sizeof(model), "SYNTHETIC OFDM\nGenerating known-reference IQ\nNo RF, TV, TMCC or FEC");
+            setText(waiting, model);
+            setText(broadcast, "Synthetic reference / no broadcast service");
+        }
+        else setText(waiting, scanning() ? "Scanning channels - audio muted" : signal_interrupted                                                                ? "Signal interrupted\nRetry / R to reacquire"
+                                                                           : desired_service && displayed.decoder.programmes.selected_program != desired_service ? "Waiting for selected service"
+                                                                                                                                                                 : "No fresh decoded picture");
         const auto& table = displayed.decoder.programmes;
         const auto received_name = oneseg_received_channel_name(displayed.service_text, table.selected_program);
-        if (!scanning() && visible && table.pmt_valid && table.selected_program &&
+        if (!offlineSource() && !scanning() && visible && table.pmt_valid && table.selected_program &&
             (!desired_service || desired_service == table.selected_program) &&
             (save_attempt_generation != displayed.generation || save_attempt_service != table.selected_program ||
              (!received_name.empty() && save_attempt_name != received_name)))
@@ -892,6 +985,7 @@ struct OneSegTvApp::Impl
         if (session) session->requestStop();
         if (timer) lv_timer_delete(timer);
         timer = nullptr;
+        workbench.reset();
         if (root)
         {
             platform::ui::screen::enable_sleep();
@@ -904,8 +998,14 @@ struct OneSegTvApp::Impl
         details_panel = details_body = details_label = details_close = details_button = nullptr;
         details_text.clear();
         menu_panel = channel_list = scan_button = scan_label = nullptr;
-        tuning_panel = tuning_rate = tuning_clock = tuning_gain = tuning_model = tuning_live = tuning_graph = nullptr;
-        tuning_arrival = tuning_drain = tuning_limit = nullptr;
+        experiment_list = nullptr;
+        experiment_ids.clear();
+        profile_save_pending = false;
+        source_bar = source_selector = archive_selector = record_button = record_caption = iq_save_button = iq_count = iq_loop = nullptr;
+        iq_archives.clear();
+        iq_source = {};
+        recorded_selected = false;
+        iq_catalog_pending = true;
         lv_image_cache_drop(&descriptor);
         actions.clear();
         pixels.clear();
@@ -920,7 +1020,7 @@ void OneSegTvApp::enter(lv_obj_t* parent)
 {
     auto& s = *impl_;
     s.close();
-    s.actions.reserve(40);
+    s.actions.reserve(64);
     s.pixels.resize(OneSegMediaWorker::max_width * OneSegMediaWorker::max_height * 2);
     s.fullscreen = false;
     s.root = lv_obj_create(parent);
@@ -941,7 +1041,19 @@ void OneSegTvApp::enter(lv_obj_t* parent)
         { ui_request_exit_to_menu(); },
         nullptr);
     s.title = s.bar.title_label;
-    s.status = Impl::text(s.root, "Ready");
+    s.source_bar = lv_obj_create(s.root);
+    lv_obj_set_size(s.source_bar, lv_pct(100), 30);
+    lv_obj_set_flex_flow(s.source_bar, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(s.source_bar, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_all(s.source_bar, 0, 0);
+    lv_obj_set_style_pad_column(s.source_bar, 4, 0);
+    lv_obj_set_style_border_width(s.source_bar, 0, 0);
+    lv_obj_remove_flag(s.source_bar, LV_OBJ_FLAG_SCROLLABLE);
+    s.status = Impl::text(s.source_bar, "Ready");
+    lv_obj_set_width(s.status, 0);
+    lv_obj_set_flex_grow(s.status, 1);
+    lv_obj_set_height(s.status, 18);
+    lv_label_set_long_mode(s.status, LV_LABEL_LONG_CLIP);
     lv_obj_set_style_text_font(s.status, &lv_font_montserrat_12, 0);
     lv_obj_set_style_pad_hor(s.status, 12, 0);
     lv_obj_set_style_text_color(s.status, ::ui::theme::text(), 0);
@@ -1014,8 +1126,6 @@ void OneSegTvApp::enter(lv_obj_t* parent)
              { v.setFullscreen(); });
     s.button("Menu", [](Impl& v)
              { v.toggleMenu(); });
-    s.button("Tune", [](Impl& v)
-             { v.toggleTuning(); });
     s.menu_panel = lv_obj_create(s.root);
     lv_obj_set_size(s.menu_panel, lv_pct(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(s.menu_panel, LV_FLEX_FLOW_COLUMN);
@@ -1064,7 +1174,6 @@ void OneSegTvApp::enter(lv_obj_t* parent)
     lv_group_add_obj(app_g, s.details_body);
     lv_obj_add_event_cb(s.details_body, Impl::key, LV_EVENT_KEY, &s);
     Impl::hidden(s.details_panel, true);
-    s.buildTuning();
     s.updateChannelList();
     Impl::hidden(s.menu_panel, true);
     auto* help = s.button("H Help", [](Impl& v)
@@ -1077,6 +1186,61 @@ void OneSegTvApp::enter(lv_obj_t* parent)
         LV_EVENT_CLICKED, &s);
     s.button("Back", [](Impl&)
              { ui_request_exit_to_menu(); });
+    Impl::text(s.menu_panel, "Experiment profiles / explicit preview load");
+    s.experiment_list = lv_dropdown_create(s.menu_panel);
+    lv_obj_set_width(s.experiment_list, lv_pct(100));
+    lv_group_add_obj(app_g, s.experiment_list);
+    lv_obj_add_event_cb(
+        s.experiment_list, [](lv_event_t* event)
+        {
+        auto& self = *static_cast<Impl*>(lv_event_get_user_data(event));
+        const auto index = lv_dropdown_get_selected(self.experiment_list);
+        if (index >= self.experiment_ids.size()) return;
+        OneSegOfdmProfile profile;
+        if (!self.profiles.load(self.experiment_ids[index], profile)) return;
+        if (profile.synthetic) { lv_dropdown_set_selected(self.source_selector, 2); self.selectSyntheticSource(); }
+        if (self.workbench) self.workbench->setWorking(profile.reception, profile.experiment);
+        self.notice = "Experiment loaded for preview; Apply to change reception";
+        Impl::hidden(self.menu_panel, true);
+        self.refresh(); },
+        LV_EVENT_VALUE_CHANGED, &s);
+    s.profileOptions();
+    OneSegOfdmWorkbench::Callbacks lab_callbacks;
+    lab_callbacks.apply = [&s](const auto& hardware, const auto& experiment)
+    { s.applyWorkbench(hardware, experiment); };
+    lab_callbacks.save = [&s](const auto& hardware, const auto& experiment)
+    { s.saveExperiment(hardware, experiment); };
+    lab_callbacks.load = [&s]
+    { s.profileOptions(); s.toggleMenu(); };
+    lab_callbacks.factory_reset = [&s]
+    {
+        if (s.offlineSource()) s.channel = s.live_channel;
+        s.recorded_selected = false;
+        s.iq_source = {};
+        lv_dropdown_set_selected(s.source_selector, 0);
+        lv_obj_remove_state(s.iq_loop, LV_STATE_CHECKED);
+        s.applyWorkbench(oneseg_factory_profile().reception, {});
+    };
+    s.workbench = std::make_unique<OneSegOfdmWorkbench>(s.root, app_g, std::move(lab_callbacks));
+    s.workbench->setWorking(s.reception, s.experiment);
+    s.buildIqControls();
+    lv_obj_set_parent(s.viewing, s.workbench->videoHost());
+    lv_obj_set_size(s.viewing, lv_pct(100), lv_pct(100));
+    lv_obj_set_flex_flow(s.viewing, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_all(s.viewing, 0, 0);
+    lv_obj_set_style_pad_row(s.viewing, 0, 0);
+    lv_obj_set_width(s.broadcast, lv_pct(100));
+    lv_obj_set_height(s.broadcast, 29);
+    lv_obj_set_style_pad_all(s.broadcast, 0, 0);
+    lv_label_set_long_mode(s.broadcast, LV_LABEL_LONG_CLIP);
+    lv_obj_set_height(s.controls, 32);
+    lv_obj_set_flex_flow(s.controls, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_all(s.controls, 0, 0);
+    for (uint32_t index = 0; index < lv_obj_get_child_count(s.controls); ++index)
+    {
+        auto* object = lv_obj_get_child(s.controls, index);
+        if (lv_obj_check_type(object, &lv_button_class)) lv_obj_set_height(object, 28);
+    }
     ::ui::input::pager::prepare_group(app_g);
     for (auto* input = lv_indev_get_next(nullptr); input; input = lv_indev_get_next(input))
         if (lv_indev_get_type(input) == LV_INDEV_TYPE_KEYPAD) lv_indev_set_group(input, app_g);
@@ -1084,7 +1248,13 @@ void OneSegTvApp::enter(lv_obj_t* parent)
     s.timer = lv_timer_create([](lv_timer_t* timer)
                               { static_cast<Impl*>(lv_timer_get_user_data(timer))->refresh(); },
                               33, &s);
-    if (const auto* last = s.saved.lastChannel()) s.queueTune(last->channel, last->service);
+    if (const auto* last = s.saved.lastChannel())
+    {
+        // Preserve immediate factory live startup; archive enumeration waits
+        // until explicit source selection or a completed recording export.
+        s.iq_catalog_pending = false;
+        s.queueTune(last->channel, last->service);
+    }
     s.refresh();
 }
 } // namespace platform::linux_runtime
