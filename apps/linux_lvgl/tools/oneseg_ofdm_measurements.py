@@ -177,9 +177,10 @@ def attach(graph, chain, synchronization, configuration, sample_rate, evm_window
             gr.sync_block.__init__(self, 'OFDM measured signal %d' % kind,
                                    in_sig=[np.complex64 if length == 1 else (np.complex64, length)], out_sig=None)
             self.kind, self.next_update, self.sequence = kind, 0., 0
-            # Bound Python scheduler crossings to batches (about 7--17 ms).
+            # Bound Python scheduler crossings to batches (about 115--138 ms
+            # at the qualified Mode 3 clock, below the 500 ms display cadence).
             # This affects only terminal diagnostic consumers, never decoding.
-            self.set_output_multiple(4096 if length == 1 else 16)
+            self.set_output_multiple(65536 if length == 1 else 128)
             self.buffer = np.empty(0, dtype=np.complex64)
             self.evm = DeferredSymbolEvmWindow(evm_window, configuration['constellation'], length) if kind == 2 else None
 

@@ -543,8 +543,8 @@ def run(arguments):
             count = min(len(outputs[0]), len(self.pending) // 2)
             iq = np.frombuffer(self.pending, dtype=np.int8, count=count * 2).reshape((-1, 2))
             # LR2021 IQ8 is signed, unlike the unsigned RTL-SDR research input.
-            outputs[0][:count].real = iq[:, 0].astype(np.float32) / 128
-            outputs[0][:count].imag = iq[:, 1].astype(np.float32) / 128
+            np.multiply(iq[:, 0], np.float32(1 / 128), out=outputs[0][:count].real)
+            np.multiply(iq[:, 1], np.float32(1 / 128), out=outputs[0][:count].imag)
             self.pending = self.pending[count * 2:]
             self.processed_pairs += count
             return count
