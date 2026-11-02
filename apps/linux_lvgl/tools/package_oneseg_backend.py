@@ -28,7 +28,15 @@ def cm0_abi_compatible(architecture, abi):
 
 
 def verify_provenance(work, manifest, pinned):
+    # Reject invalid fixed receipts before requiring or unpacking any sources.
+    for key, expected in (("revision", pinned["REVISION"]), ("archive_sha256", pinned["ARCHIVE_SHA"]),
+                          ("tmcc_source_sha256", pinned["TMCC_PATCHED_SHA"]), ("tmcc_message_schema", 1),
+                          ("viterbi_source_sha256", pinned["VITERBI_PATCHED_SHA"])):
+        if manifest.get(key) != expected:
+            raise RuntimeError("Backend provenance mismatch: " + key)
     archive = work / "source.tar.gz"
+    if not archive.is_file():
+        raise RuntimeError("Missing pinned backend source archive")
     if pinned["sha"](archive.read_bytes()) != pinned["ARCHIVE_SHA"]:
         raise RuntimeError("Backend source archive verification failed")
     with tempfile.TemporaryDirectory(prefix="trailmate-backend-provenance-") as temporary:
