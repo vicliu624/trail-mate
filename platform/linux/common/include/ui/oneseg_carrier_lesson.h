@@ -161,6 +161,16 @@ class OneSegCarrierLesson
         selected_note_ = label(roots_[2], "");
     }
 
+    void compactHelp()
+    {
+        for (auto* object : {flow_, capacity_, model_note_, selected_note_}) lv_obj_add_flag(object, LV_OBJ_FLAG_HIDDEN);
+    }
+    std::string helpText() const
+    {
+        return std::string("RX: CP removal -> FFT -> pilots/H -> equalization -> demapping -> FEC\n\n") +
+               lv_label_get_text(geometry_label_) + "\n\n" + lv_label_get_text(model_note_) + "\n\n" +
+               lv_label_get_text(selected_note_) + "\n\n" + lv_label_get_text(capacity_);
+    }
     void clearControls()
     {
         widgets_.fill(nullptr);
@@ -177,7 +187,7 @@ class OneSegCarrierLesson
     void controls(lv_obj_t* parent)
     {
         clearControls();
-        constexpr const char* names[]{"Carrier index", "Symbol row", "Dataset", "Lesson", "CFO model Hz", "Delay / shift", "Echo % amp", "FFT / mode", "GI model"};
+        constexpr const char* names[]{"Carrier index", "Symbol row", "Dataset", "Effect", "CFO model Hz", "Delay / shift", "Echo % amp", "FFT / mode", "GI model"};
         constexpr const char* options[]{nullptr, "Row 0\nRow 1\nRow 2\nRow 3", "Actual burst\nISDBT model\nGeneric model",
                                         "Orthogonality\nCFO / ICI\nEcho / CP\nTiming offset", nullptr, nullptr, nullptr,
                                         "Mode 1 / 256\nMode 2 / 512\nMode 3 / 576\nMode 3 / 1024", "1/4\n1/8\n1/16\n1/32"};

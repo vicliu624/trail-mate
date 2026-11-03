@@ -179,6 +179,19 @@ if(TRAIL_MATE_LINUX_BUILD_APP)
             target_compile_options(trailmate_oneseg_tv_page_test PRIVATE -UNDEBUG)
             target_link_libraries(trailmate_oneseg_tv_page_test PRIVATE
                 trailmate_desktop_ui trailmate_linux_sdl_host trailmate_linux_oneseg_media)
+            add_executable(trailmate_oneseg_receiver_views_test tests/oneseg_receiver_views_test.cpp)
+            target_compile_options(trailmate_oneseg_receiver_views_test PRIVATE -UNDEBUG)
+            target_link_libraries(trailmate_oneseg_receiver_views_test PRIVATE
+                trailmate_desktop_ui trailmate_linux_sdl_host trailmate_linux_oneseg_media)
+            add_test(NAME oneseg_receiver_views COMMAND trailmate_oneseg_receiver_views_test)
+            set_tests_properties(oneseg_receiver_views PROPERTIES ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_AUDIODRIVER=dummy" TIMEOUT 60)
+            add_executable(trailmate_oneseg_receiver_workbench_test tests/oneseg_receiver_workbench_test.cpp
+                "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/ui/oneseg_ofdm_workbench.cpp")
+            target_compile_options(trailmate_oneseg_receiver_workbench_test PRIVATE -UNDEBUG)
+            target_link_libraries(trailmate_oneseg_receiver_workbench_test PRIVATE
+                trailmate_desktop_ui trailmate_linux_sdl_host trailmate_linux_oneseg_media)
+            add_test(NAME oneseg_receiver_workbench COMMAND trailmate_oneseg_receiver_workbench_test)
+            set_tests_properties(oneseg_receiver_workbench PROPERTIES ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_AUDIODRIVER=dummy" TIMEOUT 60)
             add_test(NAME oneseg_ofdm_workbench COMMAND trailmate_oneseg_tv_page_test
                 unused-decoder unused-prefix unused-iq "${CMAKE_CURRENT_BINARY_DIR}/ofdm-workbench-review")
             set_tests_properties(oneseg_ofdm_workbench PROPERTIES

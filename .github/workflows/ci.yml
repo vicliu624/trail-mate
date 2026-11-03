@@ -693,8 +693,8 @@ jobs:
       - name: Build Linux TV UI and verify bundled content fonts
         run: |
           cmake -S apps/linux_lvgl -B .codex-build/oneseg/ui -G Ninja -DCMAKE_BUILD_TYPE=Debug -DTRAIL_MATE_LINUX_DEVICE_CONFIG="$PWD/boards/t_display_cm0/package.cmake" -DTRAIL_MATE_LINUX_ENABLE_ONESEG_MEDIA=ON -DTRAIL_MATE_LINUX_DEB=OFF -DTRAIL_MATE_ONESEG_GENERATE_BROADCAST_FONT=ON
-          cmake --build .codex-build/oneseg/ui --target trailmate-linux trailmate_broadcast_font_test trailmate_bundled_font_root_test trailmate_oneseg_tv_page_test --parallel 2
-          ctest --test-dir .codex-build/oneseg/ui -R '^oneseg_(broadcast_font|bundled_font_(root|override)|ofdm_workbench|ofdm_synthetic_ui|ofdm_carrier_ui)$' --output-on-failure
+          cmake --build .codex-build/oneseg/ui --target trailmate-linux trailmate_broadcast_font_test trailmate_bundled_font_root_test trailmate_oneseg_tv_page_test trailmate_oneseg_receiver_views_test trailmate_oneseg_receiver_workbench_test --parallel 2
+          ctest --test-dir .codex-build/oneseg/ui -R '^oneseg_(broadcast_font|bundled_font_(root|override)|ofdm_workbench|ofdm_synthetic_ui|ofdm_carrier_ui|receiver_views|receiver_workbench)$' --output-on-failure
       - name: Package and validate relocated native backend
         run: |
           /usr/bin/python3 apps/linux_lvgl/tests/oneseg_backend_provenance_test.py --backend-work .codex-build/oneseg/gr-isdbt

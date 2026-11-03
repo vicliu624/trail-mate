@@ -1,6 +1,7 @@
 #include "ui/oneseg_ofdm_workbench.h"
 #include "platform/linux/oneseg_ofdm_lessons.h"
 #include "ui/oneseg_carrier_lesson.h"
+#include "ui/oneseg_receiver_views.h"
 #include "ui/ui_theme.h"
 #include <algorithm>
 #include <array>
@@ -67,6 +68,13 @@ struct OneSegOfdmWorkbench::Impl
     std::array<lv_obj_t*, 7> stage_buttons{};
     OneSegOfdmStage stage = OneSegOfdmStage::Subcarriers;
     std::unique_ptr<OneSegCarrierLesson> carrier_lesson;
+    std::unique_ptr<OneSegReceiverViews> receiver_views;
+    std::unique_ptr<OneSegReceiverHelp> receiver_help;
+    lv_obj_t *view_selector = nullptr, *help_button = nullptr;
+    OneSegReceiverView selected_view = OneSegReceiverView::Actual;
+    std::array<OneSegReceiverView, 8> view_choices{};
+    size_t view_count = 0;
+    bool syncing_view = false, recorded_source = false;
     OneSegReceptionSettings reception;
     OneSegOfdmExperiment experiment;
     bool synthetic = false;
@@ -166,14 +174,55 @@ struct OneSegOfdmWorkbench::Impl
     void rebuild()
     {
         focused_control = nullptr;
+        if (receiver_help) receiver_help->close();
+        if (receiver_views)
+        {
+            receiver_views->show(false);
+            receiver_views->clearControls();
+            if (receiver_views->selected() != selected_view) receiver_views->select(selected_view);
+        }
         // Focus events during removal must never dereference an old binding.
         if (carrier_lesson) carrier_lesson->clearControls();
         for (auto& binding : bindings) binding = {};
         lv_obj_clean(fields);
+        if (view_selector)
+        {
+            syncing_view = true;
+            view_count = 1;
+            view_choices[0] = OneSegReceiverView::Actual;
+            std::string choices = "Actual";
+            unsigned selected = 0;
+            for (const auto& info : oneseg_receiver_views())
+            {
+                if (info.view == OneSegReceiverView::Actual || info.stage != stage) continue;
+                if (info.view == selected_view) selected = view_count;
+                choices += '\n';
+                choices += info.name;
+                view_choices[view_count++] = info.view;
+            }
+            lv_dropdown_set_options(view_selector, choices.c_str());
+            lv_dropdown_set_selected(view_selector, selected);
+            syncing_view = false;
+        }
+        const bool model_view = receiver_views && receiver_views->active();
+        for (auto* object : {rate, clock, gain})
+            if (model_view || recorded_source) lv_obj_add_state(object, LV_STATE_DISABLED);
+            else lv_obj_remove_state(object, LV_STATE_DISABLED);
+        hide(synthetic_rf, !synthetic || model_view);
         if (carrier_lesson)
         {
-            carrier_lesson->show(stage == OneSegOfdmStage::Subcarriers);
-            if (stage == OneSegOfdmStage::Subcarriers) carrier_lesson->controls(fields);
+            carrier_lesson->show(!model_view && stage == OneSegOfdmStage::Subcarriers);
+            if (!model_view && stage == OneSegOfdmStage::Subcarriers) carrier_lesson->controls(fields);
+        }
+        if (model_view)
+        {
+            receiver_views->show(true);
+            receiver_views->controls(fields);
+            text(message, receiver_views->model().result.status.c_str());
+            for (size_t i = 0; i < stage_buttons.size(); ++i)
+                if (i == static_cast<unsigned>(stage)) lv_obj_add_state(stage_buttons[i], LV_STATE_CHECKED);
+                else lv_obj_remove_state(stage_buttons[i], LV_STATE_CHECKED);
+            return;
         }
         size_t slot = 0;
         for (const auto& control : oneseg_ofdm_controls())
@@ -371,11 +420,41 @@ struct OneSegOfdmWorkbench::Impl
                 auto& self = *static_cast<Impl*>(lv_event_get_user_data(event));
                 auto* target = static_cast<lv_obj_t*>(lv_event_get_target(event));
                 for (size_t i = 0; i < self.stage_buttons.size(); ++i)
-                    if (self.stage_buttons[i] == target) { self.stage = static_cast<OneSegOfdmStage>(i); self.rebuild(); break; } },
+                    if (self.stage_buttons[i] == target) { self.selected_view=OneSegReceiverView::Actual;self.stage = static_cast<OneSegOfdmStage>(i); self.rebuild(); break; } },
                 this);
             lv_obj_set_flex_grow(stage_buttons[index], 1);
             lv_obj_set_style_bg_color(stage_buttons[index], ::ui::theme::accent(), LV_STATE_CHECKED);
         }
+        view_selector = lv_dropdown_create(ribbon);
+        lv_obj_set_size(view_selector, 164, 28);
+        lv_obj_set_style_text_font(view_selector, &lv_font_montserrat_12, 0);
+        lv_group_add_obj(group, view_selector);
+        lv_obj_add_event_cb(
+            view_selector, [](lv_event_t* event)
+            {
+            auto& self=*static_cast<Impl*>(lv_event_get_user_data(event));
+            if(self.syncing_view)return;
+            const auto selected=lv_dropdown_get_selected(self.view_selector);
+            if(selected<self.view_count){self.selected_view=self.view_choices[selected];self.rebuild();} },
+            LV_EVENT_VALUE_CHANGED, this);
+        help_button = button(
+            ribbon, "?", [](lv_event_t* event)
+            {
+            auto& self=*static_cast<Impl*>(lv_event_get_user_data(event));
+            std::string title="Formula / details",content;
+            if(self.receiver_views->active())
+            {
+                title+=" / ";title+=oneseg_receiver_view(self.selected_view).name;content=self.receiver_views->helpText();
+            }
+            else if(self.stage==OneSegOfdmStage::Subcarriers)content=self.carrier_lesson->helpText();
+            else content=std::string(lv_label_get_text(self.equation))+"\n\n"+lv_label_get_text(self.explanation);
+            for(const auto& replacement:std::array<std::pair<const char*,const char*>,4>{{{"Teaching","Model"},{"teaching","model"},{"training","model"},{"trainer","model"}}})
+            {
+                size_t start=0;while((start=content.find(replacement.first,start))!=std::string::npos){content.replace(start,std::strlen(replacement.first),replacement.second);start+=std::strlen(replacement.second);}
+            }
+            self.receiver_help->open(title,content,self.help_button); },
+            this);
+        lv_obj_set_width(help_button, 30);
         grid = lv_obj_create(root);
         lv_obj_set_size(grid, lv_pct(100), 0);
         lv_obj_set_flex_grow(grid, 1);
@@ -411,6 +490,7 @@ struct OneSegOfdmWorkbench::Impl
             row, "Apply experiment", [](lv_event_t* event)
             {
             auto& self = *static_cast<Impl*>(lv_event_get_user_data(event));
+            if(self.receiver_views->active()){text(self.message,"Model updated; receiver preset unchanged");return;}
             const auto hardware = self.workingReception();
             if (!self.experiment.valid(self.synthetic ? 64000000/63 : hardware.sample_rate_hz, self.synthetic)) { text(self.message, "Invalid parameter combination / check limits"); return; }
             if (self.callbacks.apply) self.callbacks.apply(hardware, self.experiment); },
@@ -419,6 +499,7 @@ struct OneSegOfdmWorkbench::Impl
             row, "Default", [](lv_event_t* event)
             {
             auto& self = *static_cast<Impl*>(lv_event_get_user_data(event));
+            if(self.receiver_views->active()){self.receiver_views->reset();text(self.message,"Model defaults; receiver preset unchanged");return;}
             self.experiment = {};
             if (self.carrier_lesson) self.carrier_lesson->reset();
             lv_dropdown_set_selected(self.rate, 0);
@@ -432,12 +513,14 @@ struct OneSegOfdmWorkbench::Impl
             row, "Save", [](lv_event_t* event)
             {
             auto& self = *static_cast<Impl*>(lv_event_get_user_data(event));
+            if(self.receiver_views->active()){self.receiver_views->save();text(self.message,"Model snapshot saved for this session");return;}
             if (self.callbacks.save) self.callbacks.save(self.workingReception(), self.experiment); },
             this);
         button(
             row, "Load", [](lv_event_t* event)
             {
             auto& self = *static_cast<Impl*>(lv_event_get_user_data(event));
+            if(self.receiver_views->active()){const bool loaded=self.receiver_views->load();text(self.message,loaded?"Model snapshot loaded":"No saved model snapshot for this view");return;}
             if (self.callbacks.load) self.callbacks.load(); },
             this);
         auto* rf = lv_obj_create(parameters);
@@ -511,7 +594,7 @@ struct OneSegOfdmWorkbench::Impl
         analysis = panel(grid);
         lv_obj_set_grid_cell(analysis, LV_GRID_ALIGN_STRETCH, 2, 1, LV_GRID_ALIGN_STRETCH, 0, 1);
         lv_obj_set_flex_flow(analysis, LV_FLEX_FLOW_COLUMN);
-        source_label = label(analysis, "OFDM learning / native tracking data");
+        source_label = label(analysis, "OFDM / native tracking data");
         lv_obj_set_width(source_label, lv_pct(100));
         lv_obj_set_style_pad_right(source_label, 118, 0);
         signal_selector = lv_dropdown_create(analysis);
@@ -545,6 +628,8 @@ struct OneSegOfdmWorkbench::Impl
             LV_EVENT_VALUE_CHANGED, this);
         equation = label(analysis, "");
         explanation = label(analysis, "");
+        hide(equation, true);
+        hide(explanation, true);
         quality = label(analysis, "");
         for (auto* object : {equation, explanation, quality}) lv_obj_set_width(object, lv_pct(100));
         signal_title = label(analysis, "Measured signal unavailable");
@@ -651,6 +736,9 @@ struct OneSegOfdmWorkbench::Impl
         lv_obj_align(phase_axis, LV_ALIGN_BOTTOM_LEFT, 0, 0);
         lv_obj_align(residual_axis, LV_ALIGN_BOTTOM_LEFT, 0, 0);
         carrier_lesson = std::make_unique<OneSegCarrierLesson>(analysis, phase_panel, residual_panel, group);
+        carrier_lesson->compactHelp();
+        receiver_views = std::make_unique<OneSegReceiverViews>(analysis, phase_panel, residual_panel, group);
+        receiver_help = std::make_unique<OneSegReceiverHelp>(root, group);
         rebuild();
     }
     void update(const OneSegTvSession::Snapshot& state)
@@ -661,6 +749,12 @@ struct OneSegOfdmWorkbench::Impl
         last_draw = tick;
         const bool readback_changed = native_configuration.available != state.decoder.native_configuration.available || native_configuration.received_ms != state.decoder.native_configuration.received_ms;
         native_configuration = state.decoder.native_configuration;
+        if (receiver_views->active())
+        {
+            receiver_views->refresh();
+            text(message, receiver_views->model().result.status.c_str());
+            return;
+        }
         if (readback_changed && focused_control) showLesson(*focused_control);
         if (stage == OneSegOfdmStage::Subcarriers)
         {
@@ -946,13 +1040,15 @@ void OneSegOfdmWorkbench::selectStage(OneSegOfdmStage stage)
 {
     if (static_cast<unsigned>(stage) >= impl_->stage_buttons.size()) return;
     impl_->stage = stage;
+    impl_->selected_view = OneSegReceiverView::Actual;
     impl_->rebuild();
     lv_group_focus_obj(impl_->stage_buttons[static_cast<unsigned>(stage)]);
 }
 void OneSegOfdmWorkbench::setRecordedSource(bool recorded)
 {
+    impl_->recorded_source = recorded;
     for (auto* object : {impl_->rate, impl_->clock, impl_->gain})
-        if (recorded) lv_obj_add_state(object, LV_STATE_DISABLED);
+        if (recorded || impl_->receiver_views->active()) lv_obj_add_state(object, LV_STATE_DISABLED);
         else lv_obj_remove_state(object, LV_STATE_DISABLED);
 }
 void OneSegOfdmWorkbench::setWorking(const OneSegReceptionSettings& reception, const OneSegOfdmExperiment& experiment)
@@ -978,6 +1074,7 @@ void OneSegOfdmWorkbench::setSyntheticSource(bool enabled)
 void OneSegOfdmWorkbench::fullscreen(bool enabled)
 {
     auto& self = *impl_;
+    self.receiver_help->close();
     for (auto* object : {self.ribbon, self.parameters, self.analysis, self.phase_panel, self.residual_panel}) hide(object, enabled);
     lv_obj_set_grid_dsc_array(self.grid, enabled ? self.full.data() : self.columns.data(), enabled ? self.full.data() : self.rows.data());
     lv_obj_set_grid_cell(self.video, LV_GRID_ALIGN_STRETCH, 0, 1, LV_GRID_ALIGN_STRETCH, 0, 1);
