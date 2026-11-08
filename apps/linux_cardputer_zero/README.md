@@ -156,8 +156,9 @@ The package installs the Cardputer Zero APPLaunch layout:
 - `/usr/share/APPLaunch/share/images/trailmate-cardputer-zero.png`
 
 In `auto` mode APPLaunch uses Wayland when `WAYLAND_DISPLAY` is present.
-Otherwise it selects framebuffer/evdev when the ST7789V framebuffer is detected
-in `/proc/fb`, or a framebuffer path is supplied by the device environment.
+Otherwise it selects framebuffer/evdev when the stock `fb_st7789v` or current
+`panel-mipi-dbid` display is detected in `/proc/fb`, or a framebuffer path is
+supplied by the device environment.
 The wrapper honors `APPLAUNCH_LINUX_FBDEV_DEVICE` and
 `APPLAUNCH_LINUX_KEYBOARD_DEVICE`; it prefers `/dev/input/cardputer-zero-internal`
 when that keyboard endpoint exists, then uses the legacy by-path endpoint.

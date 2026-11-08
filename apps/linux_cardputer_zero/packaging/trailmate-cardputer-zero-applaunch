@@ -3,11 +3,12 @@ set -eu
 
 find_st7789v_fbdev()
 {
-    [ -r /proc/fb ] || return 1
+    framebuffer_list=${1:-/proc/fb}
+    [ -r "$framebuffer_list" ] || return 1
 
     while IFS= read -r line; do
         case "$line" in
-            *fb_st7789v*)
+            *fb_st7789v*|*panel-mipi-dbi*)
                 set -- $line
                 case "${1:-}" in
                     ''|*[!0-9]*) return 1 ;;
@@ -15,7 +16,7 @@ find_st7789v_fbdev()
                 esac
                 ;;
         esac
-    done < /proc/fb
+    done < "$framebuffer_list"
 
     return 1
 }
