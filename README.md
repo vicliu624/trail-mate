@@ -21,12 +21,12 @@ Communicate over compatible Meshtastic, MeshCore or Reticulum/LXMF networks, car
 
 [English](README.md) | [Documentation](https://github.com/vicliu624/trail-mate/wiki) | [Releases](https://github.com/vicliu624/trail-mate/releases) | [Join Discord](https://discord.gg/shkueG4zfc)
 
-**1.0.1 fixes USB browser management for Pager and T-Deck.** Install the matching
-new firmware; a website update cannot add the missing USB service to 1.0.0.
-Get the board-specific files and
-[release notes](https://github.com/vicliu624/trail-mate/releases/tag/v1.0.1), or
-use the [browser installer](https://vicliu624.github.io/trail-mate/). Check the
-device support table below before choosing an image.
+**1.1.0 adds installable Cardputer Zero and T-Display-CM0 Linux packages**, online
+map creation and radio/storage reliability improvements. Get the board-specific
+files and [release notes](https://github.com/vicliu624/trail-mate/releases/tag/v1.1.0).
+Linux users should follow the [Debian installation guide](docs/engineering/release-1.1.0.md);
+supported microcontrollers also have a [browser installer](https://vicliu624.github.io/trail-mate/).
+Check the device support table below before choosing an image or package.
 
 ## The device is your account
 
@@ -69,9 +69,10 @@ copies already received by others. Decentralization gives users choices and
 reduces dependence on one operator; it does not make published location data
 secret or prevent every form of behavioural analysis.
 
-The [1.0.1 delivery record](docs/releases/1.0.1.md) keeps the build and acceptance
-evidence separate from device-support claims. Use [Releases](https://github.com/vicliu624/trail-mate/releases)
-for installable images and check the board table before choosing a target.
+The [1.1.0 build and installation record](docs/engineering/release-1.1.0.md) and
+[physical Linux-device acceptance](docs/engineering/linux-paired-mesh-validation-20261108.md)
+separate release contents from hardware-support claims. The earlier
+[1.0.1 delivery record](docs/releases/1.0.1.md) remains available for that release.
 
 ---
 
@@ -82,7 +83,7 @@ for installable images and check the board table before choosing a target.
 - **Hardware:** keyboard handhelds, touch navigation terminals, and low-power message devices
 - **Toolchains:** PlatformIO / Arduino · ESP-IDF · CMake for Linux
 - **Validation:** multi-target CI builds, native regression tests, LVGL integration tests, architecture boundary checks, stack and runtime-budget checks, and OTA-size validation
-- **Releases:** automated firmware packaging, web-flasher images for selected targets, nRF52 UF2 images, and tagged-release debug symbols
+- **Releases:** automated firmware packaging, ARM64/ARMHF Linux device packages, web-flasher images for selected targets, nRF52 UF2 images, and tagged-release debug symbols
 - **Core capabilities:** GNSS · offline maps · LoRa messaging · local storage · on-device team awareness
 - **License:** [AGPL-3.0](LICENSE)
 
@@ -323,7 +324,12 @@ The table below records the **real build targets currently present in the reposi
 | **LILYGO T-Display P4 TFT** | `TRAIL_MATE_IDF_TARGET=t_display_p4_tft` | ESP-IDF | TFT / HI8561 port with shared UI and dashboard; display, touch and sliders verified on the test unit. External keyboard input remains under hardware diagnosis. |
 | **LILYGO T-Display P4 AMOLED** | `TRAIL_MATE_IDF_TARGET=t_display_p4_amoled` | ESP-IDF | Explicit AMOLED / RM69A10 + GT9895 bring-up target for the shared IDF shell |
 
-Linux development also includes the [Cardputer Zero device app](apps/linux_cardputer_zero/README.md) and [Linux simulator](apps/linux_sim_shell/README.md). These have their own build and validation paths; embedded CI coverage does not establish Linux hardware readiness.
+Linux release targets include the [Cardputer Zero ARM64 device app](apps/linux_cardputer_zero/README.md)
+and [T-Display-CM0 Raspbian ARMHF app](apps/linux_lvgl/README.md), with
+[installation and native ABI details](docs/engineering/release-1.1.0.md).
+Their paired LoRa messaging and Zero framebuffer/keyboard paths have
+[separate physical acceptance](docs/engineering/linux-paired-mesh-validation-20261108.md).
+The [Linux simulator](apps/linux_sim_shell/README.md) remains a development target.
 
 ### How To Choose A Target Today
 

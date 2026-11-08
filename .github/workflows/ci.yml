@@ -979,6 +979,14 @@ jobs:
     if: needs.firmware_scope.outputs.build == 'true'
     uses: ./.github/workflows/linux-device-packages.yml
 
+  cardputer_zero_smoke:
+    name: Cardputer Zero release regressions
+    needs: firmware_scope
+    if: needs.firmware_scope.outputs.build == 'true'
+    uses: ./.github/workflows/cardputer-zero-linux.yml
+    with:
+      smoke_only: true
+
   release:
     name: Publish GitHub Release
     runs-on: ubuntu-latest
@@ -996,6 +1004,7 @@ jobs:
       - pages_contract
       - build_idf
       - linux_packages
+      - cardputer_zero_smoke
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       actions: write

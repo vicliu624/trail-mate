@@ -1,6 +1,11 @@
 name: Cardputer Zero Linux
 
 on:
+  workflow_call:
+    inputs:
+      smoke_only:
+        type: boolean
+        default: false
   workflow_dispatch:
   push:
     paths:
@@ -57,18 +62,22 @@ jobs:
         run: python3 scripts/check_root_build_artifacts.py
 
       - name: Configure Cardputer Zero Debian package
+        if: ${{ !inputs.smoke_only }}
         working-directory: builds/linux_cmake
         run: cmake --preset linux-cardputer-zero-release
 
       - name: Set up QEMU for arm64 Docker package build
+        if: ${{ !inputs.smoke_only }}
         uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
 
       - name: Build Cardputer Zero Debian package
+        if: ${{ !inputs.smoke_only }}
         run: bash apps/linux_cardputer_zero/tools/build_cardputer_zero_deb.sh
 
       - name: Upload Cardputer Zero Debian package
+        if: ${{ !inputs.smoke_only }}
         uses: actions/upload-artifact@v4
         with:
           name: trailmate-cardputer-zero-deb
