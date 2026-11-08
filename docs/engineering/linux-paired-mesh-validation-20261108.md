@@ -251,6 +251,12 @@ Navigation dialog to APPLaunch after a 1.8-second Escape hold; the old process
 ended normally and Map runtime destruction occurred while LVGL and its data
 providers were alive. Navigation, Route Actions and Help titles remained visible.
 
+The `.16` follow-up exercised the physical `KEY_HELP` / Fn+H path into Contacts
+Help and Map Help, then returned through Escape to the main menu. Its native
+suite passed 68/68; the regression also checks both dedicated help dialogs and
+their return paths. The device-local preservation audit still matched the
+original identity, 41 messages and 57 map/route/photo files after installation.
+
 On the same physical build, the online wizard searched `Singapore` through
 Photon, returned `Singapore / SG`, displayed an enclosing area of approximately
 111.9 by 42.7 km and enabled Next. No new download was started for this check;

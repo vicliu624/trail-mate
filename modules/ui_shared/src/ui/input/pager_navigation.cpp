@@ -374,13 +374,16 @@ bool handle_key(uint32_t key, bool pressed, lv_group_t* group)
         // history), including their context-sensitive modal behavior.
         if (native_help(*page, id) && !in_text_editor(focused))
         {
-            lv_group_send_data(group, key);
+            // Native page handlers use their established H shortcut. Keep the
+            // original token below so its matching release is consumed too.
+            uint32_t native_key = explicit_help ? static_cast<uint32_t>('h') : key;
+            lv_group_send_data(group, native_key);
             // Some focusable containers have no key bubbling route to the
             // page (e.g. Network's browser rail). The page's own handler still
             // owns its detailed help, regardless of which control was selected.
             if (group_bound(group) && group_exists(group) && lv_group_get_focused(group) == focused &&
                 (std::strcmp(id, "network") == 0 || std::strcmp(id, "contacts") == 0 || std::strcmp(id, "map") == 0))
-                lv_obj_send_event(page->root, LV_EVENT_KEY, &key);
+                lv_obj_send_event(page->root, LV_EVENT_KEY, &native_key);
         }
         else show_help(*page, group);
     }

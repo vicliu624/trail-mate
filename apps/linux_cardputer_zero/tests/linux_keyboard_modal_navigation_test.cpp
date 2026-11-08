@@ -109,6 +109,10 @@ int main(int argc, char** argv)
         key(Key::Character, '7');
         assert(ui_get_active_app() && !std::strcmp(ui_get_active_app()->stable_id(), "contacts"));
         tick(400ms);
+        key(Key::F1);
+        assert(visible_label(lv_screen_active(), "Contacts Help"));
+        key(Key::Power);
+        assert(!visible_label(lv_screen_active(), "Contacts Help"));
         key(Key::Character, 'm');
         key(Key::Power);
         key(Key::Power);
@@ -138,6 +142,11 @@ int main(int argc, char** argv)
         key(Key::Character, '5');
         assert(ui_get_active_app() && !std::strcmp(ui_get_active_app()->stable_id(), "map"));
         tick(700ms);
+        key(Key::F1); // The physical Fn+H key must reach Map's detailed help.
+        assert(visible_label(lv_screen_active(), "Map Help"));
+        key(Key::Power);
+        assert(!visible_label(lv_screen_active(), "Map Help"));
+        assert(ui_get_active_app() && !std::strcmp(ui_get_active_app()->stable_id(), "map"));
         if (argc > 1 && !std::strcmp(argv[1], "--shutdown-active-map"))
         {
             key(Key::Character, '8');

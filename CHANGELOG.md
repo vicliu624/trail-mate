@@ -56,6 +56,8 @@ target-specific; see the linked acceptance records below.
   reopening the menu from the focused node card.
 - Route action/navigation dialogs and Map menus support directional keyboard
   focus while retaining map panning, text editing and submenu back actions.
+- Fn+H reaches existing page-specific help handlers, including Contacts, while
+  preserving the matching key release and the current text editor's draft.
 - Zero dialog titles retain a visible height before their first flex layout;
   shared map truncation uses punctuation supported by built-in ASCII fonts.
 - Holding Home for 1.5 seconds in the Cardputer Zero framebuffer application
