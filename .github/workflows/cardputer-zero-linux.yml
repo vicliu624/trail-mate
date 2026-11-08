@@ -27,7 +27,8 @@ on:
 jobs:
   cardputer-zero:
     name: Cardputer Zero shell
-    runs-on: ubuntu-latest
+    # Package on the target architecture; release smoke calls also cover x86.
+    runs-on: ${{ inputs.smoke_only && 'ubuntu-latest' || 'ubuntu-24.04-arm' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
