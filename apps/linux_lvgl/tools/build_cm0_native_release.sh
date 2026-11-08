@@ -55,6 +55,7 @@ chroot "$root" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -eu -c '
 chroot "$root" /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin HOME=/root LANG=C.UTF-8 \
     CC=gcc-14 CXX=g++-14 JOBS="$jobs" /bin/bash -eu -c '
     file --version
+    mkdir -p /build
     # The pinned CLI exits 2 with its usage text when invoked without a command.
     # Run the actual ARM producer in the target userspace before the long build.
     producer_status=0
