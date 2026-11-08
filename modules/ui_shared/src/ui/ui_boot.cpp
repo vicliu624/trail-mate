@@ -11,8 +11,15 @@
 #define lv_font_montserrat_12 lv_font_montserrat_14
 #endif
 
+namespace ui::assets
+{
+extern "C" const lv_image_dsc_t logo;
+}
+
 namespace
 {
+
+using ui::assets::logo;
 
 constexpr uint32_t kFadeMs = 900;
 #if defined(TRAIL_MATE_BOOT_MIN_SHOW_MS)
@@ -35,11 +42,6 @@ lv_timer_t* s_gate_timer = nullptr;
 uint32_t s_start_ms = 0;
 bool s_ready = false;
 char s_log_text[kBootLogTextCapacity] = "";
-
-extern "C"
-{
-    extern const lv_image_dsc_t logo;
-}
 
 void set_logo_opa(lv_obj_t* obj, int32_t v)
 {

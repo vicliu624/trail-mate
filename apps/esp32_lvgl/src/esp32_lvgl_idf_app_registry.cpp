@@ -21,15 +21,17 @@
 
 #include <cstdio>
 
+namespace ui::assets
+{
+extern "C" const lv_image_dsc_t Setting;
+}
+
 namespace
 {
 
 #define APP_REG_LOG(...) std::printf("[UI][Registry] " __VA_ARGS__)
 
-extern "C"
-{
-    extern const lv_image_dsc_t Setting;
-}
+using ui::assets::Setting;
 
 struct CompanionPageState
 {
