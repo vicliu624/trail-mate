@@ -211,9 +211,13 @@ void testTouchAgenda()
            ui::widgets::TouchEditorCapture::Captured);
     assert(std::strcmp(captured, "[") == 0 && editing.shift && editing.cursor == 0);
     assert(editing.mode == static_cast<uint8_t>(ui::widgets::ImeWidget::Mode::NUM));
-    key("]"); // Restored symbol keyboard, not its default alphabetic layout.
+    modal = find(lv_layer_top(), &lv_textarea_class);
+    assert(lv_textarea_get_cursor_pos(modal) == 0);
+    key("]"); // Restored symbol keyboard inserts at the restored cursor.
+    assert(std::strcmp(lv_textarea_get_text(modal), "][") == 0);
+    assert(lv_textarea_get_cursor_pos(modal) == 1);
     click(lv_layer_top(), "OK");
-    assert(std::strcmp(lv_textarea_get_text(page::state()->editor_widgets.note), "[]") == 0);
+    assert(std::strcmp(lv_textarea_get_text(page::state()->editor_widgets.note), "][") == 0);
 
     ui::i18n::test_pinyin_enabled = true;
     open(page::state()->editor_widgets.title);
