@@ -10,7 +10,7 @@ stable firmware release. Hardware support and validation remain target-specific.
 
 ## [Unreleased]
 
-## [1.1.0] - 2026-11-08
+## [1.1.0] - 2026-11-09
 
 This minor release adds installable Cardputer Zero and T-Display-CM0 Linux
 packages and expands their device workflows without changing existing storage
@@ -39,6 +39,9 @@ target-specific; see the linked acceptance records below.
 
 ### Fixed
 
+- Linux Reticulum retains the original private message until an IP delivery
+  finishes, allowing one policy-permitted LoRa retry after a transport failure
+  with the same message ID, timestamp and full destination identity.
 - Reticulum solicited cached path responses restore verified peer keys after
   directory recovery, preserving current metadata and the existing route's age.
 - Recent Activity rows open their exact conversation by touch or A/D and Enter,

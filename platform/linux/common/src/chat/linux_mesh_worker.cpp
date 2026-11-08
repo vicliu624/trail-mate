@@ -20,6 +20,7 @@
 #include "platform/linux/mesh/linux_meshcore_identity.h"
 #include "platform/linux/mesh/linux_reticulum_identity.h"
 #include "platform/linux/radio_power.h"
+#include "platform/linux/runtime_packet_log.h"
 #include "platform/linux/runtime_paths.h"
 #include "platform/linux/track_directory_runtime.h"
 #include "platform/ui/reticulum_call_runtime.h"
@@ -47,6 +48,15 @@ namespace trailmate::linux_app
 namespace
 {
 using Failure = chat::delivery::SendFailureKind;
+void logReticulumStage(const char* stage, std::string summary)
+{
+    platform::linux_runtime::PacketLogEntry entry;
+    entry.source = platform::linux_runtime::PacketLogSource::Lora;
+    entry.direction = platform::linux_runtime::PacketLogDirection::System;
+    entry.title = std::string("Reticulum ") + stage;
+    entry.summary = std::move(summary);
+    platform::linux_runtime::append_packet_log(std::move(entry));
+}
 uint64_t trackDirectoryNow()
 {
     return uint64_t(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
@@ -186,6 +196,9 @@ struct LinuxMeshWorker::Impl
         Command command;
         uint32_t started = 0, last_request = 0, retry_ms = 0;
         bool force_direct = false;
+        bool force_lora = false, network_queued = false, network_complete = false;
+        chat::MessageStatus network_status = chat::MessageStatus::Queued;
+        Failure network_failure = Failure::Unknown;
     };
     struct Desired
     {
@@ -655,10 +668,11 @@ struct LinuxMeshWorker::Impl
                 LinkSenderContext* sender;
                 LinuxReticulumIngress* ingress;
                 LinuxReticulumPropagation* propagation;
+                std::deque<ReticulumPending>* outbound;
                 LinuxTrackDirectories* tracks = nullptr;
                 LinuxTrackPublication* publication = nullptr;
                 LinuxTrackRead* read = nullptr;
-            } incoming_context{this, &peer_directory, &link_sender_context, &reticulum_ingress, &propagation};
+            } incoming_context{this, &peer_directory, &link_sender_context, &reticulum_ingress, &propagation, &pending_texts};
             reticulum_links.setIncomingHooks([](void* pointer, const chat::MeshIncomingText& message)
                                              {
                 auto& context = *static_cast<LinkIncomingContext*>(pointer);
@@ -709,7 +723,22 @@ struct LinuxMeshWorker::Impl
             };
             network_hooks.outcome = [](void* pointer, chat::MessageId id, chat::MessageStatus status, Failure failure)
             {
-                static_cast<LinkIncomingContext*>(pointer)->owner->result({id, chat::MeshProtocol::Reticulum, status, failure});
+                auto& context = *static_cast<LinkIncomingContext*>(pointer);
+                // Network callbacks and this admission queue share the worker
+                // thread. Retain the original command until a terminal result;
+                // enqueueing an IP link is not proof of remote delivery.
+                auto pending = std::find_if(context.outbound->begin(), context.outbound->end(),
+                                            [id](const auto& item)
+                                            { return item.network_queued && item.command.message == id; });
+                if (pending != context.outbound->end() &&
+                    (status == chat::MessageStatus::Failed || status == chat::MessageStatus::Delivered))
+                {
+                    pending->network_complete = true;
+                    pending->network_status = status;
+                    pending->network_failure = failure;
+                    if (status == chat::MessageStatus::Failed) return;
+                }
+                context.owner->result({id, chat::MeshProtocol::Reticulum, status, failure});
             };
             network_hooks.transmit_allowed = [](void* pointer)
             {
@@ -915,11 +944,22 @@ struct LinuxMeshWorker::Impl
                 meta.time_source = meta.rx_timestamp_s ? chat::RxTimeSource::DeviceUtc : chat::RxTimeSource::Uptime;
                 meta.rssi_dbm_x10 = static_cast<int16_t>(packet.rssi_dbm * 10);
                 meta.snr_db_x10 = static_cast<int16_t>(packet.snr_db * 10);
+                chat::reticulum::ParsedPacket parsed;
+                const bool parsed_ok = chat::reticulum::parsePacket(packet.data.data(), packet.size, &parsed);
+                const bool requested = parsed_ok && received.ingress.pendingPath(parsed.destination_hash);
                 if (received.announce.receive(packet.data.data(), packet.size, meta.rx_timestamp_ms,
                                               meta.rx_timestamp_s, received.sender, received.sender_context)) return;
                 if (received.links.receive(packet.data.data(), packet.size, meta.rx_timestamp_ms, received.sender, received.sender_context, &meta)) return;
-                received.ingress.receive(packet.data.data(), packet.size, ::sys::millis_now(),
-                    seconds > 0 && uint64_t(seconds) <= UINT32_MAX ? static_cast<uint32_t>(seconds) : 0); },
+                const bool accepted = received.ingress.receive(packet.data.data(), packet.size, ::sys::millis_now(),
+                    seconds > 0 && uint64_t(seconds) <= UINT32_MAX ? static_cast<uint32_t>(seconds) : 0);
+                const auto stats = received.ingress.statistics();
+                logReticulumStage("ingress", "bytes=" + std::to_string(packet.size) +
+                    " parsed=" + std::to_string(parsed_ok) + " type=" + std::to_string(parsed_ok ? static_cast<int>(parsed.packet_type) : -1) +
+                    " context=" + std::to_string(parsed_ok ? parsed.context : 0) + " requested=" + std::to_string(requested) +
+                    " accepted=" + std::to_string(accepted) + " paths=" + std::to_string(stats.paths) +
+                    " peers=" + std::to_string(stats.peers) + " rejected=" + std::to_string(stats.rejected) +
+                    " replays=" + std::to_string(stats.replays) + " responses=" + std::to_string(stats.responses) +
+                    " directory_errors=" + std::to_string(stats.directory_errors) + " projection_errors=" + std::to_string(stats.projection_errors)); },
                                            &receive_context);
             struct ReticulumBinding
             {
@@ -1030,6 +1070,9 @@ struct LinuxMeshWorker::Impl
                 }
                 if (apply)
                 {
+                    logReticulumStage("configuration", "protocol=" + std::to_string(static_cast<int>(settings.protocol)) +
+                                                           " radio=" + std::to_string(apply_radio) + " policy=" + std::to_string(static_cast<int>(settings.config.reticulum_interface_policy)) +
+                                                           " gateway=" + std::to_string(settings.config.reticulum_wifi_gateway_enabled) + " generation=" + std::to_string(applied_epoch));
                     propagation_upload.cancel(propagation_transport);
                     if (apply_radio)
                     {
@@ -1178,80 +1221,140 @@ struct LinuxMeshWorker::Impl
                     auto& pending = pending_texts.front();
                     auto& message = pending.command;
                     const auto now = ::sys::millis_now();
-                    chat::MeshPeerRecord peer;
-                    const auto found = peer_directory.find(chat::makeMeshPeerReticulumIdentity(message.reticulum), peer);
-                    const bool known = found.succeeded() && peer.reticulum.has_public_keys;
-                    chat::lxmf::runtime::OutboundDeliveryPlanInput plan_input;
-                    plan_input.has_active_link = reticulum_network.hasActiveDelivery(message.reticulum.destination_hash) || reticulum_links.hasActiveDelivery(message.reticulum.destination_hash);
-                    plan_input.propagation_enabled = propagation_config.enabled && !pending.force_direct;
-                    plan_input.propagation_preference = propagation_config.delivery;
-                    plan_input.propagation_peer_available = propagation.selected() != nullptr;
-                    const auto delivery_plan = chat::lxmf::runtime::ReticulumDeliveryPlanner::plan(plan_input);
-                    const uint32_t admission_ttl = delivery_plan.propagation_first ? 15U * 60U * 1000U : 45000U;
-                    if (message.generation != applied_epoch || uint32_t(now - pending.started) > admission_ttl || (found.succeeded() && peer.flags.ignored) ||
-                        (!found.succeeded() && found.code != chat::MeshPeerDirectoryStatusCode::NotFound))
+                    if (pending.network_queued)
                     {
-                        result({message.message, chat::MeshProtocol::Reticulum, chat::MessageStatus::Failed,
-                                !known ? Failure::PeerKeyMissing : Failure::RadioSendFailed});
-                        pending_texts.pop_front();
-                    }
-                    else if (known && delivery_plan.propagation_first)
-                    {
-                        if (propagation_upload.active() || propagation.syncStage() != chat::lxmf::runtime::PropagationSyncStage::Idle)
+                        if (message.generation != applied_epoch)
+                        {
+                            result({message.message, chat::MeshProtocol::Reticulum, chat::MessageStatus::Failed, Failure::Unknown});
+                            pending_texts.pop_front();
+                        }
+                        else if (!pending.network_complete)
                         {
                             pending_texts.push_back(std::move(pending_texts.front()));
                             pending_texts.pop_front();
                         }
-                        else
+                        else if (pending.network_status == chat::MessageStatus::Delivered)
                         {
-                            uint8_t key[64];
-                            std::memcpy(key, peer.reticulum.enc_pub, 32);
-                            std::memcpy(key + 32, peer.reticulum.sig_pub, 32);
-                            const auto queued = propagation_upload.start(reticulum_links, message.reticulum.destination_hash, key, message.text,
-                                                                         message.message, message.timestamp, now);
-                            if (queued == LinuxReticulumLinks::QueueResult::Queued) propagation_command = std::move(message);
-                            else result({message.message, chat::MeshProtocol::Reticulum, chat::MessageStatus::Failed, Failure::RadioSendFailed});
                             pending_texts.pop_front();
                         }
-                    }
-                    else if (known && reticulum_network.hasRoute(message.reticulum.destination_hash))
-                    {
-                        const auto queued = reticulum_network.queueText(message.reticulum, message.text, message.message, message.timestamp);
-                        if (queued != LinuxReticulumLinks::QueueResult::Queued && queued != LinuxReticulumLinks::QueueResult::Pending)
-                            result({message.message, chat::MeshProtocol::Reticulum, chat::MessageStatus::Failed, Failure::RadioSendFailed});
-                        pending_texts.pop_front();
-                    }
-                    else if (const auto* path = reticulum_ingress.path(message.reticulum.destination_hash, now);
-                             known && engine->isReady() && (path || reticulum_links.hasOpenDestination(message.reticulum.destination_hash)))
-                    {
-                        uint8_t public_key[64];
-                        std::memcpy(public_key, peer.reticulum.enc_pub, 32);
-                        std::memcpy(public_key + 32, peer.reticulum.sig_pub, 32);
-                        const auto queued = reticulum_links.queueText(message.reticulum.destination_hash, public_key, message.text,
-                                                                      message.message, message.timestamp, now, link_sender, &link_sender_context,
-                                                                      path ? path->hops : 1, path && path->hops > 1 ? path->next_hop_transport : nullptr);
-                        if (queued != LinuxReticulumLinks::QueueResult::Queued && queued != LinuxReticulumLinks::QueueResult::Pending)
-                            result({message.message, chat::MeshProtocol::Reticulum, chat::MessageStatus::Failed, Failure::RadioSendFailed});
-                        pending_texts.pop_front();
+                        else
+                        {
+                            bool permitted;
+                            {
+                                std::lock_guard<std::mutex> lock(mutex);
+                                permitted = !stopping && generation == applied_epoch && desired.protocol == chat::MeshProtocol::Reticulum &&
+                                            desired.config.tx_enabled && chat::reticulum::integratedLoRaAllowed(desired.config);
+                            }
+                            const bool retryable = pending.network_failure == Failure::RadioSendFailed || pending.network_failure == Failure::AckTimeout ||
+                                                   pending.network_failure == Failure::Unknown || pending.network_failure == Failure::None;
+                            if (permitted && retryable && engine->isReady())
+                            {
+                                pending.force_direct = pending.force_lora = true;
+                                pending.network_queued = pending.network_complete = false;
+                                pending.started = now;
+                                pending.last_request = pending.retry_ms = 0;
+                                logReticulumStage("network fallback", "id=" + std::to_string(message.message) + " bearer=LoRa");
+                            }
+                            else
+                            {
+                                result({message.message, chat::MeshProtocol::Reticulum, chat::MessageStatus::Failed, pending.network_failure});
+                                pending_texts.pop_front();
+                            }
+                        }
                     }
                     else
                     {
-                        if (!pending.retry_ms || uint32_t(now - pending.last_request) >= pending.retry_ms)
+                        chat::MeshPeerRecord peer;
+                        const auto found = peer_directory.find(chat::makeMeshPeerReticulumIdentity(message.reticulum), peer);
+                        const bool known = found.succeeded() && peer.reticulum.has_public_keys;
+                        chat::lxmf::runtime::OutboundDeliveryPlanInput plan_input;
+                        plan_input.has_active_link = reticulum_network.hasActiveDelivery(message.reticulum.destination_hash) || reticulum_links.hasActiveDelivery(message.reticulum.destination_hash);
+                        plan_input.propagation_enabled = propagation_config.enabled && !pending.force_direct;
+                        plan_input.propagation_preference = propagation_config.delivery;
+                        plan_input.propagation_peer_available = propagation.selected() != nullptr;
+                        const auto delivery_plan = chat::lxmf::runtime::ReticulumDeliveryPlanner::plan(plan_input);
+                        const uint32_t admission_ttl = delivery_plan.propagation_first ? 15U * 60U * 1000U : 45000U;
+                        if (message.generation != applied_epoch || uint32_t(now - pending.started) > admission_ttl || (found.succeeded() && peer.flags.ignored) ||
+                            (!found.succeeded() && found.code != chat::MeshPeerDirectoryStatusCode::NotFound))
                         {
-                            uint8_t tag[16]{};
-                            bool random = false;
-#if defined(TRAIL_MATE_HAS_OPENSSL)
-                            random = RAND_bytes(tag, sizeof(tag)) == 1;
-#endif
-                            const bool network_sent = reticulum_network.requestPath(message.reticulum.destination_hash);
-                            const auto sent = random && engine->isReady() ? reticulum_ingress.requestPath(message.reticulum.destination_hash, tag, now,
-                                                                                                          link_sender, &link_sender_context)
-                                                                          : LinuxReticulumIngress::RequestResult::NotReady;
-                            pending.last_request = now;
-                            pending.retry_ms = network_sent || sent == LinuxReticulumIngress::RequestResult::Sent ? 20000 : 1000;
+                            logReticulumStage("admission failed", "id=" + std::to_string(message.message) +
+                                                                      " generation=" + std::to_string(message.generation) + " applied=" + std::to_string(applied_epoch) +
+                                                                      " age_ms=" + std::to_string(uint32_t(now - pending.started)) + " known=" + std::to_string(known) +
+                                                                      " directory=" + std::to_string(static_cast<int>(found.code)) + " ignored=" + std::to_string(peer.flags.ignored));
+                            result({message.message, chat::MeshProtocol::Reticulum, chat::MessageStatus::Failed,
+                                    !known ? Failure::PeerKeyMissing : Failure::RadioSendFailed});
+                            pending_texts.pop_front();
                         }
-                        pending_texts.push_back(std::move(pending_texts.front()));
-                        pending_texts.pop_front();
+                        else if (known && delivery_plan.propagation_first)
+                        {
+                            if (propagation_upload.active() || propagation.syncStage() != chat::lxmf::runtime::PropagationSyncStage::Idle)
+                            {
+                                pending_texts.push_back(std::move(pending_texts.front()));
+                                pending_texts.pop_front();
+                            }
+                            else
+                            {
+                                uint8_t key[64];
+                                std::memcpy(key, peer.reticulum.enc_pub, 32);
+                                std::memcpy(key + 32, peer.reticulum.sig_pub, 32);
+                                const auto queued = propagation_upload.start(reticulum_links, message.reticulum.destination_hash, key, message.text,
+                                                                             message.message, message.timestamp, now);
+                                logReticulumStage("propagation queue", "id=" + std::to_string(message.message) + " result=" + std::to_string(static_cast<int>(queued)));
+                                if (queued == LinuxReticulumLinks::QueueResult::Queued) propagation_command = std::move(message);
+                                else result({message.message, chat::MeshProtocol::Reticulum, chat::MessageStatus::Failed, Failure::RadioSendFailed});
+                                pending_texts.pop_front();
+                            }
+                        }
+                        else if (known && !pending.force_lora && reticulum_network.hasRoute(message.reticulum.destination_hash))
+                        {
+                            pending.network_queued = true;
+                            const auto queued = reticulum_network.queueText(message.reticulum, message.text, message.message, message.timestamp);
+                            logReticulumStage("network queue", "id=" + std::to_string(message.message) + " result=" + std::to_string(static_cast<int>(queued)) +
+                                                                   " ready=" + std::to_string(reticulum_network.ready()) + " radio_path=" + std::to_string(reticulum_ingress.path(message.reticulum.destination_hash, now) != nullptr));
+                            if (!pending.network_complete && queued != LinuxReticulumLinks::QueueResult::Queued && queued != LinuxReticulumLinks::QueueResult::Pending)
+                            {
+                                pending.network_complete = true;
+                                pending.network_status = chat::MessageStatus::Failed;
+                                pending.network_failure = queued == LinuxReticulumLinks::QueueResult::Invalid ? Failure::Rejected : Failure::RadioSendFailed;
+                            }
+                        }
+                        else if (const auto* path = reticulum_ingress.path(message.reticulum.destination_hash, now);
+                                 known && engine->isReady() && (path || reticulum_links.hasOpenDestination(message.reticulum.destination_hash)))
+                        {
+                            uint8_t public_key[64];
+                            std::memcpy(public_key, peer.reticulum.enc_pub, 32);
+                            std::memcpy(public_key + 32, peer.reticulum.sig_pub, 32);
+                            const auto queued = reticulum_links.queueText(message.reticulum.destination_hash, public_key, message.text,
+                                                                          message.message, message.timestamp, now, link_sender, &link_sender_context,
+                                                                          path ? path->hops : 1, path && path->hops > 1 ? path->next_hop_transport : nullptr);
+                            logReticulumStage("link queue", "id=" + std::to_string(message.message) + " result=" + std::to_string(static_cast<int>(queued)) +
+                                                                " path=" + std::to_string(path != nullptr) + " hops=" + std::to_string(path ? path->hops : 0));
+                            if (queued != LinuxReticulumLinks::QueueResult::Queued && queued != LinuxReticulumLinks::QueueResult::Pending)
+                                result({message.message, chat::MeshProtocol::Reticulum, chat::MessageStatus::Failed, Failure::RadioSendFailed});
+                            pending_texts.pop_front();
+                        }
+                        else
+                        {
+                            if (!pending.retry_ms || uint32_t(now - pending.last_request) >= pending.retry_ms)
+                            {
+                                uint8_t tag[16]{};
+                                bool random = false;
+#if defined(TRAIL_MATE_HAS_OPENSSL)
+                                random = RAND_bytes(tag, sizeof(tag)) == 1;
+#endif
+                                const bool network_sent = !pending.force_lora && reticulum_network.requestPath(message.reticulum.destination_hash);
+                                const auto sent = random && engine->isReady() ? reticulum_ingress.requestPath(message.reticulum.destination_hash, tag, now,
+                                                                                                              link_sender, &link_sender_context)
+                                                                              : LinuxReticulumIngress::RequestResult::NotReady;
+                                logReticulumStage("path request", "id=" + std::to_string(message.message) + " result=" + std::to_string(static_cast<int>(sent)) +
+                                                                      " known=" + std::to_string(known) + " directory=" + std::to_string(static_cast<int>(found.code)) +
+                                                                      " radio=" + std::to_string(engine->isReady()) + " network=" + std::to_string(network_sent));
+                                pending.last_request = now;
+                                pending.retry_ms = network_sent || sent == LinuxReticulumIngress::RequestResult::Sent ? 20000 : 1000;
+                            }
+                            pending_texts.push_back(std::move(pending_texts.front()));
+                            pending_texts.pop_front();
+                        }
                     }
                 }
                 reticulum_links.processOutbound(::sys::millis_now(), link_sender, &link_sender_context);
@@ -1293,7 +1396,9 @@ struct LinuxMeshWorker::Impl
                     const auto network_pending = reticulum_network.pendingOutboundIds();
                     snapshot.reticulum_pending.insert(snapshot.reticulum_pending.end(), network_pending.begin(), network_pending.end());
                     snapshot.network_paths = reticulum_network.pathDestinations();
-                    for (const auto& pending : pending_texts) snapshot.reticulum_pending.push_back(pending.command.message);
+                    for (const auto& pending : pending_texts)
+                        if (std::find(snapshot.reticulum_pending.begin(), snapshot.reticulum_pending.end(), pending.command.message) == snapshot.reticulum_pending.end())
+                            snapshot.reticulum_pending.push_back(pending.command.message);
                     if (identity.ready)
                     {
                         identity.node_id = reticulum_identity.nodeId();
@@ -1346,6 +1451,7 @@ struct LinuxMeshWorker::Impl
         }
         catch (const std::exception& error)
         {
+            logReticulumStage("worker exception", "mesh worker stopped after an exception");
             std::lock_guard<std::mutex> lock(mutex);
             view.status = error.what();
             view.ready = false;
