@@ -129,6 +129,10 @@ bool monitor_enabled() { return status.monitor_enabled; }
 int volume() { return 60; }
 Status get_status() { return status; }
 const char* last_error() { return ""; }
+CapabilityStatus capability_status()
+{
+    return {CapabilityState::Simulated, "Simulated walkie radio session."};
+}
 } // namespace platform::ui::walkie
 namespace platform::ui::usb_support
 {
