@@ -60,7 +60,7 @@ int main()
         shell.enqueueInputs({{code, value ? std::string(1, value) : std::string{}, value}});
         tick(150ms);
     };
-    for (int i = 0; i < 7; ++i) key(Key::Right);
+    for (int i = 0; i < 7; ++i) key(Key::Next);
     key(Key::Enter);
     tick(650ms);
     assert(label(lv_screen_active(), "Geocaching"));

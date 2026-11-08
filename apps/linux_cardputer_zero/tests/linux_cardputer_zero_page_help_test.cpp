@@ -32,7 +32,7 @@ static lv_obj_t* find_label(lv_obj_t* object, const char* text)
 
 static void check_header(lv_obj_t* object)
 {
-    if (lv_obj_check_type(object, &lv_label_class) && !std::strcmp(lv_label_get_text(object), "H ?"))
+    if (lv_obj_check_type(object, &lv_label_class) && !std::strcmp(lv_label_get_text(object), "H?"))
     {
         auto* bar = lv_obj_get_parent(object);
         lv_obj_update_layout(bar);

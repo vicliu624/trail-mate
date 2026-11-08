@@ -18,7 +18,7 @@ if [ "${1:-}" != --namespace ]; then
         fingerprint=$(gpg --show-keys --with-colons "$work/raspbian.key" | awk -F: '$1=="fpr" {print $10; exit}')
         test "$fingerprint" = A0DA38D0D76E8B5D638872819165938D90FDDD2E
         gpg --batch --yes --dearmor -o "$work/raspbian.gpg" "$work/raspbian.key"
-        debootstrap --arch=armhf --variant=minbase --foreign --include=raspbian-archive-keyring \
+        debootstrap --arch=armhf --variant=minbase --foreign --include=raspbian-archive-keyring,ca-certificates \
             --keyring="$work/raspbian.gpg" trixie "$root" https://archive.raspbian.org/raspbian
         chroot "$root" /debootstrap/debootstrap --second-stage
     fi
