@@ -1759,9 +1759,10 @@ struct LinuxAppServices::Implementation
             const bool found = mesh_peer_directory.findByNodeId(protocol, key.node_id.value, previous).succeeded();
             const uint8_t* existing = protocol == ::chat::MeshProtocol::Meshtastic ? previous.meshtastic.public_key : previous.meshcore.public_key;
             const bool has_key = protocol == ::chat::MeshProtocol::Meshtastic ? previous.meshtastic.has_public_key : previous.meshcore.has_public_key;
-            if (found && has_key && std::equal(key.public_key, key.public_key + 32, existing)) continue;
+            if (found && has_key && std::equal(key.public_key, key.public_key + 32, existing) &&
+                (protocol != ::chat::MeshProtocol::MeshCore || previous.identity.kind == ::chat::MeshPeerIdentityKind::PublicKey)) continue;
             const bool pinned = protocol == ::chat::MeshProtocol::Meshtastic ? previous.meshtastic.key_manually_verified : previous.meshcore.public_key_verified;
-            if (found && has_key && pinned) continue;
+            if (found && has_key && pinned && !std::equal(key.public_key, key.public_key + 32, existing)) continue;
             ::chat::MeshPeerRecord update;
             update.valid = true;
             update.source = ::chat::MeshPeerSource::RuntimeRx;

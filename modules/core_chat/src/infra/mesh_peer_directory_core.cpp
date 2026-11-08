@@ -169,7 +169,10 @@ void copyIntoPersisted(PersistedMeshPeerEntryV1& dst,
     dst.protocol = static_cast<uint8_t>(src.identity.protocol);
     dst.identity_kind = static_cast<uint8_t>(src.identity.kind);
     dst.source = static_cast<uint8_t>(src.source);
-    dst.node_id = src.identity.node_id;
+    dst.node_id = src.identity.protocol == MeshProtocol::MeshCore &&
+                          src.identity.kind == MeshPeerIdentityKind::PublicKey
+                      ? src.meshcore.node_id_hint
+                      : src.identity.node_id;
     dst.identity_public_key_len = src.identity.public_key_len;
     std::memcpy(dst.identity_public_key,
                 src.identity.public_key,
@@ -271,6 +274,23 @@ bool copyFromPersisted(MeshPeerRecord& dst,
     std::memcpy(dst.meshcore.public_key,
                 src.meshcore_public_key,
                 sizeof(dst.meshcore.public_key));
+    if (dst.identity.protocol == MeshProtocol::MeshCore)
+    {
+        dst.meshcore.node_id_hint = src.node_id;
+        // Older blobs omitted the hint for public-key identities. Recover the
+        // protocol's little-endian projected ID without changing the blob ABI.
+        if (dst.meshcore.node_id_hint == 0 &&
+            dst.identity.kind == MeshPeerIdentityKind::PublicKey &&
+            dst.identity.public_key_len == kMeshPeerMeshCorePublicKeyLen)
+        {
+            const auto* key = dst.identity.public_key;
+            dst.meshcore.node_id_hint = static_cast<NodeId>(key[0]) |
+                                        (static_cast<NodeId>(key[1]) << 8U) |
+                                        (static_cast<NodeId>(key[2]) << 16U) |
+                                        (static_cast<NodeId>(key[3]) << 24U);
+            if (dst.meshcore.node_id_hint == 0) dst.meshcore.node_id_hint = 0x4D430000UL;
+        }
+    }
 
     copyReticulumIdentityBytes(dst.reticulum.identity,
                                src.reticulum_identity_valid,
@@ -723,12 +743,62 @@ MeshPeerDirectoryStatus MeshPeerDirectoryCore::record(
             MeshPeerDirectoryStatusCode::InvalidArgument);
     }
 
-    const std::size_t existing_index = findIndex(record.identity);
+    MeshPeerIdentity identity = record.identity;
+    std::size_t placeholder_index = records_.size();
+    if (identity.protocol == MeshProtocol::MeshCore)
+    {
+        // Radio metadata can arrive before the full key. Once the key is known,
+        // keep a single public-key identity so names, Nearby and direct chat
+        // all address the same record, regardless of event delivery order.
+        if (identity.kind == MeshPeerIdentityKind::NodeId && record.meshcore.has_public_key)
+        {
+            if (!makeMeshPeerPublicKeyIdentity(MeshProtocol::MeshCore,
+                                               record.meshcore.public_key,
+                                               kMeshPeerMeshCorePublicKeyLen, identity))
+                return MeshPeerDirectoryStatus::fail(MeshPeerDirectoryStatusCode::InvalidArgument);
+        }
+        const NodeId node = meshPeerProjectedNodeId(record);
+        if (node != 0)
+        {
+            placeholder_index = findIndex(makeMeshPeerNodeIdentity(MeshProtocol::MeshCore, node));
+            if (identity.kind == MeshPeerIdentityKind::NodeId)
+            {
+                const MeshPeerRecord* keyed = nullptr;
+                for (const auto& candidate : records_)
+                {
+                    if (candidate.identity.protocol != MeshProtocol::MeshCore ||
+                        candidate.identity.kind != MeshPeerIdentityKind::PublicKey ||
+                        candidate.meshcore.node_id_hint != node) continue;
+                    if (keyed) return MeshPeerDirectoryStatus::fail(MeshPeerDirectoryStatusCode::InvalidArgument);
+                    keyed = &candidate;
+                }
+                if (keyed) identity = keyed->identity;
+            }
+            if (placeholder_index < records_.size() && identity.kind == MeshPeerIdentityKind::PublicKey &&
+                records_[placeholder_index].meshcore.has_public_key &&
+                std::memcmp(records_[placeholder_index].meshcore.public_key, identity.public_key,
+                            kMeshPeerMeshCorePublicKeyLen) != 0)
+                placeholder_index = records_.size(); // A node-ID collision cannot rebind an existing key.
+        }
+    }
+    std::size_t existing_index = findIndex(identity);
+    if (existing_index == records_.size() && placeholder_index < records_.size())
+        existing_index = placeholder_index;
     if (existing_index < records_.size())
     {
         const MeshPeerRecord& existing = records_[existing_index];
         MeshPeerRecord next = mergeMeshPeerRecordFacts(existing, record);
+        next.identity = identity;
+        if (placeholder_index < records_.size() && placeholder_index != existing_index)
+        {
+            next = mergeMeshPeerRecordFacts(records_[placeholder_index], next);
+            next.identity = identity;
+            next.flags = existing.flags;
+            copyMeshPeerText(next.user_alias, sizeof(next.user_alias), existing.user_alias);
+        }
         records_[existing_index] = next;
+        if (placeholder_index < records_.size() && placeholder_index != existing_index)
+            records_.erase(records_.begin() + static_cast<std::ptrdiff_t>(placeholder_index));
         markDirty();
         maybeSave();
         return MeshPeerDirectoryStatus::success();
@@ -742,6 +812,7 @@ MeshPeerDirectoryStatus MeshPeerDirectoryCore::record(
     }
 
     MeshPeerRecord next = record;
+    next.identity = identity;
     next.user_alias[0] = '\0';
     next.flags = {};
     if (next.last_seen_s < next.first_seen_s)

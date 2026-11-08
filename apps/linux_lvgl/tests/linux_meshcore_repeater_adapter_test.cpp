@@ -147,6 +147,10 @@ int main()
         current_time += 1000;
         adapter.tick();
         require(radio.sent.size() == before, "retune did not cancel pending forwarding");
+        // Establish the repeater's own identity on the new air plan before
+        // counting only the subsequent discovery responses.
+        require(adapter.requestNodeInfo(0, false), "retuned identity advertisement failed");
+        before = radio.sent.size();
         mc::MeshCoreDiscoverRequestBuildInfo request;
         request.tag = 0x01020304;
         request.type_filter = 1 << mc::kMeshCoreAdvertTypeRepeater;

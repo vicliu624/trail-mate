@@ -1532,7 +1532,8 @@ void MeshCoreAdapter::rememberPeerPubKey(const uint8_t pubkey[MeshCoreIdentity::
     }
 
     const uint8_t peer_hash = pubkey[0];
-    if (peer_hash == 0x00 || peer_hash == 0xFF || peer_hash == self_hash_)
+    if (peer_hash == 0x00 || peer_hash == 0xFF ||
+        memcmp(pubkey, identity_.publicKey(), MeshCoreIdentity::kPubKeySize) == 0)
     {
         return;
     }
@@ -1615,7 +1616,8 @@ void MeshCoreAdapter::loadPeerPubKeysFromDirectory()
         }
 
         const uint8_t peer_hash = pubkey[0];
-        if (peer_hash == 0x00 || peer_hash == 0xFF || peer_hash == self_hash_)
+        if (peer_hash == 0x00 || peer_hash == 0xFF ||
+            memcmp(pubkey, identity_.publicKey(), MeshCoreIdentity::kPubKeySize) == 0)
         {
             continue;
         }
@@ -1651,7 +1653,7 @@ void MeshCoreAdapter::savePeerPubKeyToDirectory(const PeerRouteEntry& route)
 {
     if (!peer_directory_ || !route.has_pubkey ||
         route.peer_hash == 0x00 || route.peer_hash == 0xFF ||
-        route.peer_hash == self_hash_ ||
+        memcmp(route.pubkey, identity_.publicKey(), MeshCoreIdentity::kPubKeySize) == 0 ||
         isZeroKey(route.pubkey, sizeof(route.pubkey)))
     {
         return;
@@ -2544,9 +2546,9 @@ bool MeshCoreAdapter::executeProtocolEffect(const runtime::ProtocolEffect& effec
                         rssi = last_rx_rssi_;
                     }
 
-                    const uint32_t ts = is_valid_epoch(item.timestamp)
-                                            ? item.timestamp
-                                            : now_message_timestamp();
+                    // Nearby freshness is a local observation, independent of
+                    // the sender's clock or the age of its identity payload.
+                    const uint32_t ts = now_message_timestamp();
                     sys::EventBus::publish(
                         new sys::NodeInfoUpdateEvent(
                             item.node_id,
@@ -5532,7 +5534,7 @@ void MeshCoreAdapter::handleRawPacketInternal(const uint8_t* data, size_t size, 
 
         const uint8_t* pubkey = parsed.payload;
         const uint8_t peer_hash = pubkey[0];
-        if (peer_hash == self_hash_)
+        if (memcmp(pubkey, identity_.publicKey(), MeshCoreIdentity::kPubKeySize) == 0)
         {
             return;
         }
@@ -5599,7 +5601,7 @@ void MeshCoreAdapter::handleRawPacketInternal(const uint8_t* data, size_t size, 
             }
             entry->last_advert_ts = ts;
         }
-        publishMeshcoreNodeInfo(node, name, name, role, hops, snr, rssi, ts);
+        publishMeshcoreNodeInfo(node, name, name, role, hops, snr, rssi, now_message_timestamp());
         if (advert.has_location)
         {
             publishMeshcorePosition(node, advert.latitude_i6, advert.longitude_i6, ts);

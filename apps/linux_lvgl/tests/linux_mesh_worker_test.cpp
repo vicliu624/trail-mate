@@ -251,6 +251,11 @@ int main()
     std::memset(known.public_key, 0x11, sizeof(known.public_key));
     radio::mesh::LinuxSqlitePeerKeyStore peer_store;
     assert(peer_store.put(known).ok);
+    mesh::PeerPublicKey known_mc;
+    known_mc.node_id = mesh::NodeId{0x42424242};
+    std::memset(known_mc.public_key, 0x42, sizeof(known_mc.public_key));
+    radio::mesh::LinuxSqlitePeerKeyStore mc_peer_store({"meshcore", "peer_keys", 64});
+    assert(mc_peer_store.put(known_mc).ok);
     State state;
     radio::PacketRadioCoordinator coordinator(std::make_unique<Driver>(state));
     trailmate::linux_app::LinuxMeshWorker worker(coordinator.mesh(), 123);
@@ -281,6 +286,8 @@ int main()
     unblock(state);
     eventually([&]
                { return worker.isReady(); });
+    assert(worker.isPkiReady() && worker.getCapabilities().supports_pki);
+    assert(worker.hasPkiKey(known_mc.node_id.value));
     trailmate::linux_app::meshcore_wire::Frame received_frame;
     assert(trailmate::linux_app::meshcore_wire::encodeText(config, chat::ChannelId::PRIMARY,
                                                            "keep across rename", 1700000000, received_frame));

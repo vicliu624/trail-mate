@@ -692,14 +692,11 @@ class MeshCoreRuntime final : public IProtocolRuntime
         }
 
         const uint8_t peer_hash = response.pubkey[0];
-        if (peer_hash == static_cast<uint8_t>(context.self_node & 0xFFU))
-        {
-            return result;
-        }
-
         const NodeId node = chat::meshcore::deriveNodeIdFromPubkey(response.pubkey,
                                                                    response.pubkey_len);
-        if (node == 0)
+        // A one-byte routing hash is not an identity: distinct nearby nodes
+        // frequently share that prefix.
+        if (node == 0 || node == context.self_node)
         {
             return result;
         }

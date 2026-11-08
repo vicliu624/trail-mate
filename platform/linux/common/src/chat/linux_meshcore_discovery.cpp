@@ -106,7 +106,11 @@ bool Discovery::receive(const chat::MeshConfig& config, const std::array<uint8_t
         !mc::discoverFilterMatchesType(mc::kMeshCoreDiscoverTypeFilterAll, response.node_type)) return false;
     const auto node = mc::deriveNodeIdFromPubkey(response.pubkey, response.pubkey_len);
     if (!node || node == 0xFFFFFFFFU || !remember(replies_, node, now)) return false;
-    if (peer) *peer = {node, mc::mapAdvertTypeToRole(response.node_type), response.snr_qdb};
+    if (peer)
+    {
+        *peer = {node, mc::mapAdvertTypeToRole(response.node_type), response.snr_qdb};
+        std::copy_n(response.pubkey, peer->public_key.size(), peer->public_key.begin());
+    }
     return true;
 }
 bool Discovery::takeResponse(uint32_t now, Frame& frame)

@@ -1659,7 +1659,7 @@ bool LinuxMeshWorker::isPkiReady() const
 bool LinuxMeshWorker::hasPkiKey(chat::NodeId peer) const
 {
     std::lock_guard<std::mutex> lock(impl_->mutex);
-    return impl_->desired.protocol == chat::MeshProtocol::Meshtastic && impl_->currentReady() &&
+    return (impl_->desired.protocol == chat::MeshProtocol::Meshtastic || impl_->desired.protocol == chat::MeshProtocol::MeshCore) && impl_->currentReady() &&
            std::find(impl_->view.keys.begin(), impl_->view.keys.end(), peer) != impl_->view.keys.end();
 }
 chat::MeshSendResult LinuxMeshWorker::sendTextDetailed(chat::ChannelId channel, const std::string& text, chat::MessageId forced, chat::NodeId peer)

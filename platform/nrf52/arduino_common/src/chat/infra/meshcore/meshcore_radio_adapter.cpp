@@ -492,9 +492,9 @@ bool MeshCoreRadioAdapter::executeProtocolEffect(const ::chat::runtime::Protocol
                         rssi = static_cast<float>(item.rx_meta.rssi_dbm_x10) / 10.0f;
                     }
 
-                    const uint32_t timestamp = item.timestamp != 0
-                                                   ? item.timestamp
-                                                   : ::chat::now_epoch_seconds();
+                    // A remote identity timestamp must not make a freshly
+                    // received peer expire from the local Nearby view.
+                    const uint32_t timestamp = ::chat::now_epoch_seconds();
                     contact_service_->updateNodeInfo(
                         item.node_id,
                         item.short_name.c_str(),

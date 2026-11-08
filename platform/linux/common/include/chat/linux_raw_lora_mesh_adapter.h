@@ -162,6 +162,9 @@ class LinuxRawLoraMeshAdapter final : public ::chat::IMeshAdapter
     };
 
     bool ensureRadioReady();
+    void maybeAnnounceSelf();
+    void resetSelfAnnouncement();
+    void markSelfAnnounced();
     bool meshCoreVerificationNumber(::chat::NodeId peer, uint64_t nonce, uint32_t& number) const;
     bool publishMeshCoreVerification(const meshcore_wire::Verification::Action&);
     void updateMeshCoreVerification();
@@ -285,6 +288,9 @@ class LinuxRawLoraMeshAdapter final : public ::chat::IMeshAdapter
                            ::chat::MessageStatus status, ::chat::delivery::SendFailureKind failure);
     ::platform::linux_runtime::RetryBackoff radio_retry_;
     Clock retry_clock_;
+    uint32_t self_announcement_started_ms_ = 0;
+    uint32_t self_announcement_delay_ms_ = 5000;
+    bool self_announcement_armed_ = false;
     ::chat::NodeId self_node_id_ = 0;
     ::chat::MeshConfig config_{};
     ::chat::MeshProtocol active_protocol_ = ::chat::MeshProtocol::Meshtastic;

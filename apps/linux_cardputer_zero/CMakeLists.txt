@@ -321,6 +321,12 @@ if(TRAIL_MATE_CARDPUTER_ZERO_BUILD_SCREENSHOT_CAPTURE)
 endif()
 
 if(BUILD_TESTING)
+    if(TARGET OpenSSL::Crypto)
+        add_executable(trailmate_cardputer_zero_node_discovery_test "${TRAIL_MATE_REPO_ROOT}/apps/linux_lvgl/tests/linux_node_discovery_test.cpp")
+        target_link_libraries(trailmate_cardputer_zero_node_discovery_test PRIVATE trailmate_cardputer_zero_linux_common)
+        target_compile_options(trailmate_cardputer_zero_node_discovery_test PRIVATE -UNDEBUG)
+        add_test(NAME trailmate_cardputer_zero_node_discovery COMMAND trailmate_cardputer_zero_node_discovery_test)
+    endif()
     add_executable(trailmate_cardputer_zero_wifi_profiles_test
         "${TRAIL_MATE_REPO_ROOT}/apps/linux_lvgl/tests/linux_wifi_profiles_test.cpp")
     target_link_libraries(trailmate_cardputer_zero_wifi_profiles_test PRIVATE trailmate_cardputer_zero_linux_common)

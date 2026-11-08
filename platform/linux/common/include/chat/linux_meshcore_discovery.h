@@ -9,6 +9,7 @@ struct DiscoveredPeer
     chat::NodeId node = 0;
     uint8_t role = 0;
     int8_t snr_qdb = 0;
+    std::array<uint8_t, 32> public_key{};
 };
 // Pure bounded scheduling/correlation state. Caller owns the radio and clock.
 class Discovery
