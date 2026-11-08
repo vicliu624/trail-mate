@@ -28,6 +28,7 @@ struct Service final : tc::Service
     tc::Snapshot state;
     tc::Plan received;
     bool source_ready = false;
+    tc::AreaSearchSnapshot area_state;
     Service() { state.producer_ready = true; }
     std::vector<tc::Source> sources() override
     {
@@ -53,6 +54,14 @@ struct Service final : tc::Service
         return true;
     }
     tc::Snapshot snapshot() override { return state; }
+    bool searchAreas(const std::string& query) override
+    {
+        area_state.query = query;
+        ++area_state.revision;
+        area_state.results = {{"R10", "Test area", "Test area, Yunnan, China", "CN", 102.70, 25, 102.71, 25.01}};
+        return true;
+    }
+    tc::AreaSearchSnapshot areaSearch() override { return area_state; }
     void cancel() override
     {
         state.busy = false;
@@ -136,13 +145,11 @@ int main(int argc, char** argv)
                 lv_obj_send_event(found[i], LV_EVENT_VALUE_CHANGED, nullptr);
             }
         };
-        click("Next");
+        click("Coordinates");
         fill({"102.70", "25", "102.71", "25.01"});
         click("Next");
         click("Next");
-        fill({"Created on device", "device-area"});
-        click("Next");
-        fill({"device-area.tmap", "1"});
+        fill({"Created on device", "device-area.tmap"});
         click("Next");
         if (argc > 2)
         {
@@ -152,7 +159,7 @@ int main(int argc, char** argv)
             host.saveScreenshot(argv[2]);
         }
         click("Create");
-        assert(service.received.source == "/sources/test.osm.pbf" && service.received.name == "Created on device" && service.received.west == 102.70 && service.received.max_zoom == 14);
+        assert(service.received.download_source && service.received.name == "Created on device" && service.received.west == 102.70 && service.received.max_zoom == 14);
         click("Close");
         assert(closed == 1 && service.state.busy);
         extensions::ui::tmap_creator::open(
@@ -234,10 +241,11 @@ int main(int argc, char** argv)
         activate("Close");
         press(SDLK_t);
         assert(find_label(root, "Next"));
+        press(SDLK_TAB); // Search is now the initial editor; leave it before H Help.
         press(SDLK_h);
         assert(find_label(root, "Activate Next / Back / Create"));
         press(SDLK_h);
-        activate("Next");
+        activate("Coordinates");
         std::vector<lv_obj_t*> editors;
         fields(root, editors);
         assert(editors.size() == 4);
@@ -249,7 +257,6 @@ int main(int argc, char** argv)
         assert(!std::strcmp(lv_textarea_get_text(editors.front()), "ht"));
         assert(!find_label(root, "Activate Next / Back / Create"));
         press(SDLK_ESCAPE);
-        activate("Close");
         assert(find_label(root, "Extensions"));
         ui_exit_active_app(root);
         platform::linux_runtime::stop_resource_pack_tasks();

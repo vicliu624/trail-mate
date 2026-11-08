@@ -13,7 +13,7 @@ set(CPACK_DEBIAN_PACKAGE_DESCRIPTION
 set(TRAIL_MATE_DEVICE_DEBIAN_DEPENDS
     "libc6 (>= 2.38), libstdc++6 (>= 14), libgcc-s1, libsdl2-2.0-0 (>= 2.0.18), libcurl4t64, libarchive13t64, libjpeg62-turbo, libpng16-16t64, libsqlite3-0, libssl3t64, ca-certificates, network-manager, systemd, init-system-helpers (>= 1.54~), kmod, python3, wlopm")
 if(TRAIL_MATE_TMAP_PRODUCER_DIR)
-    string(APPEND TRAIL_MATE_DEVICE_DEBIAN_DEPENDS ", libicu76")
+    string(APPEND TRAIL_MATE_DEVICE_DEBIAN_DEPENDS ", libicu76, osmium-tool, gdal-bin, unzip")
 endif()
 if(TRAIL_MATE_LINUX_ENABLE_ONESEG_MEDIA)
     if(NOT TARGET trailmate_linux_oneseg_media)

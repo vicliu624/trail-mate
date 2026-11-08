@@ -92,7 +92,7 @@ void syncFocusedDescLabel();
 
 bool showBottomHelpShortcut()
 {
-#if defined(ARDUINO_T_LORA_PAGER)
+#if defined(ARDUINO_T_LORA_PAGER) || defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
     return true;
 #else
     return false;
@@ -1091,6 +1091,10 @@ void setBottomBarChipText(const BottomBarChipUi& chip, const char* text)
 
 std::string renderBottomHelpText(const char* text)
 {
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    (void)text;
+    return ui::menu::dashboard::isFeedOpen() ? "#D6403A V# Menu" : "#D6403A V# Widgets";
+#else
     const char* safe_text = text ? text : "";
     const size_t prefix_len = std::strlen(kBottomHelpPlainPrefix);
     if (std::strncmp(safe_text, kBottomHelpPlainPrefix, prefix_len) != 0)
@@ -1104,6 +1108,7 @@ std::string renderBottomHelpText(const char* text)
     rendered += ui::menu::dashboard::isFeedOpen() ? "  #D6403A V# Menu" : "  #D6403A V# Widgets";
 #endif
     return rendered;
+#endif
 }
 
 void setBottomBarHelpText(const char* text)

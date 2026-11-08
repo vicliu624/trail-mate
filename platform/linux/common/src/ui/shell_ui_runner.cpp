@@ -19,6 +19,14 @@
 #include "platform/linux/packet_radio.h"
 #include "platform/linux/resource_pack_policy.h"
 #include "platform/linux/runtime_paths.h"
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+#include "platform/linux/backlight_screen.h"
+#include "platform/linux/cardputer_cap.h"
+#include "platform/linux/iio_sensors.h"
+#include "platform/ui/gps_runtime.h"
+#include "ui/components/screen_saver_overlay.h"
+#include "ui/runtime/ui_feedback.h"
+#endif
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/quick_controls_runtime.h"
 #include "platform/ui/settings_store.h"
@@ -118,6 +126,19 @@ struct QueuedKeyEvent
     std::uint32_t key{};
     lv_indev_state_t state{LV_INDEV_STATE_RELEASED};
 };
+
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+struct CardputerSensorBinding
+{
+    CardputerSensorBinding()
+    {
+        ::platform::linux_runtime::IioSensorOptions options;
+        options.expected = true;
+        ::platform::linux_runtime::configure_iio_sensors(options);
+    }
+    ~CardputerSensorBinding() { ::platform::linux_runtime::shutdown_iio_sensors(); }
+};
+#endif
 
 bool dispatchTeamUiEvent(sys::Event* event)
 {
@@ -383,6 +404,12 @@ void CanvasLvglHost::copyFrameBufferToCanvas()
 void runShellUi(platform::SurfacePresenter& presenter,
                 std::chrono::milliseconds auto_exit_after, bool tmap_creation)
 {
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    ::platform::linux_runtime::BacklightScreenBinding screen;
+    ::platform::linux_runtime::CardputerCap cap;
+    cap.begin();
+    CardputerSensorBinding sensors;
+#endif
     ShellSession shell;
     CanvasLvglHost host{shell};
 
@@ -394,9 +421,24 @@ void runShellUi(platform::SurfacePresenter& presenter,
     auto next_frame = clock::now();
     const auto started_at = next_frame;
     bool presenting = true;
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    bool screen_initialized = false;
+#endif
     while ((presenting = presenter.pump()) && !::platform::linux_runtime::application_restart_requested())
     {
-        shell.enqueueInputs(presenter.drainInput());
+        const auto input = presenter.drainInput();
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+        for (const auto& event : input)
+        {
+            const bool confirm = event.key == app::InputKey::Enter ||
+                                 (event.key == app::InputKey::Character && event.text == ' ');
+            if (!::platform::linux_runtime::BacklightScreenBinding::consumeWakeInput(confirm))
+                shell.enqueueInputs({event});
+        }
+        ::platform::linux_runtime::service_screen_runtime();
+#else
+        shell.enqueueInputs(input);
+#endif
 
         if (auto_exit_after > std::chrono::milliseconds::zero() &&
             (clock::now() - started_at) >= auto_exit_after)
@@ -406,6 +448,29 @@ void runShellUi(platform::SurfacePresenter& presenter,
         }
 
         host.tick();
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+        if (shell.ready() && !screen_initialized)
+        {
+            ::platform::ui::screen::Hooks hooks;
+            hooks.show_screen_saver = ::ui::components::screen_saver_overlay::show;
+            hooks.hide_screen_saver = ::ui::components::screen_saver_overlay::hide;
+            hooks.present_screen_saver = ::ui::components::screen_saver_overlay::request_present;
+            ::platform::ui::screen::init(hooks);
+            screen_initialized = true;
+        }
+        if (shell.ready() && cap.pending())
+        {
+            auto& radio = ::platform::linux_runtime::mesh_packet_radio();
+            const auto gps = ::platform::ui::gps::diagnostics();
+            const char* radio_error = radio.lastError();
+            const ::platform::linux_runtime::CardputerCapObservation observation{
+                ::platform::linux_runtime::packet_radio_enabled(), radio.isOnline(),
+                gps.enabled, gps.chars_total, radio_error ? radio_error : "", radio.hardwareCandidatePresent()};
+            const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(clock::now() - started_at).count();
+            if (const char* notice = cap.takeNotice(static_cast<uint64_t>(elapsed), observation))
+                ::ui::feedback::show_notice(notice, 4500);
+        }
+#endif
         presenter.setTextInputState(shell.textInputState());
         presenter.present(host.canvas());
 

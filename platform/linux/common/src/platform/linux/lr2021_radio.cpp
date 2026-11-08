@@ -8,11 +8,13 @@
 #include "platform/linux/packet_radio.h"
 #include "platform/shared/radio/fm_lr2021_stream.h"
 #include "platform/shared/radio/lora_receive_config.h"
+#include "platform/shared/radio/restart_receive.h"
 
 #include <RadioLib.h>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -382,6 +384,16 @@ class Lr2021Radio final : public IPacketRadio
         const uint32_t irq = radio_.getIrqFlags();
         if (!hal_.healthy()) return check(-1, "read IRQ");
         statistics_.last_irq_flags = irq;
+        const auto restart_receive = [this](const char* operation)
+        {
+            // RX is continuous, including after RX_DONE. RadioLib configures
+            // the receive path before StartRx; LR2021 requires standby first.
+            return platform::shared::radio::restartReceive(
+                radio_,
+                [this](int code, const char* step)
+                { return check(code, step); },
+                operation);
+        };
         if (irq & (RADIOLIB_LR2021_IRQ_ERROR | RADIOLIB_LR2021_IRQ_CMD_ERROR | RADIOLIB_LR2021_IRQ_PA_OCP_OVP))
         {
             // RX_DONE must never hide a hardware failure. Best-effort stop and
@@ -400,13 +412,13 @@ class Lr2021Radio final : public IPacketRadio
             if (irq & (RADIOLIB_LR2021_IRQ_LORA_HDR_CRC_ERROR | RADIOLIB_LR2021_IRQ_ADDR_ERROR))
                 ++statistics_.rx_header_errors;
             if (irq & RADIOLIB_LR2021_IRQ_LEN_ERROR) ++statistics_.rx_invalid_lengths;
-            check(radio_.startReceive(), "recover damaged packet");
+            restart_receive("recover damaged packet");
             return false;
         }
         if (irq & RADIOLIB_LR2021_IRQ_TIMEOUT)
         {
             ++statistics_.rx_timeouts;
-            check(radio_.startReceive(), "recover RX timeout");
+            restart_receive("recover RX timeout");
             return false;
         }
         if (!(irq & RADIOLIB_LR2021_IRQ_RX_DONE)) return false;
@@ -414,7 +426,7 @@ class Lr2021Radio final : public IPacketRadio
         if (!size || size > packet->data.size())
         {
             ++statistics_.rx_invalid_lengths;
-            check(radio_.startReceive(), "recover length");
+            restart_receive("recover length");
             return false;
         }
         const float rssi = radio_.getRSSI();
@@ -423,7 +435,7 @@ class Lr2021Radio final : public IPacketRadio
         if (code != RADIOLIB_ERR_NONE || !hal_.healthy())
         {
             ++statistics_.rx_read_errors;
-            check(radio_.startReceive(), "recover read");
+            restart_receive("recover read");
             return false;
         }
         packet->size = size;
@@ -440,7 +452,10 @@ class Lr2021Radio final : public IPacketRadio
             packet->sf = packet->cr = 0;
         }
         ++statistics_.rx_packets;
-        return check(radio_.startReceive(), "resume receive");
+        // The payload is valid even if restarting RX fails. Deliver it once;
+        // check() marks the transport offline for the next acquisition.
+        restart_receive("resume receive");
+        return true;
     }
     float readRssi() override
     {
@@ -648,6 +663,13 @@ class Lr2021Radio final : public IPacketRadio
         online_ = false;
         statistics_.online = false;
         lora_config_.invalidate();
+        const char* trace = std::getenv("TRAIL_MATE_LR2021_TRACE_SPI");
+        if (trace && std::strcmp(trace, "1") == 0)
+        {
+            std::fprintf(stderr, "[LR2021 error] operation=%s code=%d irq=0x%08lx transport=%s\n",
+                         operation, code, static_cast<unsigned long>(statistics_.last_irq_flags),
+                         hal_.healthy() ? "healthy" : hal_.error().c_str());
+        }
         return fail(hal_.healthy() ? std::string("LR2021 ") + operation + " failed: " + std::to_string(code) : hal_.error());
     }
     PacketRadioHardware hardware_;

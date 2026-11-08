@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cerrno>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -425,6 +426,9 @@ struct EvdevInput::Impl
     bool shift_held{false};
     bool ctrl_held{false};
     bool alt_held{false};
+    bool escape_held{false};
+    bool quit_requested{false};
+    std::chrono::steady_clock::time_point escape_pressed_at{};
 
     bool openDevice(const std::string& path)
     {
@@ -459,6 +463,8 @@ struct EvdevInput::Impl
         shift_held = false;
         ctrl_held = false;
         alt_held = false;
+        escape_held = false;
+        quit_requested = false;
     }
 
     bool tryAutoDiscovery()
@@ -605,10 +611,25 @@ std::vector<app::InputEvent> EvdevInput::drainInput()
             continue;
         }
 
-        // We only handle EV_KEY events.
+        if (raw.type == EV_SYN && raw.code == SYN_DROPPED)
+        {
+            // A lost release must never become an unintended long-press exit.
+            impl_->escape_held = false;
+        }
+        // We only emit EV_KEY events.
         if (raw.type != EV_KEY)
         {
             continue;
+        }
+
+        if (raw.code == KEY_ESC)
+        {
+            if (raw.value == 1 && !impl_->escape_held)
+            {
+                impl_->escape_held = true;
+                impl_->escape_pressed_at = std::chrono::steady_clock::now();
+            }
+            else if (raw.value == 0) impl_->escape_held = false;
         }
 
         // Track modifier state.
@@ -641,9 +662,16 @@ std::vector<app::InputEvent> EvdevInput::drainInput()
 
         events.push_back(makeInputEvent(*mapping, impl_->shift_held));
     }
+    if (impl_->escape_held && std::chrono::steady_clock::now() - impl_->escape_pressed_at >= std::chrono::milliseconds(1500))
+        impl_->quit_requested = true;
 #endif
 
     return events;
+}
+
+bool EvdevInput::quitRequested() const noexcept
+{
+    return impl_->quit_requested;
 }
 
 const std::string& EvdevInput::devicePath() const noexcept

@@ -312,8 +312,9 @@ bool handle_key(uint32_t key, bool pressed, lv_group_t* group)
     if (!page || in_text_editor(focused) || ui::widgets::ime_owns_text_focus(focused)) return false;
     auto* app = ui_get_active_app();
     const char* id = app ? app->stable_id() : nullptr;
+    const bool dropdown_open = lv_obj_check_type(focused, &lv_dropdown_class) && lv_dropdown_is_open(focused);
     if (!help::is_open(page->modal) && simple_navigation(id) &&
-        !lv_group_get_editing(group) &&
+        !lv_group_get_editing(group) && !dropdown_open &&
         (key == 'w' || key == 'W' || key == 's' || key == 'S' || key == LV_KEY_UP || key == LV_KEY_DOWN))
     {
         lv_group_set_editing(group, false);

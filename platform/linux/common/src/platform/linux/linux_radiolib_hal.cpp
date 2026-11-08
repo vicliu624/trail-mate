@@ -221,6 +221,14 @@ void LinuxRadioLibHal::spiTransfer(uint8_t* output, size_t size, uint8_t* input)
         fail("SPI transfer");
         return;
     }
+    // Opt-in packet-command diagnostics. Never dump packet payloads or IQ data.
+    const char* trace = std::getenv("TRAIL_MATE_LR2021_TRACE_SPI");
+    if (!iq_mode_ && trace && std::strcmp(trace, "1") == 0)
+    {
+        std::fprintf(stderr, "[LR2021 SPI] bytes=%zu command=%02x%02x status=%02x%02x\n",
+                     size, output[0], size > 1 ? output[1] : 0,
+                     input[0], size > 1 ? input[1] : 0);
+    }
     // BUSY may assert after NSS rises. Do not require observing its high edge;
     // short pulses may already be over when userspace is scheduled again.
     delayMicroseconds(iq_mode_ ? 1 : 100);

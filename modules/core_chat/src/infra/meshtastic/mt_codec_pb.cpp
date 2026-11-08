@@ -21,6 +21,8 @@ namespace meshtastic
 namespace
 {
 
+constexpr uint32_t kBitfieldWantResponseMask = 0x02;
+
 meshtastic_Data* acquireDataScratch(meshtastic_Data* supplied,
                                     std::unique_ptr<meshtastic_Data>& owned)
 {
@@ -265,7 +267,7 @@ bool encodeNodeInfoMessage(const std::string& user_id, const std::string& long_n
     data->portnum = meshtastic_PortNum_NODEINFO_APP;
     data->want_response = want_response;
     data->has_bitfield = true;
-    data->bitfield = 0;
+    data->bitfield = want_response ? kBitfieldWantResponseMask : 0;
 
     if (user_len > sizeof(data->payload.bytes))
     {
@@ -314,7 +316,7 @@ bool encodeAppDataWithRequestId(uint32_t portnum, const uint8_t* payload, size_t
     data->portnum = static_cast<meshtastic_PortNum>(portnum);
     data->want_response = want_response;
     data->has_bitfield = true;
-    data->bitfield = 0;
+    data->bitfield = want_response ? kBitfieldWantResponseMask : 0;
     data->request_id = request_id;
 
     if (payload_len > sizeof(data->payload.bytes))

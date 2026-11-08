@@ -10,6 +10,8 @@ struct TmapCreationOptions
     std::filesystem::path storage, cache;
     // An installed executable or an explicit composition/test override.
     std::filesystem::path producer = "/usr/lib/trailmate/tmap-producer/TmapTool";
+    std::filesystem::path osmium = "/usr/bin/osmium";
+    std::string map_endpoint = "https://overpass.private.coffee/api/interpreter";
 };
 class LinuxTmapCreation final : public ::platform::ui::tmap_creation::Service
 {
@@ -21,6 +23,8 @@ class LinuxTmapCreation final : public ::platform::ui::tmap_creation::Service
     bool start(const ::platform::ui::tmap_creation::Plan&, std::string& error) override;
     ::platform::ui::tmap_creation::Snapshot snapshot() override;
     void cancel() override;
+    bool searchAreas(const std::string&) override;
+    ::platform::ui::tmap_creation::AreaSearchSnapshot areaSearch() override;
 
   private:
     struct Impl;

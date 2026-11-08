@@ -88,19 +88,6 @@ extern "C" const lv_image_dsc_t music;
 #endif
 #include "ui/screens/walkie_talkie/walkie_talkie_page_shell.h"
 
-namespace
-{
-
-constexpr size_t kMaxMenuApps = ui::kAppCatalogCapacity;
-
-#define APP_CATALOG_LOG(...) std::printf("[UI][Catalog] " __VA_ARGS__)
-
-#if defined(TRAIL_MATE_ESP_BOARD_TAB5)
-constexpr bool kTab5SkipSkyPlot = true;
-#else
-constexpr bool kTab5SkipSkyPlot = false;
-#endif
-
 #if !TRAIL_MATE_USE_MONO_SCREEN_240X320
 extern "C"
 {
@@ -133,6 +120,19 @@ extern "C"
 // the catalog icon-free also prevents the visual adapter from keeping the
 // legacy image catalogue alive through AppScreen pointers.
 #define CATALOG_ICON(symbol) nullptr
+#endif
+
+namespace
+{
+
+constexpr size_t kMaxMenuApps = ui::kAppCatalogCapacity;
+
+#define APP_CATALOG_LOG(...) std::printf("[UI][Catalog] " __VA_ARGS__)
+
+#if defined(TRAIL_MATE_ESP_BOARD_TAB5)
+constexpr bool kTab5SkipSkyPlot = true;
+#else
+constexpr bool kTab5SkipSkyPlot = false;
 #endif
 
 void request_menu_exit(void*)

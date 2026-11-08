@@ -306,10 +306,21 @@ if(TRAIL_MATE_LINUX_BUILD_APP)
                 COMMAND_ERROR_IS_FATAL ANY)
             add_executable(trailmate_linux_lr2021_receive_test tests/linux_lr2021_receive_test.cpp)
             target_include_directories(trailmate_linux_lr2021_receive_test PRIVATE
-                "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/include" "${CMAKE_CURRENT_BINARY_DIR}")
+                "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/include"
+                "${TRAIL_MATE_REPO_ROOT}/platform/shared/include" "${CMAKE_CURRENT_BINARY_DIR}")
             target_compile_options(trailmate_linux_lr2021_receive_test PRIVATE -UNDEBUG)
             target_link_libraries(trailmate_linux_lr2021_receive_test PRIVATE trailmate_linux_radiolib)
             add_test(NAME linux_lr2021_receive COMMAND trailmate_linux_lr2021_receive_test)
+            add_executable(trailmate_idf_radio_receive_test tests/idf_radio_receive_test.cpp
+                "${TRAIL_MATE_REPO_ROOT}/platform/esp/radio/idf_lora_radio_pump.cpp")
+            target_include_directories(trailmate_idf_radio_receive_test PRIVATE
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/idf_radio_receive_fakes"
+                "${TRAIL_MATE_REPO_ROOT}/platform/esp/radio"
+                "${TRAIL_MATE_REPO_ROOT}/platform/shared/include")
+            target_compile_definitions(trailmate_idf_radio_receive_test PRIVATE ESP_PLATFORM=1)
+            target_compile_options(trailmate_idf_radio_receive_test PRIVATE -UNDEBUG)
+            target_compile_features(trailmate_idf_radio_receive_test PRIVATE cxx_std_17)
+            add_test(NAME idf_radio_receive COMMAND trailmate_idf_radio_receive_test)
             add_executable(trailmate_idf_lr2021_irq_test tests/idf_lr2021_irq_test.cpp)
             target_include_directories(trailmate_idf_lr2021_irq_test PRIVATE
                 "${TRAIL_MATE_REPO_ROOT}/platform/shared/include"
@@ -1234,6 +1245,14 @@ if(TRAIL_MATE_LINUX_BUILD_APP)
             target_link_options(trailmate_linux_meshcore_direct_test PRIVATE -fsanitize=address,undefined)
         endif()
         add_executable(trailmate_linux_meshcore_services_test tests/linux_meshcore_services_test.cpp)
+        add_executable(trailmate_desktop_identity_storage_stress_test tests/linux_identity_storage_stress_test.cpp)
+        target_link_libraries(trailmate_desktop_identity_storage_stress_test PRIVATE trailmate_desktop_linux_common)
+        target_compile_options(trailmate_desktop_identity_storage_stress_test PRIVATE -UNDEBUG)
+        add_test(NAME linux_identity_storage_stress COMMAND trailmate_desktop_identity_storage_stress_test)
+        add_executable(trailmate_linux_identity_database_lock_test tests/linux_identity_database_lock_test.cpp)
+        target_link_libraries(trailmate_linux_identity_database_lock_test PRIVATE trailmate_desktop_linux_common)
+        target_compile_options(trailmate_linux_identity_database_lock_test PRIVATE -UNDEBUG)
+        add_test(NAME linux_identity_database_lock COMMAND trailmate_linux_identity_database_lock_test)
         add_executable(trailmate_linux_reticulum_identity_test tests/linux_reticulum_identity_test.cpp
             "${TRAIL_MATE_REPO_ROOT}/platform/linux/common/src/mesh/linux_reticulum_identity.cpp")
         add_executable(trailmate_linux_identity_replacement_test tests/linux_identity_replacement_test.cpp

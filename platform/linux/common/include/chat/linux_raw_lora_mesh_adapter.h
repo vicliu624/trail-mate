@@ -286,6 +286,16 @@ class LinuxRawLoraMeshAdapter final : public ::chat::IMeshAdapter
     void* message_id_context_ = nullptr;
     void publishSendResult(::chat::MessageId id, ::chat::MeshProtocol protocol,
                            ::chat::MessageStatus status, ::chat::delivery::SendFailureKind failure);
+    struct MeshtasticPendingAck
+    {
+        ::chat::MessageId message = 0;
+        ::chat::NodeId peer = 0;
+        uint32_t sent_at = 0;
+    };
+    std::array<MeshtasticPendingAck, 32> meshtastic_pending_acks_{};
+    void expireMeshtasticAcks();
+    void cancelMeshtasticAcks();
+    void consumeMeshtasticRouting(const ::chat::meshtastic::PacketHeaderWire&, const meshtastic_Data&, bool encrypted);
     ::platform::linux_runtime::RetryBackoff radio_retry_;
     Clock retry_clock_;
     uint32_t self_announcement_started_ms_ = 0;

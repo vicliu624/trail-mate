@@ -37,6 +37,7 @@ struct Clock final : agenda::IAgendaClock
     mutable std::mutex mutex;
     std::set<std::thread::id> frontend{std::this_thread::get_id()};
     agenda::ClockSample value;
+    mutable std::atomic_uint samples{0};
     Clock()
     {
         assert(agenda::toCalendarSeconds({2026, 10, 21, 12, 0, 0}, value.calendar_seconds));
@@ -46,6 +47,7 @@ struct Clock final : agenda::IAgendaClock
     {
         std::lock_guard<std::mutex> lock(mutex);
         assert(!frontend.count(std::this_thread::get_id()));
+        ++samples;
         return value;
     }
     void advance(uint64_t seconds)
@@ -172,6 +174,11 @@ int main()
         wait([&]
              { return snapshot(source).storage_ready; });
         assert(snapshot(source).page.count == 0);
+        // The real clock reads durable timezone settings. An idle calendar
+        // must not repeatedly open SQLite at the UI's subsecond cadence.
+        const auto idle_samples = clock.samples.load();
+        std::this_thread::sleep_for(650ms);
+        assert(clock.samples.load() - idle_samples <= 2);
         const int fd = factory.file();
         assert(fd >= 0);
         assert((fcntl(fd, F_GET_SEALS) & F_SEAL_WRITE) != 0);
@@ -279,7 +286,7 @@ int main()
              { return source.currentTime().calendar_seconds == clock.now(); });
         assert(!source.reminderSnapshot().reminder.valid);
         clock.advance(1);
-        source.requestRefresh();
+        // A due reminder must be discovered by the idle timer itself.
         wait([&]
              { return source.reminderSnapshot().reminder.valid; });
         assert(!source.dismissReminder(shown.revision).ok);

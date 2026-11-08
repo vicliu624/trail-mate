@@ -1,10 +1,13 @@
 #include "platform/linux/tmap_creation.h"
 #include "platform/linux/hostlink_upload_io.h"
+#include "platform/linux/http_download.h"
 #include "platform/linux/route_image_source_io.h"
 #include "platform/linux/runtime_paths.h"
+#include "platform/linux/tmap_area_search.h"
 #include "platform/linux/tmap_job_workspace.h"
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <condition_variable>
 #include <cstdio>
@@ -65,7 +68,7 @@ std::string output_filename(const std::string& filename, const std::string& styl
                ? stem.substr(0, zoom) + '-' + style + stem.substr(zoom) + ".tmap"
                : stem + '-' + style + ".tmap";
 }
-std::string plan_json(const tc::Plan& p, const std::filesystem::path& output, const std::filesystem::path& cache)
+std::string plan_json(const tc::Plan& p, const std::filesystem::path& output, const std::filesystem::path& cache, const std::string& source_endpoint)
 {
     std::ostringstream out;
     out << std::setprecision(15)
@@ -73,7 +76,8 @@ std::string plan_json(const tc::Plan& p, const std::filesystem::path& output, co
         << ",\"Bounds\":{\"West\":" << p.west << ",\"South\":" << p.south << ",\"East\":" << p.east << ",\"North\":" << p.north << "}},"
         << "\"BaseLayers\":{\"IncludeOsm\":" << (p.osm ? "true" : "false") << ",\"IncludeTerrain\":" << (p.terrain ? "true" : "false")
         << ",\"IncludeSatellite\":" << (p.satellite ? "true" : "false") << ",\"MinimumZoom\":" << unsigned(p.min_zoom) << ",\"MaximumZoom\":" << unsigned(p.max_zoom) << "},"
-        << "\"Poi\":{\"PbfPath\":\"/proc/self/fd/198\",\"EnablePoiSeparation\":true},\"Annotations\":{},\"OutputDirectory\":" << json(output.string())
+        << "\"Poi\":{\"PbfPath\":\"/proc/self/fd/198\",\"EnablePoiSeparation\":true,\"SourceProvider\":" << json(p.download_source ? "overpass" : "local")
+        << ",\"SourceDownloadUrl\":" << json(p.download_source ? source_endpoint : "") << "},\"Annotations\":{},\"OutputDirectory\":" << json(output.string())
         << ",\"Tmap\":{\"FileName\":" << json(p.filename) << ",\"PackageKey\":" << json(p.package_key)
         << ",\"CountryCode\":" << json(p.country) << ",\"AdminCode\":" << json(p.admin)
         << ",\"Tier\":\"Custom\",\"Revision\":" << p.revision << ",\"MaximumOutputBytes\":" << p.maximum_bytes
@@ -83,8 +87,8 @@ std::string plan_json(const tc::Plan& p, const std::filesystem::path& output, co
 } // namespace
 struct LinuxTmapCreation::Impl
 {
-    explicit Impl(TmapCreationOptions options) : options(std::move(options)), worker([this]
-                                                                                     { run(); }) {}
+    explicit Impl(TmapCreationOptions options) : options(std::move(options)), area_search(std::getenv("TRAIL_MATE_AREA_SEARCH_URL") ? std::getenv("TRAIL_MATE_AREA_SEARCH_URL") : "https://photon.komoot.io/api/"), worker([this]
+                                                                                                                                                                                                                           { run(); }) {}
     ~Impl()
     {
         stopping = true;
@@ -121,6 +125,7 @@ struct LinuxTmapCreation::Impl
         state.source_directory = roots.front().string();
         state.source_revision = ++source_revision;
         state.producer_ready = ::access(options.producer.c_str(), X_OK) == 0;
+        state.downloader_ready = ::access(options.osmium.c_str(), X_OK) == 0;
     }
     tc::Estimate estimate(const tc::Plan& p)
     {
@@ -137,8 +142,19 @@ struct LinuxTmapCreation::Impl
             std::lock_guard<std::mutex> lock(mutex);
             const auto source = std::find_if(inputs.begin(), inputs.end(), [&](const auto& value)
                                              { return value.path == p.source; });
-            if (source == inputs.end()) return invalid("Select a local .osm.pbf file from map-sources.");
-            source_bytes = source->bytes;
+            if (p.download_source)
+            {
+                if (!state.downloader_ready) return invalid("The map downloader is incomplete. Install the full Trail Mate package.");
+                constexpr double radians = 3.14159265358979323846 / 180;
+                const double area_km2 = (p.east - p.west) * (p.north - p.south) * 111.32 * 111.32 * std::cos((p.north + p.south) * .5 * radians);
+                if (area_km2 > 2500) return invalid("This area is too large for an online job on this device. Choose a district or a smaller coordinate area (up to 2500 km2).");
+                source_bytes = 64ULL * 1024 * 1024;
+            }
+            else
+            {
+                if (source == inputs.end()) return invalid("Select a local .osm.pbf file from map-sources.");
+                source_bytes = source->bytes;
+            }
             result.available_bytes = available;
         }
         const unsigned layers = unsigned(p.osm) + unsigned(p.terrain) + unsigned(p.satellite);
@@ -169,7 +185,8 @@ struct LinuxTmapCreation::Impl
     {
         if (cancelled || stopping) throw std::runtime_error("Cancelled");
     }
-    bool process(const std::vector<std::string>& arguments, int source = -1, int lease = -1)
+    bool process(const std::vector<std::string>& arguments, int source = -1, int lease = -1,
+                 const std::filesystem::path& executable = {})
     {
         int descriptors[2];
         if (pipe2(descriptors, O_CLOEXEC) != 0) throw std::runtime_error("Cannot open producer output pipe.");
@@ -185,7 +202,7 @@ struct LinuxTmapCreation::Impl
         posix_spawnattr_init(&attributes);
         posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETPGROUP);
         posix_spawnattr_setpgroup(&attributes, 0);
-        std::vector<std::string> owned{options.producer.string()};
+        std::vector<std::string> owned{executable.empty() ? options.producer.string() : executable.string()};
         owned.insert(owned.end(), arguments.begin(), arguments.end());
         std::vector<char*> argv;
         for (auto& value : owned) argv.push_back(value.data());
@@ -263,6 +280,94 @@ struct LinuxTmapCreation::Impl
         if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) throw std::runtime_error(tail.empty() ? "TMAP producer failed." : tail);
         return true;
     }
+    std::filesystem::path download_source(const tc::Plan& plan, TmapJobWorkspace& workspace)
+    {
+        update(tc::Phase::Preparing, "Downloading map data for the selected area");
+        std::ostringstream query;
+        query << std::setprecision(15) << "[out:xml][timeout:90][maxsize:67108864];(node("
+              << plan.south << ',' << plan.west << ',' << plan.north << ',' << plan.east << ");way("
+              << plan.south << ',' << plan.west << ',' << plan.north << ',' << plan.east << ");rel[\"type\"=\"multipolygon\"]("
+              << plan.south << ',' << plan.west << ',' << plan.north << ',' << plan.east << "););(._;>;);out body qt;";
+        std::string escaped;
+        for (const unsigned char c : query.str())
+        {
+            if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '.' || c == '-') escaped += char(c);
+            else
+            {
+                escaped += '%';
+                escaped += "0123456789ABCDEF"[c >> 4];
+                escaped += "0123456789ABCDEF"[c & 15];
+            }
+        }
+        const auto url = options.map_endpoint + (options.map_endpoint.find('?') == std::string::npos ? "?data=" : "&data=") + escaped;
+        const auto xml = workspace.path() / "download.osm", pbf = workspace.path() / "source.osm.pbf";
+        struct Download
+        {
+            int fd = -1;
+            bool nodes = false, remark = false;
+            std::string tail;
+            ~Download()
+            {
+                if (fd >= 0) ::close(fd);
+            }
+        } download;
+        download.fd = ::open(xml.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
+        if (download.fd < 0) throw std::runtime_error("Cannot prepare map download storage.");
+        ::platform::ui::http_client::Request request;
+        request.url = url.c_str();
+        request.timeout_ms = 150000;
+        request.max_bytes = 64U * 1024 * 1024;
+        struct Progress
+        {
+            Impl* owner;
+            std::chrono::steady_clock::time_point started;
+        } progress{this, std::chrono::steady_clock::now()};
+        request.progress_context = &progress;
+        request.progress = [](uint32_t bytes, uint32_t total, void* context)
+        {
+            const auto& progress = *static_cast<Progress*>(context);
+            auto& self = *progress.owner;
+            std::lock_guard lock(self.mutex);
+            self.state.completed = bytes;
+            self.state.total = total;
+            const auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - progress.started).count();
+            self.state.stage = bytes ? "Downloading map data (" + std::to_string(bytes / 1024) + " KiB)"
+                                     : "Waiting for map server (" + std::to_string(elapsed) + " s)";
+            self.state.percent = total ? int(uint64_t(bytes) * 20 / total) : -1;
+        };
+        std::string error;
+        const bool ok = http_download(
+            request, [](const uint8_t* data, size_t count, void* context)
+            {
+            auto& output = *static_cast<Download*>(context);
+            const std::string scan = output.tail + std::string(reinterpret_cast<const char*>(data), count);
+            output.nodes |= scan.find("<node ") != std::string::npos;
+            output.remark |= scan.find("<remark") != std::string::npos;
+            output.tail = scan.substr(scan.size() > 32 ? scan.size() - 32 : 0);
+            while (count)
+            {
+                const auto written = ::write(output.fd, data, count);
+                if (written < 0 && errno == EINTR) continue;
+                if (written <= 0) return false;
+                data += written; count -= size_t(written);
+            }
+            return true; },
+            &download, error, nullptr, &cancelled, "TrailMate/1.0 (+https://github.com/vicliu624/trail-mate)");
+        check();
+        if (!ok) throw std::runtime_error("Map download failed: " + error + ". Check Wi-Fi and retry, or choose a smaller area.");
+        if (download.remark || !download.nodes) throw std::runtime_error("The map server could not provide this area. Retry or choose a smaller area.");
+        if (::fsync(download.fd)) throw std::runtime_error("Cannot save downloaded map data.");
+        ::close(download.fd);
+        download.fd = -1;
+        update(tc::Phase::Preparing, "Preparing downloaded map data");
+        process({"cat", xml.string(), "-o", pbf.string(), "--output-format=pbf"}, -1, workspace.lease(), options.osmium);
+        {
+            std::lock_guard lock(mutex);
+            state.completed = state.total = 0;
+            state.percent = -1;
+        }
+        return pbf;
+    }
     void build(const tc::Plan& p)
     {
         const auto checked = estimate(p);
@@ -282,7 +387,8 @@ struct LinuxTmapCreation::Impl
             if (existing.handle) destination.close(existing.handle);
             if (existing.status != UploadIo::OpenStatus::Missing) throw std::runtime_error("Output already exists or is unavailable; choose a new filename.");
         }
-        const int source = ::open(p.source.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK);
+        const auto source_path = p.download_source ? download_source(p, workspace) : std::filesystem::path(p.source);
+        const int source = ::open(source_path.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK);
         if (source < 0) throw std::runtime_error("Cannot open selected PBF source.");
         struct SourceLease
         {
@@ -297,7 +403,7 @@ struct LinuxTmapCreation::Impl
         const auto plan = work / "plan.json";
         {
             std::ofstream file(plan);
-            file << plan_json(p, out, work / "sources");
+            file << plan_json(p, out, work / "sources", options.map_endpoint);
             if (!file) throw std::runtime_error("Cannot persist TMAP production plan.");
         }
         update(tc::Phase::Building, "Importing PBF and rendering tiles");
@@ -464,6 +570,7 @@ struct LinuxTmapCreation::Impl
         }
     }
     TmapCreationOptions options;
+    TmapAreaSearch area_search;
     std::mutex mutex;
     std::condition_variable changed;
     std::vector<tc::Source> inputs;
@@ -505,7 +612,9 @@ bool LinuxTmapCreation::start(const tc::Plan& plan, std::string& error)
         return false;
     }
     impl_->cancelled = false;
+    const bool downloader_ready = impl_->state.downloader_ready;
     impl_->state = {};
+    impl_->state.downloader_ready = downloader_ready;
     impl_->state.source_directory = (impl_->options.storage / "map-sources").string();
     impl_->state.source_revision = impl_->source_revision;
     impl_->state.producer_ready = true;
@@ -521,6 +630,8 @@ tc::Snapshot LinuxTmapCreation::snapshot()
     return impl_->state;
 }
 void LinuxTmapCreation::cancel() { impl_->cancelled = true; }
+bool LinuxTmapCreation::searchAreas(const std::string& query) { return impl_->area_search.search(query); }
+tc::AreaSearchSnapshot LinuxTmapCreation::areaSearch() { return impl_->area_search.snapshot(); }
 void configure_tmap_creation(bool enabled)
 {
     static std::unique_ptr<LinuxTmapCreation> service;
@@ -530,6 +641,7 @@ void configure_tmap_creation(bool enabled)
     const auto paths = resolve_paths();
     TmapCreationOptions options{paths.sd_root, paths.cache_root};
     if (const auto* value = std::getenv("TRAIL_MATE_TMAP_PRODUCER")) options.producer = value;
+    if (const auto* value = std::getenv("TRAIL_MATE_MAP_SOURCE_URL")) options.map_endpoint = value;
     service = std::make_unique<LinuxTmapCreation>(std::move(options));
     tc::bind(service.get());
 }

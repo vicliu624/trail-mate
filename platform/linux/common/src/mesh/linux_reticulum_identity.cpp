@@ -2,6 +2,7 @@
 #include "chat/infra/meshcore/crypto/ed25519/ed_25519.h"
 #include "chat/infra/reticulum/reticulum_wire.h"
 #include "platform/linux/identity_owner_lease.h"
+#include "platform/linux/private_database_file.h"
 #include <algorithm>
 #include <cstring>
 #include <memory>
@@ -110,22 +111,18 @@ bool LinuxReticulumIdentity::begin()
         const auto owner_path = database_.string() + ".identity-owner";
         if (!open_shared_identity_owner(owner_path, owner_fd_)) return fail("Reticulum identity is retired or exclusively owned");
     }
-    const int file = ::open(database_.c_str(), O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK, 0600);
-    struct stat status
-    {
-    };
-    if (file < 0) return fail("Cannot open Reticulum identity file");
-    const bool regular = ::fstat(file, &status) == 0 && S_ISREG(status.st_mode) && status.st_uid == ::geteuid();
-    const bool protected_file = regular && ::fchmod(file, 0600) == 0;
-    ::close(file);
-    if (!protected_file) return fail("Reticulum identity requires a private, user-owned regular file");
 #endif
     Database db;
     int flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX;
 #ifdef SQLITE_OPEN_NOFOLLOW
     flags |= SQLITE_OPEN_NOFOLLOW;
 #endif
-    if (sqlite3_open_v2(database_.string().c_str(), &db.value, flags, nullptr) != SQLITE_OK || sqlite3_busy_timeout(db.value, 250) != SQLITE_OK ||
+    if (sqlite3_open_v2(database_.string().c_str(), &db.value, flags, nullptr) != SQLITE_OK)
+        return fail("Cannot open Reticulum identity file");
+#if defined(__linux__)
+    if (!protect_private_database_file(database_)) return fail("Reticulum identity requires a private, user-owned regular file");
+#endif
+    if (sqlite3_busy_timeout(db.value, 250) != SQLITE_OK ||
         !db.execute("PRAGMA synchronous=FULL; BEGIN IMMEDIATE")) return fail("Cannot open Reticulum identity transaction");
     // Closing an uncommitted connection rolls back. No replacement identity is
     // generated when the existing row, schema or key relationship is damaged.

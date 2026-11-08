@@ -60,13 +60,14 @@ hardware/session closure.
 Cardputer Zero uses the compact Pager visual language under a 320 x 170
 keyboard-device constraint.
 
-The shared LVGL menu profile keeps an independent compact focus carousel:
+The shared LVGL menu profile adapts the Pager grid and widget feed:
 
 ```text
 make_cardputer_zero_profile()
-  owns compact geometry independently of the Pager grid
-  keeps PagerFocus menu behavior
-  shrinks geometry for 320 x 170
+  inherits the Pager CompactGrid style
+  fits four columns and two rows between the fixed status bars
+  exposes the shared widget feed with V and Up/Down (W/S)
+  scales complete widget cards for 320 x 170
   enables keyboard directional navigation
   hides memory statistics
 ```

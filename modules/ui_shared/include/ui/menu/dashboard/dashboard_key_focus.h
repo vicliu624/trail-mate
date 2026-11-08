@@ -18,7 +18,7 @@ struct DashboardKeyFocus
     {
         if (count == 5) return;
         items[count++] = item;
-#if defined(ARDUINO_T_LORA_PAGER)
+#if defined(ARDUINO_T_LORA_PAGER) || defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
         lv_obj_set_style_outline_width(item, 2, LV_STATE_FOCUS_KEY);
         lv_obj_set_style_outline_pad(item, 1, LV_STATE_FOCUS_KEY);
         lv_obj_set_style_outline_color(item, lv_color_hex(0x6B4A1E), LV_STATE_FOCUS_KEY);
@@ -31,7 +31,7 @@ struct DashboardKeyFocus
     }
     void show()
     {
-#if defined(ARDUINO_T_LORA_PAGER)
+#if defined(ARDUINO_T_LORA_PAGER) || defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
         for (unsigned i = 0; i < count; ++i)
         {
             constexpr auto state = static_cast<lv_state_t>(LV_STATE_FOCUSED | LV_STATE_FOCUS_KEY);

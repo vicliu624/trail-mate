@@ -256,7 +256,11 @@ void refresh_compass_widget(void* context)
                         heading.available ? "COMPASS" : "NO FIX",
                         heading.available ? color_soft_blue() : color_soft_warn(),
                         heading.available ? color_info() : color_warn());
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+        set_label_text_if_changed(compass.target_name, heading.available ? "Magnetic north" : "Need local GPS");
+#else
         set_label_text_if_changed(compass.target_name, heading.available ? "North locked" : "Need local GPS");
+#endif
 
         char heading_buf[48];
         if (heading.available)
@@ -273,6 +277,9 @@ void refresh_compass_widget(void* context)
                                   heading.available ? "magnetometer heading active" : "heading unlocks after first fix");
         set_label_text_if_changed(compass.footer_label,
                                   heading.available ? "device heading from 9-axis module" : "compass wakes after GPS fix");
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+        if (heading.available) set_label_text_if_changed(compass.footer_label, "Hold level | uncalibrated magnetic heading");
+#endif
         update_needle(compass, needle_bearing);
         lv_obj_set_style_bg_opa(compass.north_marker, LV_OPA_COVER, 0);
         return;

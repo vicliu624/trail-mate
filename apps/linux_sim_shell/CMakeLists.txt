@@ -218,6 +218,17 @@ if(BUILD_TESTING)
     add_test(NAME trailmate_chat_service_smoke
              COMMAND trailmate_chat_service_smoke)
 
+    get_target_property(auto_reply_sources trailmate_chat_service_smoke SOURCES)
+    list(REMOVE_ITEM auto_reply_sources "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/tests/test_chat_service_resend.cpp")
+    add_executable(trailmate_auto_reply_observer_test
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/tests/test_auto_reply_observer.cpp"
+        ${auto_reply_sources})
+    target_include_directories(trailmate_auto_reply_observer_test PRIVATE
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include"
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/include")
+    target_compile_features(trailmate_auto_reply_observer_test PRIVATE cxx_std_17)
+    add_test(NAME trailmate_auto_reply_observer_test COMMAND trailmate_auto_reply_observer_test)
+
     add_executable(trailmate_chat_delivery_message_projection_smoke
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/tests/test_chat_delivery_message_projection.cpp"
         "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/src/delivery/chat_delivery_message_projection.cpp"

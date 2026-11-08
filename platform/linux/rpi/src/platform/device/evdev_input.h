@@ -44,6 +44,9 @@ class EvdevInput
     /// when no device is open or no events are available.
     std::vector<app::InputEvent> drainInput();
 
+    /// A long Esc hold requests a clean return to APPLaunch.
+    bool quitRequested() const noexcept;
+
     /// Returns the device path that was actually opened (for diagnostics).
     const std::string& devicePath() const noexcept;
 

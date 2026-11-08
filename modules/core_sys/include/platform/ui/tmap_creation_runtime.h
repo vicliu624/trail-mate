@@ -13,6 +13,8 @@ struct Source
 struct Plan
 {
     std::string source, name, filename, package_key, country, admin;
+    // Online creation acquires its own OSM source inside the private job.
+    bool download_source = false;
     double west = 0, south = 0, east = 0, north = 0;
     uint8_t min_zoom = 13, max_zoom = 14;
     bool osm = true, terrain = false, satellite = false;
@@ -38,12 +40,24 @@ struct Estimate
 struct Snapshot
 {
     Phase phase = Phase::Idle;
-    bool busy = false, producer_ready = false;
+    bool busy = false, producer_ready = false, downloader_ready = false;
     int percent = -1;
     uint64_t completed = 0, total = 0;
     uint32_t source_revision = 0;
     std::string source_directory;
     std::string stage, error, output;
+};
+struct Area
+{
+    std::string id, name, description, country;
+    double west = 0, south = 0, east = 0, north = 0;
+};
+struct AreaSearchSnapshot
+{
+    uint32_t revision = 0;
+    bool busy = false, from_cache = false;
+    std::string query, error;
+    std::vector<Area> results;
 };
 // Composition registers a capable producer. Unsupported targets carry no job,
 // thread or producer dependency. Views own their bytes across UI callbacks.
@@ -56,6 +70,8 @@ class Service
     virtual bool start(const Plan&, std::string& error) = 0;
     virtual Snapshot snapshot() = 0;
     virtual void cancel() = 0;
+    virtual bool searchAreas(const std::string&) { return false; }
+    virtual AreaSearchSnapshot areaSearch() { return {}; }
 };
 inline Service*& registered_service()
 {

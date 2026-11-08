@@ -57,8 +57,9 @@ uint16_t timeout_secs()
 bool supports_app_timeout_setting()
 {
     std::lock_guard<std::mutex> lock(s_mutex);
-    if (!s_options.power || s_stopped) return false;
-    const auto power = s_options.power->snapshot();
+    if (s_stopped) return false;
+    const auto power = s_options.power_snapshot ? s_options.power_snapshot() : s_options.power ? s_options.power->snapshot()
+                                                                                               : ::platform::linux_runtime::OutputPowerSnapshot{};
     return power.available && !power.failed;
 }
 
@@ -178,6 +179,7 @@ void service_screen_runtime()
     using namespace ::platform::ui::screen_power;
     Hooks hooks;
     std::shared_ptr<OutputPowerRuntime> power;
+    std::function<bool(bool)> request_power;
     State before;
     State next;
     bool wake = false;
@@ -186,7 +188,9 @@ void service_screen_runtime()
         if (!s_initialized || s_stopped) return;
         hooks = s_hooks;
         power = s_options.power;
-        const auto actual = power ? power->snapshot() : OutputPowerSnapshot{};
+        request_power = s_options.request_power;
+        const auto actual = s_options.power_snapshot ? s_options.power_snapshot() : power ? power->snapshot()
+                                                                                          : OutputPowerSnapshot{};
         // Loss of the selected output or a failed operation must not strand the
         // UI in a software-only sleep state. A healthy port enables timeouts.
         s_machine.dispatch(actual.available && !actual.failed ? Event::Tick : Event::ModalWake, now_ms());
@@ -200,7 +204,9 @@ void service_screen_runtime()
         wake = s_wake_pending;
         s_presented = next;
     }
-    if (next == State::Sleeping && before != State::Sleeping && (!power || !power->request(false)))
+    const auto request = [&](bool on)
+    { return request_power ? request_power(on) : power && power->request(on); };
+    if (next == State::Sleeping && before != State::Sleeping && !request(false))
     {
         std::lock_guard<std::mutex> lock(s_mutex);
         s_machine.dispatch(Event::ModalWake, now_ms());
@@ -208,7 +214,7 @@ void service_screen_runtime()
         s_wake_pending = true;
         wake = true;
     }
-    if (wake && power) (void)power->request(true);
+    if (wake) (void)request(true);
     // Hooks may reenter the public screen ports. Invoke them without the state
     // mutex, only on the UI thread; background callers only mutate the machine.
     if (before != next)
@@ -234,6 +240,8 @@ void shutdown_screen_runtime()
         s_hooks = {};
         s_machine.dispatch(::platform::ui::screen_power::Event::Initialize, now_ms());
         power = std::move(s_options.power);
+        s_options.power_snapshot = {};
+        s_options.request_power = {};
     }
     // Do not join the hardware worker while holding the state mutex.
     power.reset();

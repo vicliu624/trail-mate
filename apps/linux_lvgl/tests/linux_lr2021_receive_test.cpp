@@ -1,4 +1,5 @@
 #include "platform/linux/packet_radio.h"
+#include "platform/shared/radio/restart_receive.h"
 #include <RadioLib.h>
 #include <algorithm>
 #include <cassert>
@@ -27,16 +28,22 @@ struct Receiver
         uint32_t irq = 0;
         size_t size = 8;
         unsigned reads = 0, receives = 0, standbys = 0;
-        int receive_error = 0, read_error = 0;
+        int receive_error = 0, read_error = 0, standby_error = 0;
+        bool receiving = true;
         uint32_t getIrqFlags() { return irq; }
         int startReceive()
         {
             ++receives;
-            return receive_error;
+            if (receiving) return -706;
+            if (receive_error) return receive_error;
+            receiving = true;
+            return 0;
         }
         int standby()
         {
             ++standbys;
+            if (standby_error) return standby_error;
+            receiving = false;
             return 0;
         }
         size_t getPacketLength() { return size; }
@@ -118,6 +125,22 @@ int main()
         assert(receiver.pollReceive(&packet));
         assert(packet.size == 8 && packet.data[0] == 0x42 && packet.rssi_dbm == -60 && packet.snr_db == 9);
         assert(receiver.statistics_.rx_packets == 1 && receiver.radio_.receives == 1);
+        assert(receiver.radio_.standbys == 1 && receiver.radio_.receiving);
+    }
+    for (const bool standby_fails : {false, true})
+    {
+        Receiver receiver;
+        receiver.radio_.irq = RADIOLIB_LR2021_IRQ_RX_DONE;
+        if (standby_fails) receiver.radio_.standby_error = -42;
+        else receiver.radio_.receive_error = -42;
+        RadioPacket packet;
+        assert(receiver.pollReceive(&packet));
+        assert(packet.size == 8 && packet.data[0] == 0x42);
+        assert(receiver.statistics_.rx_packets == 1 && !receiver.online_);
+        assert(receiver.radio_.standbys == 1);
+        assert(receiver.radio_.receives == (standby_fails ? 0 : 1));
+        // A failed rearm cannot deliver the same payload a second time.
+        assert(!receiver.pollReceive(&packet) && receiver.radio_.reads == 1);
     }
     std::puts("Linux LR2021 production RX: damaged-frame rejection with/without RX_DONE, fatal reset/offline, progress preservation and valid packet acceptance passed");
 }

@@ -106,7 +106,7 @@ void clicked(lv_event_t* event)
 bool music_key(void* context, uint32_t key)
 {
     auto& self = *static_cast<MusicWidget*>(context);
-#if defined(ARDUINO_T_LORA_PAGER)
+#if defined(ARDUINO_T_LORA_PAGER) || defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
     if (key == 'a' || key == 'A' || key == LV_KEY_LEFT || key == 'd' || key == 'D' || key == LV_KEY_RIGHT)
     {
         self.focus.move(key == 'a' || key == 'A' || key == LV_KEY_LEFT ? -1 : 1);
@@ -135,7 +135,7 @@ bool music_key(void* context, uint32_t key)
     }
     if (key == LV_KEY_ENTER)
     {
-#if defined(ARDUINO_T_LORA_PAGER)
+#if defined(ARDUINO_T_LORA_PAGER) || defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
         send(self, self.focus.selected);
 #else
         send(self, 4);
@@ -213,7 +213,7 @@ WidgetHandle create_music_widget(lv_obj_t* parent, lv_coord_t width, lv_coord_t 
     lv_obj_add_flag(footer, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_user_data(footer, reinterpret_cast<void*>(4));
     lv_obj_add_event_cb(footer, clicked, LV_EVENT_CLICKED, self);
-#if defined(ARDUINO_T_LORA_PAGER)
+#if defined(ARDUINO_T_LORA_PAGER) || defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
     lv_obj_set_style_bg_opa(self->chrome.footer, LV_OPA_TRANSP, 0);
     ui::i18n::set_label_text(footer, "A/D select  Enter run  W/S wheel widgets  V menu");
     self->focus.selected = 1;

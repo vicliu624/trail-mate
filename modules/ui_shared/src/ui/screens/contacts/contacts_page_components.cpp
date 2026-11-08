@@ -3654,6 +3654,9 @@ static void open_action_menu_modal()
             ? chat_support::supports_team_chat()
         : (g_contacts_state.current_mode == ContactsMode::Groups)
             ? chat_support::supports_reticulum_destination_text()
+        : (node && chat_support::active_mesh_protocol() == chat::MeshProtocol::Reticulum &&
+           chat::hasReticulumDestinationIdentity(node->reticulum_identity))
+            ? chat_support::supports_reticulum_destination_text()
             : chat_support::supports_local_text_chat();
     int action_count = allow_chat_action ? 2 : 1; // Chat + Cancel
     if (allow_reticulum_call)

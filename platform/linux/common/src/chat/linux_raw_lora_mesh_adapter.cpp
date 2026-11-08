@@ -7,6 +7,7 @@
 #include "chat/linux_meshcore_direct_wire.h"
 #include "chat/linux_meshcore_group_wire.h"
 #include "chat/runtime/meshcore_runtime.h"
+#include "chat/runtime/meshtastic_runtime.h"
 #include "platform/linux/mesh/linux_radio_identity_store.h"
 #include "platform/linux/runtime_paths.h"
 
@@ -59,6 +60,7 @@ constexpr std::uint32_t kRxMonitorHeartbeatSeconds = 15;
 constexpr std::uint8_t kBitfieldWantResponseMask = 0x02;
 constexpr std::uint32_t kNodeInfoReplySuppressMs = 60000;
 constexpr std::uint32_t kKeyVerificationTimeoutMs = 60000;
+constexpr std::uint32_t kMeshtasticAckTimeoutMs = 60000;
 constexpr std::size_t kMaxPkiNodes = 16;
 constexpr std::size_t kPkiKeySize = 32;
 template <class Event>
@@ -1213,6 +1215,7 @@ bool LinuxRawLoraMeshAdapter::begin()
 
 void LinuxRawLoraMeshAdapter::tick()
 {
+    expireMeshtasticAcks();
     updateMeshCoreVerification();
     meshcore_wire::DirectOutcome expired;
     while (meshcore_direct_.expire(::sys::millis_now(), expired))
@@ -1387,6 +1390,107 @@ void LinuxRawLoraMeshAdapter::publishSendResult(::chat::MessageId id, ::chat::Me
     if (send_result_sink_) send_result_sink_(send_result_context_, id, protocol, status, failure);
     else ::sys::EventBus::publish(new ::sys::ChatSendResultEvent(id, status, protocol, failure), 0);
 }
+void LinuxRawLoraMeshAdapter::expireMeshtasticAcks()
+{
+    const auto now = retry_clock_();
+    for (auto& pending : meshtastic_pending_acks_)
+    {
+        if (!pending.message || uint32_t(now - pending.sent_at) < kMeshtasticAckTimeoutMs) continue;
+        const auto id = pending.message;
+        pending = {};
+        publishSendResult(id, ::chat::MeshProtocol::Meshtastic, ::chat::MessageStatus::Failed,
+                          ::chat::delivery::SendFailureKind::AckTimeout);
+        append_lora_system_log("Meshtastic ACK timeout", "No peer confirmation for " + node_hex(id) + ".");
+    }
+}
+void LinuxRawLoraMeshAdapter::cancelMeshtasticAcks()
+{
+    for (auto& pending : meshtastic_pending_acks_)
+    {
+        if (!pending.message) continue;
+        const auto id = pending.message;
+        pending = {};
+        publishSendResult(id, ::chat::MeshProtocol::Meshtastic, ::chat::MessageStatus::Failed,
+                          ::chat::delivery::SendFailureKind::Rejected);
+    }
+}
+void LinuxRawLoraMeshAdapter::consumeMeshtasticRouting(
+    const ::chat::meshtastic::PacketHeaderWire& header, const meshtastic_Data& decoded, bool encrypted)
+{
+    if (!encrypted || header.to != self_node_id_ || !decoded.request_id ||
+        decoded.payload.size > sizeof(decoded.payload.bytes)) return;
+    meshtastic_Routing routing = meshtastic_Routing_init_default;
+    auto stream = pb_istream_from_buffer(decoded.payload.bytes, decoded.payload.size);
+    if (!pb_decode(&stream, meshtastic_Routing_fields, &routing) ||
+        routing.which_variant != meshtastic_Routing_error_reason_tag) return;
+    // Official Meshtastic Routing replies use channel encryption even for PKI
+    // text. Match the addressed recipient and request, rather than treating an
+    // overheard relay or an unrelated channel packet as delivery confirmation.
+    for (auto& pending : meshtastic_pending_acks_)
+    {
+        if (pending.message != decoded.request_id || pending.peer != header.from) continue;
+        using Failure = ::chat::delivery::SendFailureKind;
+        Failure failure = Failure::Unknown;
+        switch (routing.error_reason)
+        {
+        case meshtastic_Routing_Error_NONE:
+            failure = Failure::None;
+            break;
+        case meshtastic_Routing_Error_TIMEOUT:
+        case meshtastic_Routing_Error_MAX_RETRANSMIT:
+        case meshtastic_Routing_Error_NO_RESPONSE:
+        case meshtastic_Routing_Error_NO_ROUTE:
+            failure = Failure::AckTimeout;
+            break;
+        case meshtastic_Routing_Error_NO_INTERFACE:
+        case meshtastic_Routing_Error_DUTY_CYCLE_LIMIT:
+        case meshtastic_Routing_Error_RATE_LIMIT_EXCEEDED:
+            failure = Failure::RadioSendFailed;
+            break;
+        case meshtastic_Routing_Error_NO_CHANNEL:
+            failure = Failure::ChannelKeyMissing;
+            break;
+        case meshtastic_Routing_Error_PKI_UNKNOWN_PUBKEY:
+        case meshtastic_Routing_Error_PKI_FAILED:
+            failure = Failure::PeerKeyMissing;
+            break;
+        case meshtastic_Routing_Error_GOT_NAK:
+        case meshtastic_Routing_Error_BAD_REQUEST:
+        case meshtastic_Routing_Error_NOT_AUTHORIZED:
+        case meshtastic_Routing_Error_ADMIN_BAD_SESSION_KEY:
+        case meshtastic_Routing_Error_ADMIN_PUBLIC_KEY_UNAUTHORIZED:
+        case meshtastic_Routing_Error_TOO_LARGE:
+            failure = Failure::Rejected;
+            break;
+        }
+        const auto id = pending.message;
+        pending = {};
+        publishSendResult(id, ::chat::MeshProtocol::Meshtastic,
+                          failure == Failure::None ? ::chat::MessageStatus::Delivered : ::chat::MessageStatus::Failed,
+                          failure);
+        append_lora_system_log(failure == Failure::None ? "Meshtastic ACK received" : "Meshtastic NACK received",
+                               "Message " + node_hex(id) + " peer " + node_hex(header.from) +
+                                   " reason " + std::to_string(routing.error_reason) + ".");
+        if (routing.error_reason == meshtastic_Routing_Error_PKI_UNKNOWN_PUBKEY ||
+            routing.error_reason == meshtastic_Routing_Error_NO_CHANNEL)
+        {
+            // Reuse the same key-resynchronization policy as ESP32/nRF52. The
+            // matched ACK slot was consumed above, so duplicate NACKs cannot
+            // trigger repeated NodeInfo exchanges.
+            ::chat::runtime::ProtocolEffects effects;
+            const auto cause = routing.error_reason == meshtastic_Routing_Error_PKI_UNKNOWN_PUBKEY
+                                   ? ::chat::runtime::MeshtasticPkiResyncCause::PeerReportsUnknownPubkey
+                                   : ::chat::runtime::MeshtasticPkiResyncCause::PeerReportsNoChannel;
+            auto channel = ::chat::ChannelId::PRIMARY;
+            (void)channel_from_hash(build_meshtastic_air_plan(config_), header.channel, &channel);
+            ::chat::runtime::MeshtasticPkiResyncState{}.handle({cause, header.from, 0, channel}, effects);
+            for (const auto& effect : effects.items)
+                if (const auto* info = std::get_if<::chat::runtime::SendNodeInfoEffect>(&effect))
+                    (void)sendMeshtasticNodeInfoTo(info->peer, info->want_response, info->channel);
+        }
+        return;
+    }
+}
 std::vector<::chat::NodeId> LinuxRawLoraMeshAdapter::encryptedPeerIds() const
 {
     std::vector<::chat::NodeId> peers;
@@ -1417,6 +1521,7 @@ std::vector<::mesh::PeerPublicKey> LinuxRawLoraMeshAdapter::peerPublicKeys() con
 }
 void LinuxRawLoraMeshAdapter::cancelPendingSends()
 {
+    cancelMeshtasticAcks();
     meshcore_repeater_.reset();
     meshcore_direct_routes_ = {};
     cancelMeshCoreVerification();
@@ -1484,7 +1589,7 @@ void LinuxRawLoraMeshAdapter::suspendRadio()
         .supports_trace_route_request = true,
         .supports_trace_route_reply = true,
         .supports_protocol_app_response = true,
-        .supports_protocol_ack_tracking = false,
+        .supports_protocol_ack_tracking = true,
     };
 }
 
@@ -1792,9 +1897,9 @@ bool LinuxRawLoraMeshAdapter::sendMeshCoreAdvert(bool broadcast)
     if (!tx_enabled_ || meshcore_discovery_.listening(::sys::millis_now()) || !ensureRadioReady()) return false;
     meshcore_wire::Frame frame;
     const bool sent = meshcore_wire::encodeAdvert(meshcore_identity_, config_,
-                                       short_name_.empty() ? long_name_ : short_name_,
-                                       now_seconds(), broadcast, frame) &&
-           transmitMeshCoreFrame(frame.bytes.data(), frame.size);
+                                                  short_name_.empty() ? long_name_ : short_name_,
+                                                  now_seconds(), broadcast, frame) &&
+                      transmitMeshCoreFrame(frame.bytes.data(), frame.size);
     if (sent) markSelfAnnounced();
     return sent;
 }
@@ -2364,6 +2469,8 @@ void LinuxRawLoraMeshAdapter::applyProtocolConfig(
         meshcore_seen_ = {};
         meshcore_seen_cursor_ = 0;
     }
+    // Flush local transmit results first, then publish terminal cancellation.
+    cancelMeshtasticAcks();
     if (radio_changed)
     {
         meshcore_direct_routes_ = {};
@@ -2778,6 +2885,26 @@ bool LinuxRawLoraMeshAdapter::sendMeshtasticPayload(
         return false;
     }
 
+    MeshtasticPendingAck* pending = nullptr;
+    if (portnum == meshtastic_PortNum_TEXT_MESSAGE_APP && dest != 0 && dest != kBroadcastNodeId)
+    {
+        expireMeshtasticAcks();
+        for (auto& candidate : meshtastic_pending_acks_)
+        {
+            if (candidate.message == msg_id)
+            {
+                meshcore_send_failure_ = ::chat::MeshOperationFailure::Busy;
+                return false;
+            }
+            if (!candidate.message && !pending) pending = &candidate;
+        }
+        if (!pending)
+        {
+            meshcore_send_failure_ = ::chat::MeshOperationFailure::Busy;
+            return false;
+        }
+    }
+
     std::uint8_t data_payload[256] = {};
     std::size_t data_size = sizeof(data_payload);
     bool encoded = false;
@@ -2902,7 +3029,9 @@ bool LinuxRawLoraMeshAdapter::sendMeshtasticPayload(
         header.id = msg_id;
         header.channel = channel_hash;
         header.flags = (config_.hop_limit & 7) | ((config_.hop_limit & 7) << 5) | (air_want_ack ? ::chat::meshtastic::PACKET_FLAGS_WANT_ACK_MASK : 0);
-        return mqtt_->publishMeshtasticPayload(header, channel, wire_payload, wire_payload_size, use_pki);
+        const bool ok = mqtt_->publishMeshtasticPayload(header, channel, wire_payload, wire_payload_size, use_pki);
+        if (ok && pending) *pending = {msg_id, dest, retry_clock_()};
+        return ok;
     }
     std::uint8_t wire[255] = {};
     std::size_t wire_size = sizeof(wire);
@@ -2955,6 +3084,7 @@ bool LinuxRawLoraMeshAdapter::sendMeshtasticPayload(
     ::platform::linux_runtime::append_packet_log(std::move(entry));
 
     const bool ok = transmitMeshtasticFrame(wire, wire_size);
+    if (ok && pending) *pending = {msg_id, dest, retry_clock_()};
     if (!ok)
     {
         append_lora_system_log(
@@ -3755,31 +3885,19 @@ bool LinuxRawLoraMeshAdapter::sendRoutingAck(::chat::NodeId dest,
     }
 
     const ::chat::MessageId msg_id = nextMessageId();
-    const std::uint8_t* payload = data_buf;
-    std::size_t payload_len = data_stream.bytes_written;
-    std::uint8_t pki_buf[256] = {};
-    if (channel_hash == 0)
+    const MeshtasticAirPlan plan = build_meshtastic_air_plan(config_);
+    if (channel_hash == 0 && psk_len == 0)
     {
-        std::size_t pki_len = sizeof(pki_buf);
-        if (!encryptPkiPayload(dest,
-                               msg_id,
-                               data_buf,
-                               data_stream.bytes_written,
-                               pki_buf,
-                               &pki_len))
-        {
-            return false;
-        }
-        payload = pki_buf;
-        payload_len = pki_len;
-        psk = nullptr;
-        psk_len = 0;
+        // PKI requests arrive on air channel zero; ROUTING_APP is returned on
+        // the primary shared channel, as in the official firmware.
+        psk = psk_for_channel(plan, ::chat::ChannelId::PRIMARY, &psk_len);
+        channel_hash = channel_hash_for(plan, ::chat::ChannelId::PRIMARY);
     }
 
     std::uint8_t wire[255] = {};
     std::size_t wire_size = sizeof(wire);
-    if (!build_meshtastic_wire_packet(payload,
-                                      payload_len,
+    if (!build_meshtastic_wire_packet(data_buf,
+                                      data_stream.bytes_written,
                                       self_node_id_,
                                       msg_id,
                                       dest,
@@ -4451,6 +4569,7 @@ bool LinuxRawLoraMeshAdapter::consumeMeshtasticData(
 
     if (decoded.portnum == meshtastic_PortNum_ROUTING_APP)
     {
+        consumeMeshtasticRouting(header, decoded, encrypted);
         append_lora_system_log(
             "Meshtastic routing RX",
             "Routing payload from " + node_hex(header.from) + ".",

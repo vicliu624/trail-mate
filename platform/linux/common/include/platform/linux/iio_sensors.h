@@ -25,8 +25,18 @@ struct ImuSnapshot
     uint32_t updated_ms = 0, last_motion_ms = 0;
 };
 
+struct MagnetometerSnapshot
+{
+    bool present = false, ready = false;
+    float x = 0, y = 0, z = 0, heading_deg = 0;
+    int16_t raw_x = 0, raw_y = 0, raw_z = 0;
+    uint32_t updated_ms = 0;
+};
+
 // Standard IIO channel names/scales; no sensor-model or board identification.
 bool read_iio_imu(const std::filesystem::path& device, ImuSnapshot& output);
+// Level-device magnetic heading. This is not a calibrated true-north bearing.
+bool read_iio_magnetometer(const std::filesystem::path& device, MagnetometerSnapshot& output, int mount_rotation = 0);
 unsigned gravity_rotation(float x, float y, unsigned previous, int mount_rotation = 0);
 
 class IioSensorRuntime
@@ -35,6 +45,7 @@ class IioSensorRuntime
     explicit IioSensorRuntime(IioSensorOptions options);
     ~IioSensorRuntime();
     ImuSnapshot snapshot() const;
+    MagnetometerSnapshot magnetometerSnapshot() const;
 
   private:
     struct Impl;
@@ -43,5 +54,6 @@ class IioSensorRuntime
 
 bool configure_iio_sensors(const IioSensorOptions& options);
 ImuSnapshot linux_imu_snapshot();
+MagnetometerSnapshot linux_magnetometer_snapshot();
 void shutdown_iio_sensors();
 } // namespace platform::linux_runtime

@@ -59,6 +59,19 @@ static lv_obj_t* create_btn_with_label(lv_obj_t* parent, int w, int h, const cha
 void create(lv_obj_t* parent, const Spec& spec, Widgets& w)
 {
     const auto& profile = ::ui::page_profile::current();
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    (void)spec;
+    const int button_height = 20;
+    const int action_bar_height = 26;
+    const int send_width = 50;
+    const int position_width = 52;
+    const int cancel_width = 54;
+    const int content_pad = 4;
+    const int content_row_pad = 3;
+    const int action_pad_lr = 4;
+    const int action_pad_tb = 2;
+    const int button_gap = 4;
+#else
     const int button_height = std::max(spec.btn_h, static_cast<int>(profile.filter_button_height));
     const int action_bar_height = std::max(spec.action_bar_h, button_height + 16);
     const int send_width = std::max(spec.send_w, profile.large_touch_hitbox ? 108 : spec.send_w);
@@ -69,6 +82,7 @@ void create(lv_obj_t* parent, const Spec& spec, Widgets& w)
     const int action_pad_lr = std::max(spec.action_pad_lr, profile.large_touch_hitbox ? 14 : spec.action_pad_lr);
     const int action_pad_tb = std::max(spec.action_pad_tb, profile.large_touch_hitbox ? 6 : spec.action_pad_tb);
     const int button_gap = std::max(spec.btn_gap, profile.large_touch_hitbox ? 12 : spec.btn_gap);
+#endif
 
     w.container = lv_obj_create(parent);
     lv_obj_set_size(w.container, LV_PCT(100), LV_PCT(100));
@@ -91,6 +105,13 @@ void create(lv_obj_t* parent, const Spec& spec, Widgets& w)
     w.textarea = lv_textarea_create(w.content);
     lv_obj_set_width(w.textarea, LV_PCT(100));
     lv_obj_set_flex_grow(w.textarea, 1);
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    lv_obj_set_style_pad_all(w.textarea, 4, 0);
+    auto* keyboard_hint = lv_label_create(w.content);
+    ::ui::i18n::set_label_text(keyboard_hint, "Tab to Send, then Enter");
+    lv_obj_set_style_text_font(keyboard_hint, ::ui::page_profile::resolve_tiny_font(), 0);
+    lv_obj_set_style_text_color(keyboard_hint, lv_color_hex(0x6A5646), 0);
+#endif
 
     w.action_bar = lv_obj_create(w.container);
     lv_obj_set_size(w.action_bar, LV_PCT(100), action_bar_height);
@@ -109,6 +130,17 @@ void create(lv_obj_t* parent, const Spec& spec, Widgets& w)
     lv_obj_set_style_pad_right(w.position_btn, button_gap, 0);
 
     w.cancel_btn = create_btn_with_label(w.action_bar, cancel_width, button_height, "Cancel");
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    lv_obj_set_style_pad_column(w.action_bar, button_gap, 0);
+    for (auto* button : {w.send_btn, w.position_btn, w.cancel_btn})
+    {
+        lv_obj_set_style_pad_left(button, 3, 0);
+        lv_obj_set_style_pad_right(button, 3, 0);
+        lv_obj_set_style_pad_top(button, 1, 0);
+        lv_obj_set_style_pad_bottom(button, 1, 0);
+        lv_obj_set_style_text_font(button, ::ui::page_profile::resolve_caption_font(), 0);
+    }
+#endif
 
     lv_obj_t* spacer = lv_obj_create(w.action_bar);
     lv_obj_set_size(spacer, 1, 1);

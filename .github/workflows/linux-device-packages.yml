@@ -1,0 +1,90 @@
+name: Linux Device Packages
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  producers:
+    name: Pinned self-contained TMAP producers
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: vicliu624/trail-mate-center
+          ref: efa12462a526aabad7212cbadfa537ace0b7dbd6
+          path: .codex-build/tmap-center-source
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Publish licensed producer bundles
+        shell: pwsh
+        run: |
+          foreach ($runtime in @('linux-arm', 'linux-arm64')) {
+            ./tools/publish_tmap_producer.ps1 -CenterRoot .codex-build/tmap-center-source -OutputDirectory "build/tmap-producer/$runtime" -Runtime $runtime
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - name: Archive producer bundles
+        run: |
+          mkdir -p build/producer-archives
+          for runtime in linux-arm linux-arm64; do
+            tar -C "build/tmap-producer/$runtime" -czf "build/producer-archives/tmap-$runtime.tar.gz" .
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-tmap-producers
+          path: build/producer-archives/*.tar.gz
+          if-no-files-found: error
+
+  packages:
+    name: ${{ matrix.device }} Debian package
+    needs: producers
+    runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [cardputer-zero, t-display-cm0]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-tmap-producers
+          path: build/producer-archives
+      - name: Prepare target producer
+        env:
+          DEVICE: ${{ matrix.device }}
+        run: |
+          runtime=linux-arm64
+          if [ "$DEVICE" = t-display-cm0 ]; then runtime=linux-arm; fi
+          mkdir -p "$RUNNER_TEMP/tmap-producer"
+          tar -C "$RUNNER_TEMP/tmap-producer" -xzf "build/producer-archives/tmap-$runtime.tar.gz"
+          echo "TRAIL_MATE_TMAP_PRODUCER_DIR=$RUNNER_TEMP/tmap-producer" >> "$GITHUB_ENV"
+      - name: Build Cardputer Zero ARM64 package
+        if: matrix.device == 'cardputer-zero'
+        env:
+          TRAIL_MATE_CARDPUTER_ZERO_PACKAGE_JOBS: '4'
+        run: bash apps/linux_cardputer_zero/tools/build_cardputer_zero_deb.sh
+      - name: Enable ARMHF native chroot execution
+        if: matrix.device == 't-display-cm0'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm
+      - name: Install Raspbian bootstrap tools
+        if: matrix.device == 't-display-cm0'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends debootstrap gnupg ca-certificates
+      - name: Build CM0 Raspbian ARMHF app and 1seg backend
+        if: matrix.device == 't-display-cm0'
+        run: |
+          sudo env TRAIL_MATE_CM0_RELEASE_WORK="$RUNNER_TEMP/cm0-release" TRAIL_MATE_TMAP_PRODUCER_DIR="$TRAIL_MATE_TMAP_PRODUCER_DIR" TRAIL_MATE_PACKAGE_JOBS=4 bash apps/linux_lvgl/tools/build_cm0_native_release.sh
+      - name: Verify release package payloads
+        run: python3 scripts/verify_linux_release_packages.py --directory build --version "$(python3 scripts/project_version.py --debian)" --device '${{ matrix.device }}'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-device-${{ matrix.device }}
+          path: |
+            build/cardputer-zero-deb/*.deb
+            build/cm0-deb/*.deb
+          if-no-files-found: error

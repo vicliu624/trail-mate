@@ -225,7 +225,10 @@ struct LinuxAgendaSource::Impl
                 bool have_command = false, allow = false, refresh = false;
                 {
                     std::unique_lock<std::mutex> lock(mutex);
-                    wake.wait_for(lock, std::chrono::milliseconds(100), [&]
+                    // Calendar/reminder clocks have one-second resolution.
+                    // Commands and presentation changes still wake immediately;
+                    // idle sampling must not reopen timezone storage at 10 Hz.
+                    wake.wait_for(lock, std::chrono::seconds(1), [&]
                                   { return stopping || has_command || refresh_requested || presentation_changed; });
                     if (stopping && !has_command) break;
                     if (has_command)

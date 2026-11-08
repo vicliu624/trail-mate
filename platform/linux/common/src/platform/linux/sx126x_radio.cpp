@@ -496,7 +496,7 @@ bool Sx126xRadio::configureFsk(const FskSettings& config)
 
 bool Sx126xRadio::transmit(const std::uint8_t* data, std::size_t size)
 {
-    if (data == nullptr || size == 0 || size > 220)
+    if (data == nullptr || size == 0 || size > 255)
     {
         return false;
     }
@@ -507,6 +507,14 @@ bool Sx126xRadio::transmit(const std::uint8_t* data, std::size_t size)
         return false;
     }
 
+    const auto resume_receive = [this]()
+    {
+        // TX temporarily replaces the IRQ mask. SetRx alone does not restore
+        // RX_DONE reporting, leaving the radio deaf to software after a send.
+        return setDioIrqParamsLocked(kIrqRxDone | kIrqTimeout | kIrqCrcErr | kIrqHeaderErr,
+                                     kIrqRxDone) &&
+               clearIrqLocked(kIrqAll) && setRxLocked(kRxTimeoutInf);
+    };
     bool ok = setBufferBaseLocked(0x00, 0x00);
     const std::uint8_t packet[6] = {
         static_cast<std::uint8_t>((lora_config_.preamble_len >> 8) & 0xFF),
@@ -537,7 +545,7 @@ bool Sx126xRadio::transmit(const std::uint8_t* data, std::size_t size)
          clearIrqLocked(kIrqAll) && setTxLocked(0x000000);
     if (!ok)
     {
-        (void)setRxLocked(kRxTimeoutInf);
+        (void)resume_receive();
         return false;
     }
 
@@ -547,22 +555,20 @@ bool Sx126xRadio::transmit(const std::uint8_t* data, std::size_t size)
         const std::uint32_t irq = getIrqFlagsLocked();
         if ((irq & kIrqTxDone) != 0)
         {
-            (void)clearIrqLocked(kIrqAll);
-            (void)setRxLocked(kRxTimeoutInf);
+            const bool receiving = resume_receive();
             ++tx_packets_;
-            return true;
+            return receiving;
         }
         if ((irq & kIrqTimeout) != 0)
         {
-            (void)clearIrqLocked(kIrqAll);
-            (void)setRxLocked(kRxTimeoutInf);
+            (void)resume_receive();
             setErrorLocked("LoRa TX timeout");
             return false;
         }
         if (std::chrono::steady_clock::now() - start >
             std::chrono::seconds(4))
         {
-            (void)setRxLocked(kRxTimeoutInf);
+            (void)resume_receive();
             setErrorLocked("LoRa TX wait timed out");
             return false;
         }

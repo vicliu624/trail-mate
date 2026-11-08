@@ -102,7 +102,8 @@ class ChatMessageListScreen
     {
         Direct,
         Broadcast,
-        Team
+        Team,
+        All
     };
 
     enum class ModalCommand
@@ -136,7 +137,12 @@ class ChatMessageListScreen
     ModalButtonContext modal_button_contexts_[5]{};
 
     int selected_index_ = -1;
-    FilterMode filter_mode_ = FilterMode::Direct;
+    FilterMode filter_mode_ =
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+        FilterMode::All;
+#else
+        FilterMode::Direct;
+#endif
     bool filter_panel_visible_ = true;
     bool data_loading_ = false;
     char search_query_[32] = {};

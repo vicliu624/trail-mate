@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -8,6 +9,13 @@
 
 namespace trailmate::cardputer_zero::platform::device
 {
+
+struct FramebufferStatistics
+{
+    std::uint64_t requests = 0;
+    std::uint64_t commits = 0;
+    std::uint64_t bytes_written = 0;
+};
 
 class LinuxFramebufferPlatform : public SurfacePresenter
 {
@@ -18,6 +26,7 @@ class LinuxFramebufferPlatform : public SurfacePresenter
     [[nodiscard]] bool pump() override;
     [[nodiscard]] std::vector<app::InputEvent> drainInput() override;
     void present(const core::Canvas& canvas) override;
+    [[nodiscard]] FramebufferStatistics statistics() const noexcept;
 
   private:
     struct Impl;

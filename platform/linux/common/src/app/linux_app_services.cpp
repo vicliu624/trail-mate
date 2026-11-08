@@ -61,6 +61,7 @@ extern char** environ;
 #include "platform/linux/route_image_tasks.h"
 #include "platform/linux/settings_reset_binding.h"
 #include "platform/linux/settings_reset_storage.h"
+#include "platform/shared/chat/auto_reply_observer.h"
 #include "platform/ui/device_runtime.h"
 #include "platform/ui/gps_runtime.h"
 #include "platform/ui/network_runtime.h"
@@ -1578,6 +1579,7 @@ struct LinuxAppServices::Implementation
                            : static_cast<::chat::IMeshAdapter&>(raw_lora_mesh_adapter)),
           chat_service(chat_model, mesh_adapter, chat_store),
           chat_event_bridge(chat_service),
+          auto_reply_observer(::platform::shared::chat::create_auto_reply_observer(chat_service)),
           team_runtime(),
           team_crypto(),
           team_event_sink(),
@@ -1736,6 +1738,7 @@ struct LinuxAppServices::Implementation
     ::chat::IMeshAdapter& mesh_adapter;
     ::chat::ChatService chat_service;
     LinuxChatEventBusBridge chat_event_bridge;
+    std::unique_ptr<::chat::ChatService::IncomingMessageObserver> auto_reply_observer;
     LinuxTeamRuntime team_runtime;
     LinuxTeamCrypto team_crypto;
     LinuxTeamEventBusSink team_event_sink;

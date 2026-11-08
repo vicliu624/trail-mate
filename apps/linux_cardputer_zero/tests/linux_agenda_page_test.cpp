@@ -102,7 +102,7 @@ int main(int argc, char** argv)
             key(Key::Enter);
         };
         tick(3300ms);
-        for (unsigned i = 0; i < 12; ++i) key(Key::Right);
+        for (unsigned i = 0; i < 12; ++i) key(Key::Next);
         key(Key::Enter);
         until([&]
               { return page::state() && page::state()->snapshot.storage_ready; });

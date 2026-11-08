@@ -373,7 +373,6 @@ ChatMessageListScreen::ChatMessageListScreen(lv_obj_t* parent)
       broadcast_btn_(nullptr),
       list_back_btn_(nullptr),
       selected_index_(-1),
-      filter_mode_(FilterMode::Direct),
       action_cb_(nullptr),
       action_cb_user_data_(nullptr)
 {
@@ -402,6 +401,10 @@ ChatMessageListScreen::ChatMessageListScreen(lv_obj_t* parent)
     direct_btn_ = w.direct_btn;
     broadcast_btn_ = w.broadcast_btn;
     team_btn_ = w.team_btn;
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    if (direct_btn_)
+        ::ui::i18n::set_label_text(lv_obj_get_child(direct_btn_, 0), "All");
+#endif
 
     // ---------- Styles ----------
     chat::ui::message_list::styles::apply_root_container(container_);
@@ -752,7 +755,11 @@ void ChatMessageListScreen::buildFilteredConversations(
     for (const auto& conv : convs_)
     {
         bool mode_match = false;
-        if (is_team_conversation(conv.id))
+        if (filter_mode_ == FilterMode::All)
+        {
+            mode_match = true;
+        }
+        else if (is_team_conversation(conv.id))
         {
             mode_match = filter_mode_ == FilterMode::Team;
         }
@@ -1362,7 +1369,13 @@ void ChatMessageListScreen::filter_click_cb(lv_event_t* e)
     lv_obj_t* tgt = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
     if (tgt == screen->direct_btn_)
     {
-        screen->setFilterMode(FilterMode::Direct);
+        screen->setFilterMode(
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+            FilterMode::All
+#else
+            FilterMode::Direct
+#endif
+        );
     }
     else if (tgt == screen->broadcast_btn_)
     {
@@ -1538,7 +1551,7 @@ void ChatMessageListScreen::updateFilterHighlight()
     {
         lv_obj_clear_state(team_btn_, LV_STATE_CHECKED);
     }
-    if (filter_mode_ == FilterMode::Direct)
+    if (filter_mode_ == FilterMode::Direct || filter_mode_ == FilterMode::All)
     {
         lv_obj_add_state(direct_btn_, LV_STATE_CHECKED);
     }

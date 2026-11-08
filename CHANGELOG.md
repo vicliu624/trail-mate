@@ -10,6 +10,69 @@ stable firmware release. Hardware support and validation remain target-specific.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-08
+
+This minor release adds installable Cardputer Zero and T-Display-CM0 Linux
+packages and expands their device workflows without changing existing storage
+formats or requiring new radio identities. Hardware qualification remains
+target-specific; see the linked acceptance records below.
+
+### Added
+
+- Cardputer Zero ARM64 Debian package with APPLaunch integration, framebuffer
+  rendering, physical keyboard navigation, hardware permissions, Cap LoRa/GNSS
+  detection, heading integration and the shared launcher/widget screens.
+- T-Display-CM0 Raspbian ARMHF application and matching native 1seg backend
+  packages, preserving the target's GCC 14 C++ ABI and ARMv7 receive contract.
+  CM0 also gains the LR2021 FM/1seg views, OFDM learning workbench and receiver
+  diagnostics developed since 1.0.1.
+- Online TMAP creation with global administrative-area search, optional manual
+  bounds, source/layer choices, review, progress, cancellation and a direct
+  transition to the generated map. Linux release packages include the pinned
+  self-contained Center producer and its source/license/hash manifest.
+- Linux LoRa Reticulum discovery through signed local Announce and path replies,
+  and sleep-only private-message automatic replies through a shared observer.
+- Release-time builds and validation of both Linux device packages, their
+  architectures, bundled producer files and accompanying 1seg backend.
+
+### Fixed
+
+- SX1262 transmit paths restore receive interrupts and support complete
+  255-byte LoRa frames. LR2021 rearms continuous receive through standby.
+  ESP-IDF receive paths preserve progress interrupts, read valid payloads before
+  clearing their IRQs and retain a valid frame if the next receive restart fails.
+- Meshtastic official-firmware interoperability: addressed ACK/NACK tracking,
+  public-key refresh after matched key errors, duplicate-error suppression and
+  consistent response-request bits in shared protobuf encoding.
+- MeshCore discovery/key propagation and Reticulum full-destination contact
+  actions. Paired Zero/CM0 discovery, bidirectional private text and remote
+  delivery proofs were physically verified for all three protocols.
+- Incoming messages refresh the active conversation/inbox, including broadcast
+  previews and unread state. Zero uses a compact single-line topbar and chat
+  actions, with Tab then Enter to send from the keyboard composer.
+- Framebuffer rendering avoids repeated full-screen writes and flicker; keyboard
+  exit, native backlight sleep, wake-input handling and shared widget focus are
+  integrated with the existing screen lifecycle.
+- Linux identity-file permission checks preserve SQLite POSIX locks instead of
+  closing an additional ordinary database descriptor. Lock, concurrent-write
+  and repeated-startup regressions verify message/configuration/identity
+  preservation. This removes a reproduced unsafe locking path; it does not
+  promise recovery of previously corrupted records.
+- Online map download/conversion progress, proxy use, cancellation and temporary
+  workspace cleanup, plus the shared map-overlay and preview integration fixes
+  made since 1.0.1.
+- Catalog image declarations use global C linkage, fixing newer host compiler
+  linkage failures in Cardputer and Agenda CI builds. Formatting retains
+  clang-format 14 on an explicitly supported runner image.
+
+### Validation
+
+- [Three-protocol and official Meshtastic acceptance](docs/engineering/linux-paired-mesh-validation-20261108.md).
+- [Cardputer Zero device acceptance](docs/engineering/cardputer-zero-device-validation-20261108.md).
+- [Online TMAP creation and packaging](docs/engineering/linux-tmap-creation.md).
+- Shared ESP receive regressions and stack hygiene checks passed. Linux device
+  radio tests do not substitute for physical ESP32 qualification.
+
 ## [1.0.1] - 2026-10-17
 
 This patch enables the browser-management USB path in Pager and T-Deck release

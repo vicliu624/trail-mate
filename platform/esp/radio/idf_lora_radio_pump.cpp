@@ -9,6 +9,7 @@ namespace
 
 constexpr uint32_t kIrqRxDone = 0x0002;
 constexpr uint32_t kIrqTxDone = 0x0001;
+constexpr uint32_t kIrqReceiveError = 0x0020 | 0x0040 | 0x0200;
 constexpr int kRadioOk = 0;
 
 } // namespace
@@ -74,17 +75,27 @@ IdfLoraPollResult IdfLoraRadioPump::poll(IdfLoraRadioFrame& out)
         return IdfLoraPollResult::None;
     }
 
-    board_.clearRadioIrqFlags(out.irq);
+    // Preamble/sync/header-valid IRQs describe a packet still in flight.
+    // Restart only on receive completion or a terminal error, never progress.
     if ((out.irq & kIrqRxDone) == 0)
     {
+        if ((out.irq & kIrqReceiveError) == 0) return IdfLoraPollResult::None;
+        board_.clearRadioIrqFlags(out.irq);
         return restartReceive() ? IdfLoraPollResult::ReceiveRestarted
                                 : IdfLoraPollResult::ReceiveRestartFailed;
+    }
+    if (out.irq & kIrqReceiveError)
+    {
+        board_.clearRadioIrqFlags(out.irq);
+        if (!restartReceive()) return IdfLoraPollResult::ReceiveRestartFailed;
+        return IdfLoraPollResult::ReadFailed;
     }
 
     out.packet_length = board_.getRadioPacketLength(true);
     if (out.packet_length <= 0 ||
         out.packet_length > static_cast<int>(rx_scratch_.size()))
     {
+        board_.clearRadioIrqFlags(out.irq);
         if (!restartReceive()) return IdfLoraPollResult::ReceiveRestartFailed;
         return IdfLoraPollResult::InvalidPacketLength;
     }
@@ -92,6 +103,7 @@ IdfLoraPollResult IdfLoraRadioPump::poll(IdfLoraRadioFrame& out)
     if (board_.readRadioData(rx_scratch_.data(),
                              static_cast<std::size_t>(out.packet_length)) != kRadioOk)
     {
+        board_.clearRadioIrqFlags(out.irq);
         if (!restartReceive()) return IdfLoraPollResult::ReceiveRestartFailed;
         return IdfLoraPollResult::ReadFailed;
     }
@@ -100,6 +112,8 @@ IdfLoraPollResult IdfLoraRadioPump::poll(IdfLoraRadioFrame& out)
     out.len = static_cast<std::size_t>(out.packet_length);
     out.rssi = board_.getRadioRSSI();
     out.snr = board_.getRadioSNR();
+    // RadioLib validates IRQ metadata while reading. Clear it only after read.
+    board_.clearRadioIrqFlags(out.irq);
     // Deliver a packet that has already been read even if arming the next
     // receive window fails.  The next poll will retry it and report that
     // failure instead of silently throwing away real traffic.

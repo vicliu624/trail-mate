@@ -16,9 +16,29 @@ entry and a separate explicit fbdev/evdev debug fallback; hardware validation
 still has to happen on the real device session.
 
 The shared LVGL main-menu profile for this target is Cardputer Zero specific:
-`make_cardputer_zero_profile()` owns a compact focus carousel for the 320 x 170
-display. It remains independent of the Pager's newer grid layout. Business
+`make_cardputer_zero_profile()` uses the Pager's adaptive icon grid and focus
+styling, with four columns and two visible rows on the 320 x 170 display.
+Keyboard direction keys navigate the grid and scroll to the remaining apps. Business
 pages continue using shared page geometry and runtime ports.
+
+The Pager-style widget feed is also available: press `V` to switch between the
+grid and widgets, use Up/Down or W/S to change widgets, and press `V` or Escape
+to return to the grid. Music and Quick Controls support Left/Right (A/D) to
+select a control and Enter to activate it. The feed reuses Mesh, GPS, Recent
+Messages, Agenda, Music, and Quick Controls data ports; Compass appears only when
+the runtime reports heading support. Each complete widget is scaled to fit the
+short display without removing its controls or data fields.
+
+The framebuffer presenter caches identical canvas content. It converts changed
+frames in private memory and publishes the completed native frame with one copy;
+it never clears the live scanout buffer before drawing. This avoids black-frame
+flicker and repeated pixel conversion while the UI is idle.
+
+The device session owns a background IIO sensor worker. Standard `in_magn_*`
+channels provide the onboard BMM150 compass independently of GPS fixes and screen
+rotation. Magnetic heading is shown as uncalibrated: keep the device level and
+do not treat it as a calibrated true-north bearing. Missing or unreadable samples
+remain unavailable rather than reusing a stale heading.
 
 Known hardware facts in this repo:
 
@@ -177,6 +197,42 @@ ticks the Cap LoRa-1262 radio path and the GPS serial/NMEA path even when the
 Chat, Contacts, Map, or Sky Plot page is not currently open. Pages consume
 runtime state and send commands; they do not own radio polling or GPS serial
 reads.
+
+On the framebuffer keyboard interface, press **S** in a Chat conversation to
+open Compose. Type the message, press **Tab** once to select **Send**, then
+press **Enter**. Enter inside the text field inserts a newline. A visible
+Compose hint describes this sequence, and the compact action bars preserve
+message space on the 320 × 170 panel. Further Tab presses reach the IME,
+symbols, emoji, voice and cancel controls. Press Esc briefly to go back, or
+hold it for approximately 1.5 seconds to exit cleanly to APPLaunch.
+
+Extensions → Make TMAP opens the five-step online creator. Search for a global
+city or district and select the result with the correct country/context; the
+boundary extent is filled automatically. Coordinates remains an optional
+alternative. Select map layers and a detail preset, accept or edit the suggested
+name, then review and create. Tab selects controls and Enter activates them;
+Enter in the place field also starts its search. Advanced holds output metadata,
+budgets and optional local PBF input. The normal path downloads map data itself.
+Closing leaves a job running; reopening shows its progress. Cancel stops the job.
+Completed maps are published directly to Map layers; View map opens the generated
+area and Back returns to the result. See
+[the creator guide](../../docs/engineering/linux-tmap-creation.md) for source and
+device limits, endpoint configuration, and verification.
+
+The device shell enables the OS-owned `ext_5v_out` LED-class supply before
+starting the radio and GPS services. The package grants the `gpio` group write
+access to that specific brightness attribute through udev. Trail Mate restores
+the previous supply state after its workers stop; an already enabled supply
+remains enabled. The app does not need to run as root.
+
+Startup presence detection uses the radio's actual chip response or GPS UART
+traffic, rather than treating `/dev/spidev*` and `/dev/serial0` as proof of a Cap.
+If neither service responds after eight seconds, the shell shows one brief
+notice and leaves local applications usable. Permission/power errors have a
+separate notice, and intentionally disabled services do not trigger a missing
+module notice. A GPS fix is not required to detect a receiver. Power off the
+device before inserting or removing the Cap; this is a startup check, not a
+request to hot-swap modules.
 
 Cardputer Zero Settings follows the same ownership boundary. Trail Mate exposes
 application settings that its runtime can apply. Linux session brightness and

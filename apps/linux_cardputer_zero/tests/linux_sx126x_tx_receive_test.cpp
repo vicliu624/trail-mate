@@ -1,0 +1,89 @@
+#include "platform/linux/packet_radio.h"
+#include <array>
+#include <cassert>
+#include <chrono>
+#include <cstdio>
+#include <cstring>
+#include <mutex>
+#include <string>
+#include <thread>
+
+namespace
+{
+constexpr uint16_t kIrqTxDone = 0x0001, kIrqRxDone = 0x0002, kIrqHeaderErr = 0x0020,
+                   kIrqCrcErr = 0x0040, kIrqTimeout = 0x0200, kIrqAll = 0xffff;
+constexpr uint32_t kRxTimeoutInf = 0xffffff;
+constexpr uint8_t kLoRaHeaderExplicit = 0, kLoRaCrcOn = 1, kLoRaCrcOff = 0,
+                  kLoRaIqStandard = 0, kCmdSetPacketParams = 0x8c, kCmdWriteBuffer = 0x0e;
+void sleep_ms(unsigned ms) { std::this_thread::sleep_for(std::chrono::milliseconds(ms)); }
+
+struct Transmitter
+{
+    std::mutex mutex_;
+    bool online_ = true;
+    uint8_t packet_type_ = 1;
+    platform::linux_runtime::RadioSettings lora_config_;
+    platform::linux_runtime::FskSettings fsk_config_;
+    unsigned tx_packets_ = 0, receive_starts = 0;
+    uint16_t irq_mask = kIrqRxDone, dio_mask = kIrqRxDone, outcome = kIrqTxDone;
+    bool fail_start = false, fail_write = false, fail_receive = false;
+    std::string error;
+    bool setBufferBaseLocked(uint8_t, uint8_t) { return true; }
+    bool writeCommandLocked(uint8_t, const uint8_t*, size_t, bool) { return true; }
+    bool transferLocked(const uint8_t*, uint8_t*, size_t) { return !fail_write; }
+    bool setDioIrqParamsLocked(uint16_t mask, uint16_t dio)
+    {
+        irq_mask = mask;
+        dio_mask = dio;
+        return true;
+    }
+    bool clearIrqLocked(uint16_t) { return true; }
+    bool setTxLocked(uint32_t) { return !fail_start; }
+    uint32_t getIrqFlagsLocked() const { return outcome & irq_mask; }
+    bool setRxLocked(uint32_t)
+    {
+        ++receive_starts;
+        return !fail_receive;
+    }
+    void setErrorLocked(const char* text) { error = text; }
+#include "linux_sx126x_tx.inc"
+};
+} // namespace
+
+int main()
+{
+    const uint8_t payload[] = {0x42, 0x23};
+    for (const uint8_t modem : {uint8_t{0}, uint8_t{1}})
+    {
+        Transmitter radio;
+        radio.packet_type_ = modem;
+        std::array<uint8_t, 256> maximum{};
+        assert(radio.transmit(maximum.data(), 255));
+        assert(!radio.transmit(maximum.data(), 256));
+        assert(radio.tx_packets_ == 1 && radio.receive_starts == 1);
+    }
+    for (const uint8_t modem : {uint8_t{0}, uint8_t{1}})
+    {
+        for (unsigned scenario = 0; scenario < 6; ++scenario)
+        {
+            Transmitter radio;
+            radio.packet_type_ = modem;
+            if (scenario == 1) radio.outcome = kIrqTimeout;
+            if (scenario == 2) radio.fail_start = true;
+            if (scenario == 3) radio.fail_write = true;
+            if (scenario == 4) radio.fail_receive = true;
+            if (scenario == 5) radio.outcome = 0; // Exercise the host wait timeout.
+            assert(radio.transmit(payload, sizeof(payload)) == (scenario == 0));
+            assert(radio.tx_packets_ == (scenario == 0 || scenario == 4 ? 1 : 0));
+            assert(radio.receive_starts == 1);
+            assert((radio.irq_mask & (kIrqRxDone | kIrqCrcErr | kIrqHeaderErr | kIrqTimeout)) ==
+                   (kIrqRxDone | kIrqCrcErr | kIrqHeaderErr | kIrqTimeout));
+            assert(radio.dio_mask == kIrqRxDone);
+            // Model a subsequent peer frame: it must be visible through the
+            // restored chip mask, which SetRx by itself does not change.
+            radio.outcome = kIrqRxDone;
+            assert(radio.getIrqFlagsLocked() == kIrqRxDone);
+        }
+    }
+    std::puts("Production SX126x TX: LoRa/FSK restore RX IRQs after success, chip/host timeout, start/write failure; RX restart failure is reported");
+}

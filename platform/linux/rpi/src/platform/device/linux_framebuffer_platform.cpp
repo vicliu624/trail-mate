@@ -102,6 +102,7 @@ struct LinuxFramebufferPlatform::Impl
         }
 
         framebuffer_memory = static_cast<std::byte*>(mapped);
+        staging.resize(framebuffer_size);
     }
 
     ~Impl()
@@ -116,7 +117,7 @@ struct LinuxFramebufferPlatform::Impl
         }
     }
 
-    void writePackedPixel(int x, int y, std::uint32_t packed) const noexcept
+    void writePackedPixel(int x, int y, std::uint32_t packed) noexcept
     {
         const int pixel_x = x + static_cast<int>(vinfo.xoffset);
         const int pixel_y = y + static_cast<int>(vinfo.yoffset);
@@ -124,7 +125,7 @@ struct LinuxFramebufferPlatform::Impl
 
         for (int byte_index = 0; byte_index < bytes_per_pixel; ++byte_index)
         {
-            framebuffer_memory[offset + static_cast<std::size_t>(byte_index)] =
+            staging[offset + static_cast<std::size_t>(byte_index)] =
                 static_cast<std::byte>((packed >> (byte_index * 8)) & 0xFFU);
         }
     }
@@ -136,6 +137,10 @@ struct LinuxFramebufferPlatform::Impl
     fb_var_screeninfo vinfo{};
     std::size_t framebuffer_size{};
     std::byte* framebuffer_memory{};
+    std::vector<std::byte> staging;
+    std::vector<core::Color> previous_pixels;
+    int previous_width = 0, previous_height = 0;
+    FramebufferStatistics statistics;
     EvdevInput evdev_input{};
 };
 
@@ -148,7 +153,7 @@ LinuxFramebufferPlatform::~LinuxFramebufferPlatform() = default;
 
 bool LinuxFramebufferPlatform::pump()
 {
-    return g_running.load();
+    return g_running.load() && !impl_->evdev_input.quitRequested();
 }
 
 std::vector<app::InputEvent> LinuxFramebufferPlatform::drainInput()
@@ -158,6 +163,15 @@ std::vector<app::InputEvent> LinuxFramebufferPlatform::drainInput()
 
 void LinuxFramebufferPlatform::present(const core::Canvas& canvas)
 {
+    ++impl_->statistics.requests;
+    if (canvas.width() <= 0 || canvas.height() <= 0)
+        throw std::runtime_error("invalid logical display size");
+    const auto& pixels = canvas.pixels();
+    static_assert(sizeof(core::Color) == 4, "Framebuffer cache compares packed RGBA pixels");
+    if (impl_->previous_width == canvas.width() && impl_->previous_height == canvas.height() &&
+        impl_->previous_pixels.size() == pixels.size() &&
+        std::memcmp(impl_->previous_pixels.data(), pixels.data(), pixels.size() * sizeof(core::Color)) == 0)
+        return;
     const int physical_width = static_cast<int>(impl_->vinfo.xres);
     const int physical_height = static_cast<int>(impl_->vinfo.yres);
     const int scale_x = physical_width / canvas.width();
@@ -174,7 +188,9 @@ void LinuxFramebufferPlatform::present(const core::Canvas& canvas)
     const int offset_x = (physical_width - render_width) / 2;
     const int offset_y = (physical_height - render_height) / 2;
 
-    std::memset(impl_->framebuffer_memory, 0, impl_->framebuffer_size);
+    // The panel may scan mmap memory at any time. Clearing it before drawing
+    // exposes black/partial frames on the LCD. Compose privately, then publish.
+    std::fill(impl_->staging.begin(), impl_->staging.end(), std::byte{0});
 
     for (int y = 0; y < canvas.height(); ++y)
     {
@@ -191,6 +207,17 @@ void LinuxFramebufferPlatform::present(const core::Canvas& canvas)
             }
         }
     }
+    std::memcpy(impl_->framebuffer_memory, impl_->staging.data(), impl_->framebuffer_size);
+    ++impl_->statistics.commits;
+    impl_->statistics.bytes_written += impl_->framebuffer_size;
+    impl_->previous_pixels.assign(pixels.begin(), pixels.end());
+    impl_->previous_width = canvas.width();
+    impl_->previous_height = canvas.height();
+}
+
+FramebufferStatistics LinuxFramebufferPlatform::statistics() const noexcept
+{
+    return impl_->statistics;
 }
 
 } // namespace trailmate::cardputer_zero::platform::device

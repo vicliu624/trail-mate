@@ -204,6 +204,7 @@ set(TRAIL_MATE_LINUX_COMMON_SOURCES
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/node_identity.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/geocaching_draft_store.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/tmap_creation.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/tmap_area_search.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/hostlink_geocaching_drafts.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/geocaching_crypto.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/geocaching_record_store.cpp"
@@ -943,6 +944,8 @@ function(trailmate_add_linux_ui_shell target_name common_target)
     )
     if(UI_UX_PACK STREQUAL "cardputer_compact")
         target_compile_definitions(${target_name} PRIVATE TRAIL_MATE_CARDPUTER_ZERO_LINUX=1)
+        target_sources(${target_name} PRIVATE
+            "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/cardputer_cap.cpp")
     elseif(UI_UX_PACK STREQUAL "t_display_p4_touch")
         target_compile_definitions(${target_name} PRIVATE TRAIL_MATE_UI_P4_TOUCH=1)
         target_sources(${target_name} PRIVATE

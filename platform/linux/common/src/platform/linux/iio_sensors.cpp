@@ -77,6 +77,32 @@ unsigned gravity_rotation(float x, float y, unsigned previous, int mount_rotatio
     return static_cast<unsigned>((static_cast<int>(raw) + mount_rotation % 360 + 360) % 360);
 }
 
+bool read_iio_magnetometer(const std::filesystem::path& device, MagnetometerSnapshot& output, int mount_rotation)
+{
+    output.ready = false;
+    const char* axes[] = {"x", "y", "z"};
+    float* physical[] = {&output.x, &output.y, &output.z};
+    int16_t* counts[] = {&output.raw_x, &output.raw_y, &output.raw_z};
+    for (unsigned i = 0; i < 3; ++i)
+    {
+        const auto channel = std::string("in_magn_") + axes[i];
+        double raw = 0, scale = 0, offset = 0;
+        if (!number(device / (channel + "_raw"), raw)) return false;
+        if (!number(device / (channel + "_scale"), scale) && !number(device / "in_magn_scale", scale)) return false;
+        if (!number(device / (channel + "_offset"), offset)) number(device / "in_magn_offset", offset);
+        const auto value = (raw + offset) * scale;
+        if (scale <= 0 || !std::isfinite(value)) return false;
+        *physical[i] = static_cast<float>(value);
+        *counts[i] = static_cast<int16_t>(std::clamp(raw, -32768.0, 32767.0));
+    }
+    if (std::hypot(output.x, output.y) < 1e-9f) return false;
+    constexpr float radians_to_degrees = 57.295779513f;
+    output.heading_deg = std::fmod(std::atan2(-output.y, output.x) * radians_to_degrees + mount_rotation + 360.0f, 360.0f);
+    output.present = output.ready = true;
+    output.updated_ms = milliseconds();
+    return true;
+}
+
 struct IioSensorRuntime::Impl
 {
     explicit Impl(IioSensorOptions value) : options(std::move(value))
@@ -110,6 +136,7 @@ struct IioSensorRuntime::Impl
     void run()
     {
         std::filesystem::path device;
+        std::filesystem::path magnetometer;
         ImuSnapshot previous = data;
         unsigned candidate = 0, consecutive = 0;
         while (!stopping)
@@ -141,13 +168,35 @@ struct IioSensorRuntime::Impl
                     sample.last_motion_ms = sample.updated_ms;
             }
             else device.clear();
+            if (magnetometer.empty())
+            {
+                std::error_code scan_error;
+                for (std::filesystem::directory_iterator it(options.root, scan_error), end;
+                     !scan_error && it != end; it.increment(scan_error))
+                {
+                    const auto path = it->path();
+                    if (std::filesystem::exists(path / "in_magn_x_raw", scan_error) &&
+                        std::filesystem::exists(path / "in_magn_y_raw", scan_error) &&
+                        std::filesystem::exists(path / "in_magn_z_raw", scan_error))
+                    {
+                        magnetometer = path;
+                        break;
+                    }
+                }
+            }
+            MagnetometerSnapshot magnetic;
+            magnetic.present = !magnetometer.empty() && std::filesystem::exists(magnetometer, error);
+            if (magnetic.present)
+                read_iio_magnetometer(magnetometer, magnetic, options.mount_rotation);
+            else magnetometer.clear();
             {
                 std::lock_guard<std::mutex> lock(mutex);
                 data = sample;
+                magnetic_data = magnetic;
             }
             previous = sample;
             std::unique_lock<std::mutex> lock(mutex);
-            changed.wait_for(lock, std::chrono::milliseconds(sample.ready ? 100 : 2000), [&]
+            changed.wait_for(lock, std::chrono::milliseconds(sample.ready || magnetic.ready ? 100 : 2000), [&]
                              { return stopping.load(); });
         }
     }
@@ -156,6 +205,7 @@ struct IioSensorRuntime::Impl
     std::condition_variable changed;
     std::atomic_bool stopping{false};
     ImuSnapshot data;
+    MagnetometerSnapshot magnetic_data;
     std::thread worker;
 };
 
@@ -165,6 +215,11 @@ ImuSnapshot IioSensorRuntime::snapshot() const
 {
     std::lock_guard<std::mutex> lock(impl_->mutex);
     return impl_->data;
+}
+MagnetometerSnapshot IioSensorRuntime::magnetometerSnapshot() const
+{
+    std::lock_guard<std::mutex> lock(impl_->mutex);
+    return impl_->magnetic_data;
 }
 
 namespace
@@ -196,6 +251,12 @@ ImuSnapshot linux_imu_snapshot()
     auto& state = runtime();
     std::lock_guard<std::mutex> lock(state.mutex);
     return state.sensor ? state.sensor->snapshot() : ImuSnapshot{};
+}
+MagnetometerSnapshot linux_magnetometer_snapshot()
+{
+    auto& state = runtime();
+    std::lock_guard<std::mutex> lock(state.mutex);
+    return state.sensor ? state.sensor->magnetometerSnapshot() : MagnetometerSnapshot{};
 }
 void shutdown_iio_sensors()
 {

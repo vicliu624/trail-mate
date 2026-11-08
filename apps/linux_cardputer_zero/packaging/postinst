@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+if [ "${1:-}" = configure ] && command -v udevadm >/dev/null 2>&1; then
+    udevadm control --reload-rules || true
+    udevadm trigger --action=add --subsystem-match=leds --sysname-match=ext_5v_out || true
+    udevadm settle --timeout=5 || true
+fi

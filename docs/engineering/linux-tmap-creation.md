@@ -4,21 +4,53 @@ CM0 and Cardputer Zero expose **Extensions → Make TMAP** directly in the botto
 action bar, without opening Menu. It also opens directly with **T** while on
 Extensions; the button displays
 **T Make TMAP** and H Help lists the shortcut. Text editors keep literal T input.
-The shared LVGL wizard
-uses seven pages: local PBF source, WGS84 bounds, layers/zoom, map identity,
-output/revision/budget, review, and progress/result. Touch text editing and keyboard
-focus navigation use the existing shared UI contracts. Read-only text panels can
-be scrolled with arrow keys. Closing the page leaves a job running; Cancel stops
-it. Reopening the entry shows the current job, and a completed job offers New map.
+The shared LVGL wizard uses five pages: global administrative area, map content,
+save name, review, and progress/result. This follows Center's area-first authoring
+flow. Administrative search is the default; Coordinates switches to explicit
+WGS84 bounds and back. Results show country and administrative context to
+distinguish namesakes. Only actual boundary extents are accepted; point-only
+geocoding results are not turned into invented administrative boundaries.
+
+Enter a place name and press Enter or activate Search. Tab moves focus and Enter
+activates the selected control. Map name, filename and output defaults are
+prefilled after selecting an area. Advanced contains the stable package key,
+revision, output budget and optional local PBF input. Balanced adjusts zoom for
+the chosen area; Overview, Walking, Detailed and custom zoom remain available.
+Read-only panels scroll with arrow keys. Closing the page leaves a job running;
+Cancel stops it. Reopening shows the job, and a completed job offers View map
+and New map. Before the first source bytes arrive, the job shows the elapsed
+wait for the map server; it then reports received KiB and later producer stages.
 
 ## Sources and outputs
 
-Put a local `.osm.pbf` file in `map-sources` beneath the application's configured
-storage root. The source page displays that actual directory. Refresh scans in
-the background and updates the list when finished. `maps/sources` and an explicit
-`TRAIL_MATE_TMAP_SOURCE_ROOT` override are also supported. The wizard does not
-download regional PBF extracts or infer a boundary from a country name. Enter
-explicit bounds and split areas crossing the antimeridian.
+The normal flow downloads OSM data for the selected enclosing rectangle into its
+private job workspace. The installed `osmium-tool` converts that XML stream to
+PBF before the existing Center producer runs. A user does not need to obtain or
+copy a PBF first. Downloading, conversion, production, verification and installation
+all run away from the UI thread and can be cancelled. Network or producer errors
+remain visible and do not publish an incomplete map.
+
+Global administrative lookup uses the [Photon API](https://github.com/komoot/photon/blob/master/docs/api-v1.md).
+Searches are explicit, serialized and spaced by at least a second, with a bounded
+cache of successful queries. A new search cancels obsolete work; an older response
+cannot replace the latest results. `TRAIL_MATE_AREA_SEARCH_URL` can select another
+compatible deployment without rebuilding. Map acquisition uses an Overpass
+interpreter, currently defaulting to the [Private.coffee public instance](https://wiki.openstreetmap.org/wiki/Overpass_API#Public_Overpass_API_instances);
+`TRAIL_MATE_MAP_SOURCE_URL` can select another interpreter. The original default
+returned timeouts and HTTP 502 during device validation. Attribution
+is shown in Review. Public services can be unavailable or throttle requests; the
+UI exposes retry and coordinate entry instead of treating a failure as a result.
+
+Online jobs on the small device are limited to 2500 square kilometres and a
+64 MiB source response. Larger selections must be reduced or use an appropriate
+local PBF through Advanced. The default map output budget is 128 MiB and is
+independent of the source response limit. The estimate also checks working space.
+Bounds use WGS84 and must not cross the antimeridian.
+
+Optional local `.osm.pbf` files are scanned beneath `map-sources` or `maps/sources`
+in the configured storage root. `TRAIL_MATE_TMAP_SOURCE_ROOT` remains available
+for a development source directory. Advanced lists these inputs alongside Online
+download; local-file scans remain asynchronous.
 
 OSM, terrain and satellite layers use Center's existing PBF rendering and raster
 sources. Terrain and satellite may fetch source data over the system network.
@@ -36,18 +68,14 @@ map filenames are refused; select another name instead of silently replacing a
 map. Keep a package key stable for updates to the same region and choose its
 revision explicitly.
 
-For the default CM0 desktop session, the source directory is
-`/home/pi/.local/share/trailmate/map-sources`. The page's displayed path is
-authoritative if XDG or application storage overrides are configured. For example,
-copy `area.osm.pbf` there, open Extensions → Make TMAP and select Refresh.
-Bounds are WGS84 decimal degrees: West/South/East/North, with negative numbers
-for western longitudes and southern latitudes. For a small example, enter
-`102.70`, `25.00`, `102.71`, `25.01` respectively, provided the PBF covers it.
-Start with OSM and zoom 13–14. Give the map a name, a simple package key such as
-`test-area`, filename `test-area.tmap`, revision 1 and an appropriate output limit.
-Review the estimate and start creation. After success, return to Map → Map Layer
-and choose the produced base layer, move to the covered region and use a zoom
-in the produced range. No manual output copy or separate import is required.
+Search for a small city or district, select the correctly disambiguated result,
+choose OSM and Balanced, then review and create. A manual example uses West
+`102.70`, South `25.00`, East `102.71`, North `25.01`; those numbers are optional
+input, not a default inferred location. After success, return to Map → Map Layer
+and select the produced base layer, move to the covered region and use a zoom
+in its produced range. The completed job also offers View map, which opens the
+existing map renderer at the generated area's centre and zoom, with Back returning
+to the result. No manual output copy or separate import is required.
 
 Only the original PBF and final map resources need to remain after a normal job.
 Final output includes the `.tmap` files and any referenced resources under
@@ -112,7 +140,8 @@ Use `linux-arm` for CM0, `linux-arm64` for the Cardputer package builder, and
 runtime, Skia assets, Center license and a producer/hash manifest. CMake's
 `TRAIL_MATE_TMAP_PRODUCER_DIR` installs it under `/usr/lib/trailmate/tmap-producer`
 and checks its architecture. CM0 and Cardputer package metadata include their
-distribution's ICU dependency when bundling this producer. No .NET SDK or Center
+distribution's ICU dependency when bundling this producer, and the Cardputer
+package depends on `osmium-tool` for online source conversion. No .NET SDK or Center
 checkout is required on the device. An explicit `TRAIL_MATE_TMAP_PRODUCER`
 executable override is available for development.
 
@@ -133,5 +162,9 @@ destination. A small real OSM PBF is processed by the published Center producer;
 the resulting map is independently discovered/read by the application's TMAP SDK
 and its POI is found through the normal map-search runtime. Both 1232×568 and
 320×170 wizard tests cover every step, form preservation, background continuation,
-cancellation and unsupported-service behavior. Release/device results are recorded
+cancellation and unsupported-service behavior. The online fixture also exercises
+namesakes, invalid and point-only search results, caching, obsolete searches,
+source download/conversion, HTTP failures, response limits and cancellation. Its
+successful output is read and searched through the ordinary device SDK.
+Release/device results are recorded
 in the CM0 acceptance audit after those checks run.

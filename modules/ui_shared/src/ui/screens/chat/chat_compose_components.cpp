@@ -481,10 +481,16 @@ void ChatComposeScreen::syncFocusOrder(bool focus_ime)
         }
     };
     add_visible(impl_->w.textarea);
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    // The hardware keyboard's next stop after typing is the primary action.
+    add_visible(impl_->w.send_btn);
+#endif
     add_visible(ime_toggle);
     add_visible(impl_->sym_btn);
     add_visible(impl_->emoji_btn);
+#if !defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
     add_visible(impl_->w.send_btn);
+#endif
     add_visible(impl_->w.position_btn);
     add_visible(impl_->w.cancel_btn);
     add_visible(impl_->w.top_bar.back_btn);
@@ -732,9 +738,15 @@ void ChatComposeScreen::on_key(lv_event_t* e)
         }
         if (target == screen->impl_->w.send_btn || focused == screen->impl_->w.send_btn)
         {
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+            // Keypad ENTER emits CLICKED on release. Injecting it here as
+            // well schedules a second send for the same physical key press.
+            return;
+#else
             lv_obj_send_event(screen->impl_->w.send_btn, LV_EVENT_CLICKED, nullptr);
             lv_event_stop_processing(e);
             return;
+#endif
         }
     }
 

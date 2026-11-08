@@ -83,8 +83,17 @@ static void style_help_chip(lv_obj_t* chip,
     lv_obj_set_style_pad_bottom(chip, profile.dense ? 2 : 3, 0);
     lv_obj_set_style_min_height(
         chip,
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+        18,
+#else
         ::ui::page_profile::resolve_control_button_height() - (profile.dense ? 4 : 6),
+#endif
         0);
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    lv_obj_set_style_pad_top(chip, 1, 0);
+    lv_obj_set_style_pad_bottom(chip, 1, 0);
+    lv_obj_set_style_radius(chip, 3, 0);
+#endif
     make_non_scrollable(chip);
     lv_obj_clear_flag(chip, LV_OBJ_FLAG_CLICKABLE);
 }
@@ -131,8 +140,12 @@ ConversationWidgets create_conversation_base(lv_obj_t* parent)
     // Action bar (fixed height)
     w.action_bar = lv_obj_create(w.right_column);
     lv_obj_set_size(w.action_bar, LV_PCT(100),
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+                    24);
+#else
                     ::ui::page_profile::resolve_control_button_height() +
                         (profile.dense ? 2 : 2));
+#endif
     lv_obj_set_flex_grow(w.action_bar, 0);
     lv_obj_set_flex_flow(w.action_bar, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(w.action_bar,
@@ -153,16 +166,26 @@ ConversationWidgets create_conversation_base(lv_obj_t* parent)
         0);
     lv_label_set_long_mode(w.help_label, LV_LABEL_LONG_CLIP);
     lv_label_set_recolor(w.help_label, true);
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    lv_label_set_text(w.help_label, "#D00000 S# Send  #D00000 H# Help");
+#else
     lv_label_set_text(w.help_label, "#D00000 H#elp");
+#endif
     lv_obj_center(w.help_label);
 
     create_action_bar_spacer(w.action_bar);
 
     // Primary compose button
     w.reply_btn = lv_btn_create(w.action_bar);
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    lv_obj_set_size(w.reply_btn, 54, 20);
+    lv_obj_set_style_pad_all(w.reply_btn, 2, 0);
+    lv_obj_set_style_text_font(w.reply_btn, ::ui::page_profile::resolve_caption_font(), 0);
+#else
     lv_obj_set_size(w.reply_btn,
                     profile.dense ? 74 : 96,
                     ::ui::page_profile::resolve_control_button_height());
+#endif
     make_non_scrollable(w.reply_btn);
 
     w.reply_label = lv_label_create(w.reply_btn);

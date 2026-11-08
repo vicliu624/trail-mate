@@ -281,7 +281,7 @@ void return_to_menu(ShellSession& shell, CanvasLvglHost& host)
 
 void focus_next_menu_item(ShellSession& shell, CanvasLvglHost& host)
 {
-    press(shell, InputKey::Right);
+    press(shell, InputKey::Next);
     tick_for(shell, host, std::chrono::milliseconds(180));
 }
 

@@ -11,6 +11,7 @@
 #include "chat/linux_reticulum_links.h"
 #include "chat/linux_reticulum_network.h"
 #include "chat/linux_reticulum_propagation.h"
+#include "chat/linux_reticulum_radio_announce.h"
 #include "chat/linux_reticulum_upload.h"
 #include "chat/linux_track_directories.h"
 #include "chat/linux_track_publication.h"
@@ -563,6 +564,7 @@ struct LinuxMeshWorker::Impl
             }
             engine->setMessageIdSource(allocateId, this);
             platform::linux_runtime::LinuxReticulumIdentity reticulum_identity(platform::linux_runtime::sqlite_database_path());
+            LinuxReticulumRadioAnnounce radio_announce(reticulum_identity);
             std::array<uint8_t, 16> propagation_address{};
             auto& peer_directory = ::platform::ui::reticulum_directory::mesh_peer_directory();
             (void)peer_directory.begin();
@@ -893,11 +895,12 @@ struct LinuxMeshWorker::Impl
             struct ReticulumRxContext
             {
                 LinuxReticulumIngress& ingress;
+                LinuxReticulumRadioAnnounce& announce;
                 PeerSink& sink;
                 LinuxReticulumLinks& links;
                 LinuxReticulumLinks::Sender sender;
                 void* sender_context;
-            } receive_context{reticulum_ingress, peer_sink, reticulum_links, link_sender, &link_sender_context};
+            } receive_context{reticulum_ingress, radio_announce, peer_sink, reticulum_links, link_sender, &link_sender_context};
             engine->setReticulumPacketSink([](void* context, const LinuxRawLoraMeshAdapter::ReticulumPacket& packet)
                                            {
                 auto& received = *static_cast<ReticulumRxContext*>(context);
@@ -912,6 +915,8 @@ struct LinuxMeshWorker::Impl
                 meta.time_source = meta.rx_timestamp_s ? chat::RxTimeSource::DeviceUtc : chat::RxTimeSource::Uptime;
                 meta.rssi_dbm_x10 = static_cast<int16_t>(packet.rssi_dbm * 10);
                 meta.snr_db_x10 = static_cast<int16_t>(packet.snr_db * 10);
+                if (received.announce.receive(packet.data.data(), packet.size, meta.rx_timestamp_ms,
+                                              meta.rx_timestamp_s, received.sender, received.sender_context)) return;
                 if (received.links.receive(packet.data.data(), packet.size, meta.rx_timestamp_ms, received.sender, received.sender_context, &meta)) return;
                 received.ingress.receive(packet.data.data(), packet.size, ::sys::millis_now(),
                     seconds > 0 && uint64_t(seconds) <= UINT32_MAX ? static_cast<uint32_t>(seconds) : 0); },
@@ -1066,6 +1071,10 @@ struct LinuxMeshWorker::Impl
                     engine->setPrivacyConfig(settings.privacy);
                     if (apply_radio) engine->applyProtocolConfig(settings.protocol, settings.config);
                     applied_protocol = settings.protocol;
+                    radio_announce.configure(settings.protocol == chat::MeshProtocol::Reticulum &&
+                                                 settings.config.tx_enabled && !settings.config.reticulum_anonymous_peer &&
+                                                 chat::reticulum::integratedLoRaAllowed(settings.config),
+                                             settings.name, ::sys::millis_now());
                 }
                 if (have_command)
                 {
@@ -1136,6 +1145,8 @@ struct LinuxMeshWorker::Impl
                 track_publication.tick(trackDirectoryNow(), track_current, applied_epoch);
                 track_read.tick(trackDirectoryNow(), track_current, applied_epoch);
                 engine->tick();
+                if (applied_protocol == chat::MeshProtocol::Reticulum && engine->isReady())
+                    radio_announce.tick(::sys::millis_now(), ::sys::epoch_seconds_now(), link_sender, &link_sender_context);
                 if (applied_protocol == chat::MeshProtocol::Reticulum) reticulum_network.tick(::sys::millis_now(), ::sys::epoch_seconds_now());
                 bool propagation_current;
                 {

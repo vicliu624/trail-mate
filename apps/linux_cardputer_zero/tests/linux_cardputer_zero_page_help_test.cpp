@@ -84,7 +84,7 @@ int main(int argc, char** argv)
             tick(150ms);
         };
         tick(3300ms);
-        for (int i = 0; i < index; ++i) key(cardputer_app::InputKey::Right);
+        for (int i = 0; i < index; ++i) key(cardputer_app::InputKey::Next);
         key(cardputer_app::InputKey::Enter);
         tick(650ms);
         assert(ui_get_active_app());

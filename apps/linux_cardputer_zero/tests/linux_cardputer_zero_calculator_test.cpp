@@ -67,7 +67,7 @@ int main()
             shell.enqueueInputs({{code, value ? std::string(1, value) : std::string{}, value}});
             tick(100ms);
         };
-        for (int i = 0; i < 6; ++i) key(input::InputKey::Right);
+        for (int i = 0; i < 6; ++i) key(input::InputKey::Next);
         key(input::InputKey::Enter);
         tick(650ms);
         assert(hasLabel(lv_screen_active(), "CALCULATOR"));

@@ -1,0 +1,3 @@
+# Let the gpio group manage only the Cap's shared EXT5V supply. The application
+# stays unprivileged; the kernel continues to own the underlying GPIO line.
+ACTION=="add", SUBSYSTEM=="leds", KERNEL=="ext_5v_out", RUN+="/bin/chgrp gpio /sys%p/brightness", RUN+="/bin/chmod g+w /sys%p/brightness"

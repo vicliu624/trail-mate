@@ -124,8 +124,18 @@ void top_bar_init(TopBar& bar, lv_obj_t* parent, const TopBarConfig& config)
 #else
     const lv_coord_t back_btn_radius = std::max<lv_coord_t>(large_touch ? 16 : 10, back_btn_height / 2);
 #endif
-    const lv_coord_t right_label_width = large_touch ? 156 : (narrow ? 56 : (dense ? 72 : (resolved_height >= 40 ? 120 : 90)));
+    const lv_coord_t right_label_width =
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+        64;
+#else
+        large_touch ? 156 : (narrow ? 56 : (dense ? 72 : (resolved_height >= 40 ? 120 : 90)));
+#endif
     const lv_font_t* text_font = resolve_top_bar_font(resolved_height);
+    const lv_font_t* status_font = text_font;
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    // Preserve room for the full battery percentage on the 320-pixel display.
+    status_font = &lv_font_montserrat_12;
+#endif
 
     bar.container = lv_obj_create(parent);
     lv_obj_set_size(bar.container, LV_PCT(100), resolved_height);
@@ -208,11 +218,16 @@ void top_bar_init(TopBar& bar, lv_obj_t* parent, const TopBarConfig& config)
     lv_obj_set_style_min_width(bar.title_label, 0, 0);
     lv_obj_set_style_text_align(bar.title_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_max_width(bar.title_label, LV_PCT(100), 0);
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    lv_label_set_long_mode(bar.title_label, LV_LABEL_LONG_DOT);
+    lv_obj_set_height(bar.title_label, lv_font_get_line_height(text_font));
+    lv_obj_set_style_text_align(bar.title_label, LV_TEXT_ALIGN_LEFT, 0);
+#endif
 
     bar.right_label = lv_label_create(bar.container);
     lv_label_set_text(bar.right_label, "");
     lv_obj_set_width(bar.right_label, right_label_width);
-    lv_obj_set_height(bar.right_label, lv_font_get_line_height(text_font));
+    lv_obj_set_height(bar.right_label, lv_font_get_line_height(status_font));
     lv_label_set_long_mode(bar.right_label, LV_LABEL_LONG_DOT);
     lv_obj_set_style_text_color(bar.right_label,
 #if defined(ARDUINO_T_DECK_PRO)
@@ -222,7 +237,7 @@ void top_bar_init(TopBar& bar, lv_obj_t* parent, const TopBarConfig& config)
 #endif
                                 0);
     lv_obj_set_style_text_align(bar.right_label, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_set_style_text_font(bar.right_label, text_font, 0);
+    lv_obj_set_style_text_font(bar.right_label, status_font, 0);
     lv_obj_set_style_bg_opa(bar.right_label, LV_OPA_TRANSP, 0);
 
     if (config.power_indicator)
@@ -235,7 +250,13 @@ void top_bar_init(TopBar& bar, lv_obj_t* parent, const TopBarConfig& config)
         // Dialog headers own their shortcuts. Registering them as pages would
         // make H open another Help instead of closing the current dialog.
         auto* help_hint = lv_label_create(bar.container);
-        lv_label_set_text(help_hint, narrow ? "H ?" : "H Help");
+        lv_label_set_text(help_hint,
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+                          "H?"
+#else
+                          narrow ? "H ?" : "H Help"
+#endif
+        );
         lv_obj_set_style_text_font(help_hint, &lv_font_montserrat_12, 0);
         lv_obj_set_style_text_color(help_hint, ui::theme::text(), 0);
         lv_obj_add_flag(help_hint, LV_OBJ_FLAG_CLICKABLE);
@@ -270,6 +291,13 @@ void top_bar_set_title(TopBar& bar, const char* title)
     lv_label_set_text(bar.title_label, title);
     ::ui::fonts::apply_content_font(
         bar.title_label, title, resolve_top_bar_font(lv_obj_get_height(bar.container)));
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    // DOT can wrap when height is LV_SIZE_CONTENT. Constrain the label to
+    // exactly one line, including when a fallback font handles a peer name.
+    const auto* font = lv_obj_get_style_text_font(bar.title_label, LV_PART_MAIN);
+    lv_obj_set_height(bar.title_label, std::min<lv_coord_t>(
+                                           lv_font_get_line_height(font), lv_obj_get_content_height(bar.container)));
+#endif
 }
 
 void top_bar_set_right_text(TopBar& bar, const char* text)
@@ -289,7 +317,13 @@ void top_bar_set_right_text(TopBar& bar, const char* text)
 
     lv_label_set_text(bar.right_label, text);
     ::ui::fonts::apply_content_font(
-        bar.right_label, text, resolve_top_bar_font(lv_obj_get_height(bar.container)));
+        bar.right_label, text,
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+        &lv_font_montserrat_12
+#else
+        resolve_top_bar_font(lv_obj_get_height(bar.container))
+#endif
+    );
 }
 
 void top_bar_set_right_text_ascii(TopBar& bar, const char* text)
@@ -307,7 +341,13 @@ void top_bar_set_right_text_ascii(TopBar& bar, const char* text)
 
     lv_label_set_text(bar.right_label, text);
     ::ui::fonts::apply_font(
-        bar.right_label, resolve_top_bar_font(lv_obj_get_height(bar.container)));
+        bar.right_label,
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+        &lv_font_montserrat_12
+#else
+        resolve_top_bar_font(lv_obj_get_height(bar.container))
+#endif
+    );
 }
 
 void top_bar_set_back_callback(TopBar& bar, void (*cb)(void*), void* user_data)

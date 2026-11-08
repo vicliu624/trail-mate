@@ -174,42 +174,26 @@ MenuLayoutProfile make_t_display_p4_profile()
 
 MenuLayoutProfile make_cardputer_zero_profile()
 {
-    // Cardputer keeps its independent carousel after Pager joins the grid.
-    MenuLayoutProfile profile{};
+    // Keep Pager's adaptive grid and focus styling, sized for the 320 x 170 LCD.
+    auto profile = make_pager_profile();
     profile.name = "cardputer_zero";
     profile.transition_animation = false;
-    profile.variant = LayoutVariant::PagerFocus;
-    profile.badge_anchor_mode = BadgeAnchorMode::IconTopLeft;
-    profile.grid_pad_row = 0;
-    profile.badge_offset_x = -4;
-    profile.wrap_grid = false;
-    profile.vertical_scroll = false;
-    profile.snap_center = true;
-    profile.show_card_label = false;
-    profile.show_desc_label = true;
     profile.input_mode = InputMode::Hybrid;
-    profile.directional_key_nav = true;
     profile.show_top_bar = true;
     profile.show_memory_stats = false;
-    profile.card_width = 112;
-    profile.card_height = 80;
-    profile.icon_scale = 208;
-    profile.grid_height_pct = 50;
+    profile.card_height = 56;
+    profile.icon_scale = 128;
     profile.grid_top_offset = 26;
-    profile.grid_pad_column = 8;
-    profile.grid_pad_left = 6;
-    profile.grid_pad_right = 6;
-    profile.top_bar_height = ::ui::kUnifiedTopBarHeight;
+    profile.grid_pad_row = 4;
     profile.top_bar_side_inset = 4;
-    profile.top_bar_text_pad = 3;
     profile.status_row_offset_y = 1;
-    profile.desc_offset = -2;
-    profile.node_id_offset_x = 4;
-    profile.node_id_offset_y = -8;
     profile.badge_min_size = 18;
     profile.badge_pad_h = 5;
     profile.badge_pad_v = 2;
-    profile.desc_font = &lv_font_montserrat_12;
+    profile.card_pad_top = 2;
+    profile.card_pad_bottom = 2;
+    profile.card_pad_row = 0;
+    profile.card_label_font = &lv_font_montserrat_10;
     profile.node_id_font = &lv_font_montserrat_12;
     profile.top_bar_font = &lv_font_montserrat_12;
     profile.badge_font = &lv_font_montserrat_12;

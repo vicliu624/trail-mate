@@ -5,7 +5,7 @@
 #include "ui/menu/menu_layout.h"
 #include "ui/ux_build_config.h"
 
-#if defined(TRAIL_MATE_ESP_BOARD_TAB5) || defined(TRAIL_MATE_UI_P4_TOUCH) || defined(ARDUINO_T_DECK) || defined(ARDUINO_WIO_TRACKER_L2) || defined(ARDUINO_T_LORA_PAGER)
+#if defined(TRAIL_MATE_ESP_BOARD_TAB5) || defined(TRAIL_MATE_UI_P4_TOUCH) || defined(ARDUINO_T_DECK) || defined(ARDUINO_WIO_TRACKER_L2) || defined(ARDUINO_T_LORA_PAGER) || defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
 #include "ui/app_runtime.h"
 #include "ui/localization.h"
 #include "ui/menu/dashboard/dashboard_state.h"
@@ -56,7 +56,7 @@ unsigned page_count(const DashboardUi& state)
 
 bool dashboard_enabled()
 {
-#if defined(ARDUINO_T_DECK) || defined(ARDUINO_WIO_TRACKER_L2) || defined(ARDUINO_T_LORA_PAGER)
+#if defined(ARDUINO_T_DECK) || defined(ARDUINO_WIO_TRACKER_L2) || defined(ARDUINO_T_LORA_PAGER) || defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
     return true;
 #else
     return std::strcmp(ui::menu_profile::current().name, "t_display_p4") == 0;
@@ -128,7 +128,21 @@ void build_page()
     else
     {
         const auto kind = widget_at(state->dock_right ? overview_count() + state->page - 1U : state->page);
-        state->widgets[0] = create_widget(kind, state->grid, width, height);
+        const bool compact = std::strcmp(ui::menu_profile::current().name, "cardputer_zero") == 0;
+        // Render the same complete widget content on the short LCD. The virtual
+        // card retains enough body space for GPS stats and keyboard controls.
+        constexpr int compact_scale = 170;
+        state->widgets[0] = create_widget(kind, state->grid,
+                                          compact ? width * 256 / compact_scale : width,
+                                          compact ? height * 256 / compact_scale : height);
+        if (compact && state->widgets[0].root)
+        {
+            auto* root = state->widgets[0].root;
+            lv_obj_set_style_transform_pivot_x(root, 0, 0);
+            lv_obj_set_style_transform_pivot_y(root, 0, 0);
+            lv_obj_set_style_transform_scale_x(root, compact_scale, 0);
+            lv_obj_set_style_transform_scale_y(root, compact_scale, 0);
+        }
     }
     char page[24];
     std::snprintf(page, sizeof(page), "%u / %u", state->page + 1U,
@@ -178,7 +192,7 @@ void slide_finished(lv_anim_t*)
         // never scrolls; only the launcher grid owns vertical scrolling.
         lv_obj_scroll_to(lv_obj_get_parent(state->panel), 0, 0, LV_ANIM_OFF);
         state->feed_open = state->feed_target;
-#if defined(ARDUINO_T_LORA_PAGER)
+#if defined(ARDUINO_T_LORA_PAGER) || defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
         ui::menu_layout::set_bottom_bar_help_text("H Help");
 #endif
         feed_offset(state, state->feed_open ? lv_obj_get_width(state->panel) : 0);
@@ -447,7 +461,7 @@ bool handleKey(uint32_t key, bool at_left_edge)
     if (!state || !state->active || state->dock_right ||
         ui::menu_runtime::currentScene() != ui::menu_runtime::Scene::Menu || ui_is_overlay_active() ||
         (lv_group_get_default() && lv_group_get_default() != menu_g)) return false;
-#if defined(ARDUINO_T_LORA_PAGER)
+#if defined(ARDUINO_T_LORA_PAGER) || defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
     if (key == 'v' || key == 'V')
     {
         set_feed_open(!state->feed_open);
@@ -461,7 +475,7 @@ bool handleKey(uint32_t key, bool at_left_edge)
         if (key == 'w' || key == 'W' || key == LV_KEY_UP || key == LV_KEY_PREV) change_page(-1);
         else if (key == 's' || key == 'S' || key == LV_KEY_DOWN || key == LV_KEY_NEXT) change_page(1);
         else if (key == LV_KEY_ESC || key == LV_KEY_BACKSPACE) set_feed_open(false);
-#if !defined(ARDUINO_T_LORA_PAGER)
+#if !defined(ARDUINO_T_LORA_PAGER) && !defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
         else if (key == 'd' || key == 'D' || key == LV_KEY_RIGHT) set_feed_open(false);
 #endif
         else if (key == 'd' || key == 'D' || key == LV_KEY_RIGHT) return true;
@@ -601,7 +615,7 @@ void setActive(bool active)
         build_page();
         if (state->timer) lv_timer_resume(state->timer);
     }
-#if defined(ARDUINO_T_LORA_PAGER)
+#if defined(ARDUINO_T_LORA_PAGER) || defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
     ui::menu_layout::set_bottom_bar_help_text("H Help");
 #endif
 }

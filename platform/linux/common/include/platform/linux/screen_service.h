@@ -14,6 +14,10 @@ struct ScreenRuntimeOptions
     platform::ui::screen::ResumeMethod resume_method = platform::ui::screen::ResumeMethod::SpaceKey;
     // Optional monotonic clock port. The callback must not reenter this service.
     std::function<uint32_t()> now_ms;
+    // Optional native output port. These callbacks only read cached state or
+    // enqueue work, with the same ownership contract as OutputPowerRuntime.
+    std::function<OutputPowerSnapshot()> power_snapshot;
+    std::function<bool(bool)> request_power;
 };
 // Configure before UI initialization and before other threads use screen ports.
 // A null power port leaves automatic hardware sleep unavailable.

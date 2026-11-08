@@ -106,7 +106,7 @@ void slider_event(lv_event_t* event)
 bool controls_key(void* context, uint32_t key)
 {
     auto& self = *static_cast<ControlsWidget*>(context);
-#if defined(ARDUINO_T_LORA_PAGER)
+#if defined(ARDUINO_T_LORA_PAGER) || defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
     const bool left = key == 'a' || key == 'A' || key == LV_KEY_LEFT;
     const bool right = key == 'd' || key == 'D' || key == LV_KEY_RIGHT;
     if (left || right || key == LV_KEY_ENTER)
@@ -160,7 +160,7 @@ WidgetHandle create_controls_widget(lv_obj_t* parent, lv_coord_t width, lv_coord
     self->chrome = create_card_chrome(parent, ui::i18n::tr("Quick controls"), width, height);
     auto* body = self->chrome.body;
     // Touch devices need no footer. Pager uses a compact, transparent key hint.
-#if defined(ARDUINO_T_LORA_PAGER)
+#if defined(ARDUINO_T_LORA_PAGER) || defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
     lv_obj_set_height(self->chrome.footer, 18);
     lv_obj_set_style_bg_opa(self->chrome.footer, LV_OPA_TRANSP, 0);
     lv_obj_set_style_pad_top(self->chrome.footer, 0, 0);

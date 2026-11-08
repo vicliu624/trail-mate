@@ -69,7 +69,8 @@ int progress(void* context, curl_off_t total, curl_off_t, curl_off_t, curl_off_t
 }
 } // namespace
 bool http_download(const http::Request& request, http::WriteCallback write, void* context,
-                   std::string& error, http::TransferStats* stats, const std::atomic_bool* cancelled)
+                   std::string& error, http::TransferStats* stats, const std::atomic_bool* cancelled,
+                   const char* user_agent)
 {
     error.clear();
     if (stats) *stats = {};
@@ -88,6 +89,7 @@ bool http_download(const http::Request& request, http::WriteCallback write, void
     // Zero means no caller-specific limit; the host still bounds allocations.
     Transfer transfer{request, write, context, cancelled, 0, request.max_bytes ? request.max_bytes : 16U * 1024U * 1024U};
     curl_easy_setopt(curl.get(), CURLOPT_URL, request.url);
+    if (user_agent && *user_agent) curl_easy_setopt(curl.get(), CURLOPT_USERAGENT, user_agent);
     curl_easy_setopt(curl.get(), CURLOPT_NOSIGNAL, 1L);
     curl_easy_setopt(curl.get(), CURLOPT_TIMEOUT_MS, static_cast<long>(request.timeout_ms));
     curl_easy_setopt(curl.get(), CURLOPT_CONNECTTIMEOUT_MS, static_cast<long>(std::min(request.timeout_ms, 10000)));

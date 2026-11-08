@@ -177,9 +177,11 @@ bool poll_received_packet(uint8_t* buffer, std::size_t capacity, ReceivedPacket*
     const float rssi_dbm = packet_fits ? radio().readRssi() : 0.0f;
 
     radio().clearIrqFlags(irq);
-    const bool receiving = radio().startReceive();
+    // A valid completed read belongs to the caller even if the next receive
+    // window cannot be armed. The driver records that independent failure.
+    (void)radio().startReceive();
 
-    if (!packet_fits || read_state != 0 || !receiving)
+    if (!packet_fits || read_state != 0)
     {
         return false;
     }

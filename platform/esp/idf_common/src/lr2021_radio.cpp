@@ -16,6 +16,7 @@
 #include "platform/radio/radio_power.h"
 #include "platform/shared/radio/fm_lr2021_stream.h"
 #include "platform/shared/radio/lora_receive_config.h"
+#include "platform/shared/radio/restart_receive.h"
 #include <RadioLib.h>
 #include <atomic>
 #include <cmath>
@@ -278,7 +279,11 @@ struct State
         if (!Board::instance().setLoraRfSwitchTransmit(false)) return check(-1, "LR2021 antenna RX path failed");
         if (transmitting && !check(radio.finishTransmit(), "LR2021 finish TX failed")) return false;
         transmitting = false;
-        receiving = check(radio.startReceive(), "LR2021 start RX failed");
+        receiving = platform::shared::radio::restartReceive(
+            radio,
+            [this](int code, const char* step)
+            { return check(code, step); },
+            "LR2021 start RX failed");
         return receiving;
     }
     bool beginLoRa(const LoRaConfig& config)

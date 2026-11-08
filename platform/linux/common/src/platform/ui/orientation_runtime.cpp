@@ -3,13 +3,22 @@
 
 namespace platform::ui::orientation
 {
-bool heading_supported() { return false; }
-bool acquire_heading() { return false; }
+bool heading_supported() { return ::platform::linux_runtime::linux_magnetometer_snapshot().present; }
+bool acquire_heading() { return heading_supported(); }
 void release_heading() {}
 
 HeadingState get_heading()
 {
-    return {};
+    const auto magnetic = ::platform::linux_runtime::linux_magnetometer_snapshot();
+    HeadingState state;
+    state.sensor_ready = magnetic.ready;
+    state.available = magnetic.ready;
+    state.heading_deg = magnetic.heading_deg;
+    state.raw_x = magnetic.raw_x;
+    state.raw_y = magnetic.raw_y;
+    state.raw_z = magnetic.raw_z;
+    state.last_update_ms = magnetic.updated_ms;
+    return state;
 }
 
 void ensure_heading_runtime()

@@ -369,7 +369,7 @@ jobs:
 
   format:
     name: Format Check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -973,6 +973,12 @@ jobs:
           name: trail-mate-${{ matrix.env }}-v${{ steps.version.outputs.version }}
           path: dist/*
 
+  linux_packages:
+    name: Linux device release packages
+    needs: firmware_scope
+    if: needs.firmware_scope.outputs.build == 'true'
+    uses: ./.github/workflows/linux-device-packages.yml
+
   release:
     name: Publish GitHub Release
     runs-on: ubuntu-latest
@@ -989,6 +995,7 @@ jobs:
       - build_c6
       - pages_contract
       - build_idf
+      - linux_packages
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       actions: write
@@ -1005,6 +1012,16 @@ jobs:
       - name: Verify collected firmware files
         run: |
           find dist -type f \( -name '*.bin' -o -name '*.hex' -o -name '*.uf2' -o -name '*.zip' \) -print | sort
+          version=$(python3 scripts/project_version.py --debian)
+          python3 scripts/verify_linux_release_packages.py --directory dist --version "$version" --device cardputer-zero
+          python3 scripts/verify_linux_release_packages.py --directory dist --version "$version" --device t-display-cm0
+          python3 - <<'PY'
+          import hashlib
+          from pathlib import Path
+          files = sorted(p for p in Path('dist').rglob('*') if p.suffix in ('.bin', '.hex', '.uf2', '.zip', '.deb'))
+          assert len({p.name for p in files}) == len(files), 'Duplicate release asset names'
+          Path('dist/SHA256SUMS').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest() + '  ' + p.name + '\n' for p in files))
+          PY
 
       - name: Extract changelog entry
         run: |
@@ -1038,6 +1055,8 @@ jobs:
             dist/**/*.hex
             dist/**/*.uf2
             dist/**/*.zip
+            dist/**/*.deb
+            dist/SHA256SUMS
 
       - name: Refresh Pages metadata
         env:
