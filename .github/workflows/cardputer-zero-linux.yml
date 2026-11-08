@@ -33,6 +33,9 @@ jobs:
       - name: Verify repository root has no build artifacts
         run: python3 scripts/check_root_build_artifacts.py
 
+      - name: Verify APPLaunch backend selection
+        run: python3 apps/linux_cardputer_zero/tests/launcher_backend_test.py apps/linux_cardputer_zero/packaging/trailmate-cardputer-zero-applaunch
+
       - name: Install Cardputer Zero build dependencies
         run: |
           sudo apt-get update

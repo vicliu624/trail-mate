@@ -11,9 +11,10 @@ Linux device. It is not the Linux simulator.
 The runtime entry stays small: the shell validates
 the `cardputerzero` target profile, consumes the `boards/cardputerzero` facts,
 selects the `cardputer_compact` UX pack, and builds through
-`builds/linux_cmake`. The device package now owns a Wayland APPLaunch product
-entry and a separate explicit fbdev/evdev debug fallback; hardware validation
-still has to happen on the real device session.
+`builds/linux_cmake`. The device package owns the APPLaunch entry for both
+Wayland and framebuffer/evdev sessions. The actual framebuffer, keyboard,
+sleep and mesh acceptance is recorded in the
+[device qualification](../../docs/engineering/linux-paired-mesh-validation-20261108.md).
 
 The shared LVGL main-menu profile for this target is Cardputer Zero specific:
 `make_cardputer_zero_profile()` uses the Pager's adaptive icon grid and focus
@@ -154,17 +155,16 @@ The package installs the Cardputer Zero APPLaunch layout:
 - `/usr/share/APPLaunch/applications/trailmate.desktop`
 - `/usr/share/APPLaunch/share/images/trailmate-cardputer-zero.png`
 
-The default APPLaunch path is Wayland. In `auto` mode the wrapper starts
-`trailmate-cardputer-zero` only when `WAYLAND_DISPLAY` is present, and exits
-with a diagnostic instead of silently falling back to framebuffer when no
-Wayland session exists. The fbdev binary is reached only by setting
-`TRAIL_MATE_DISPLAY_BACKEND=fbdev` or another explicit framebuffer alias; that
-debug path honors `APPLAUNCH_LINUX_FBDEV_DEVICE` and
-`APPLAUNCH_LINUX_KEYBOARD_DEVICE`, detects the ST7789V framebuffer from
-`/proc/fb`, and falls back to `/dev/fb1` plus the documented Cardputer Zero
-keyboard by-path event device. Set `TRAIL_MATE_FRAMEBUFFER=/dev/fbN` or
-`TRAIL_MATE_INPUT_DEVICE=/dev/input/eventN` only for manual framebuffer
-debugging outside the product Wayland session.
+In `auto` mode APPLaunch uses Wayland when `WAYLAND_DISPLAY` is present.
+Otherwise it selects framebuffer/evdev when the ST7789V framebuffer is detected
+in `/proc/fb`, or a framebuffer path is supplied by the device environment.
+The wrapper honors `APPLAUNCH_LINUX_FBDEV_DEVICE` and
+`APPLAUNCH_LINUX_KEYBOARD_DEVICE`; it prefers `/dev/input/cardputer-zero-internal`
+when that keyboard endpoint exists, then uses the legacy by-path endpoint.
+`TRAIL_MATE_DISPLAY_BACKEND=fbdev`, `TRAIL_MATE_FRAMEBUFFER=/dev/fbN` and
+`TRAIL_MATE_INPUT_DEVICE=/dev/input/eventN` remain explicit overrides. If neither
+a Wayland session nor a supported/configured framebuffer is available, startup
+exits with a diagnostic instead of opening an unrelated display.
 
 The APPLaunch wrapper also owns the Cardputer Zero Cap LoRa-1262 runtime
 defaults. Unless explicitly overridden by the environment, it launches in real

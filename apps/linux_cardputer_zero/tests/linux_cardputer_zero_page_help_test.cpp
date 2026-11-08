@@ -122,7 +122,7 @@ int main(int argc, char** argv)
         key(cardputer_app::InputKey::Character, 'h');
         assert(lv_indev_get_group(keypad) == previous);
         assert(lv_group_get_focused(previous) == focused);
-        auto* hint = find_label(lv_screen_active(), "H ?");
+        auto* hint = find_label(lv_screen_active(), "H?");
         assert(hint && lv_obj_has_flag(hint, LV_OBJ_FLAG_CLICKABLE));
         lv_obj_send_event(hint, LV_EVENT_CLICKED, nullptr);
         tick(150ms);

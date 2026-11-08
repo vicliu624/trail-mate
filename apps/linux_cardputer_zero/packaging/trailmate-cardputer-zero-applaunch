@@ -76,8 +76,12 @@ case "$backend" in
         if [ -n "${WAYLAND_DISPLAY:-}" ]; then
             exec "$script_dir/trailmate-cardputer-zero" "$@"
         fi
-        echo "trailmate-cardputer-zero-applaunch: Wayland session is required; set TRAIL_MATE_DISPLAY_BACKEND=fbdev only for explicit framebuffer debugging." >&2
-        exit 127
+        if [ -z "${TRAIL_MATE_FRAMEBUFFER:-}" ] &&
+           [ -z "${APPLAUNCH_LINUX_FBDEV_DEVICE:-}" ] &&
+           ! find_st7789v_fbdev >/dev/null; then
+            echo "trailmate-cardputer-zero-applaunch: no Wayland session or Cardputer framebuffer; configure TRAIL_MATE_FRAMEBUFFER and TRAIL_MATE_INPUT_DEVICE for this device." >&2
+            exit 127
+        fi
         ;;
     fb|fbdev|framebuffer|device)
         ;;
@@ -98,7 +102,13 @@ if [ -z "${TRAIL_MATE_FRAMEBUFFER:-}" ]; then
 fi
 
 if [ -z "${TRAIL_MATE_INPUT_DEVICE:-}" ]; then
-    TRAIL_MATE_INPUT_DEVICE="${APPLAUNCH_LINUX_KEYBOARD_DEVICE:-/dev/input/by-path/platform-3f804000.i2c-event}"
+    if [ -n "${APPLAUNCH_LINUX_KEYBOARD_DEVICE:-}" ]; then
+        TRAIL_MATE_INPUT_DEVICE=$APPLAUNCH_LINUX_KEYBOARD_DEVICE
+    elif [ -e /dev/input/cardputer-zero-internal ]; then
+        TRAIL_MATE_INPUT_DEVICE=/dev/input/cardputer-zero-internal
+    else
+        TRAIL_MATE_INPUT_DEVICE=/dev/input/by-path/platform-3f804000.i2c-event
+    fi
 fi
 
 export TRAIL_MATE_FRAMEBUFFER TRAIL_MATE_INPUT_DEVICE

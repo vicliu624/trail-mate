@@ -174,8 +174,9 @@ int main(int argc, char** argv)
     assert(contains(launcher, "export ALL_PROXY all_proxy HTTPS_PROXY https_proxy HTTP_PROXY http_proxy"));
     assert(contains(launcher, "wayland|labwc)"));
     assert(contains(launcher, "if [ -n \"${WAYLAND_DISPLAY:-}\" ]; then"));
-    assert(contains(launcher, "Wayland session is required"));
-    assert(contains(launcher, "TRAIL_MATE_DISPLAY_BACKEND=fbdev"));
+    assert(contains(launcher, "no Wayland session or Cardputer framebuffer"));
+    assert(contains(launcher, "! find_st7789v_fbdev >/dev/null"));
+    assert(contains(launcher, "TRAIL_MATE_INPUT_DEVICE=/dev/input/cardputer-zero-internal"));
     assert(contains(launcher, "fb|fbdev|framebuffer|device)"));
     assert(contains(launcher, "exec \"$script_dir/trailmate-cardputer-zero\" \"$@\""));
     assert(contains(launcher, "exec \"$script_dir/trailmate-cardputer-zero-fbdev\" \"$@\""));

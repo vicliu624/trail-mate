@@ -444,9 +444,9 @@ void ChatComposeScreen::syncFocusOrder(bool focus_ime)
         return;
     }
 
-    // A rotary user traverses visible controls in their visual sequence. Keep
-    // the textarea first so hardware-key candidate confirmation targets it,
-    // while IME's hidden proxy stays internal and never appears as a stop.
+    // Rotary controls follow their visual sequence. Zero's hardware keyboard
+    // instead moves directly from the textarea to Send. The hidden IME proxy
+    // stays internal and never appears as a focus stop.
     lv_obj_t* const ime_toggle =
         ime_widget_ && lv_obj_is_valid(ime_widget_->toggle_btn())
             ? ime_widget_->toggle_btn()
@@ -480,9 +480,9 @@ void ChatComposeScreen::syncFocusOrder(bool focus_ime)
             lv_group_add_obj(group, object);
         }
     };
-    add_visible(impl_->w.textarea);
 #if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
     // The hardware keyboard's next stop after typing is the primary action.
+    add_visible(impl_->w.textarea);
     add_visible(impl_->w.send_btn);
 #endif
     add_visible(ime_toggle);

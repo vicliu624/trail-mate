@@ -52,7 +52,9 @@ target-specific; see the linked acceptance records below.
   actions, with Tab then Enter to send from the keyboard composer.
 - Framebuffer rendering avoids repeated full-screen writes and flicker; keyboard
   exit, native backlight sleep, wake-input handling and shared widget focus are
-  integrated with the existing screen lifecycle.
+  integrated with the existing screen lifecycle. APPLaunch automatically selects
+  the detected framebuffer when no Wayland session exists, while preserving
+  explicit display/input overrides.
 - Linux identity-file permission checks preserve SQLite POSIX locks instead of
   closing an additional ordinary database descriptor. Lock, concurrent-write
   and repeated-startup regressions verify message/configuration/identity
@@ -61,7 +63,7 @@ target-specific; see the linked acceptance records below.
 - Online map download/conversion progress, proxy use, cancellation and temporary
   workspace cleanup, plus the shared map-overlay and preview integration fixes
   made since 1.0.1.
-- Catalog image declarations use global C linkage, fixing newer host compiler
+- Catalog image declarations use named-namespace C linkage, fixing newer host compiler
   linkage failures in Cardputer and Agenda CI builds. Formatting retains
   clang-format 14 on an explicitly supported runner image.
 

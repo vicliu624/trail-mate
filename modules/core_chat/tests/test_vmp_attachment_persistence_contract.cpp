@@ -221,7 +221,14 @@ int main(int argc, char** argv)
     const std::size_t ime_focus = chat_compose.find("add_visible(ime_toggle)");
     const std::size_t sym_focus = chat_compose.find("add_visible(impl_->sym_btn)");
     const std::size_t emoji_focus = chat_compose.find("add_visible(impl_->emoji_btn)");
-    const std::size_t send_focus = chat_compose.find("add_visible(impl_->w.send_btn)");
+    const std::size_t zero_focus_branch = chat_compose.find("#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)",
+                                                            chat_compose.find("void ChatComposeScreen::syncFocusOrder"));
+    const std::size_t zero_text_focus = chat_compose.find("add_visible(impl_->w.textarea)", zero_focus_branch);
+    const std::size_t zero_send_focus = chat_compose.find("add_visible(impl_->w.send_btn)", zero_text_focus);
+    const std::size_t zero_focus_end = chat_compose.find("#endif", zero_focus_branch);
+    assert(zero_focus_branch < zero_text_focus && zero_text_focus < zero_send_focus && zero_send_focus < zero_focus_end);
+    const std::size_t rotary_focus_branch = chat_compose.find("#if !defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)", emoji_focus);
+    const std::size_t send_focus = chat_compose.find("add_visible(impl_->w.send_btn)", rotary_focus_branch);
     const std::size_t auxiliary_focus =
         chat_compose.find("add_visible(impl_->w.position_btn)");
     const std::size_t cancel_focus =

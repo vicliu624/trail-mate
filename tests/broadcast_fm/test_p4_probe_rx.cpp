@@ -74,7 +74,12 @@ int main()
     assert(!poll_received_packet(bytes, sizeof(bytes), &packet) && packet.size == 0);
     device.read_result = 0;
     device.receive_ok = false;
-    assert(!poll_received_packet(bytes, sizeof(bytes), &packet) && packet.size == 0);
+    const auto receive_attempts = device.receives;
+    // The valid frame belongs to this receive; failure to arm the next frame
+    // must not erase its payload or signal metadata.
+    assert(poll_received_packet(bytes, sizeof(bytes), &packet));
+    assert(device.receives == receive_attempts + 1);
+    assert(packet.size == 1 && packet.rssi_dbm == -77 && std::isnan(packet.snr_db) && bytes[0] == 0x42);
     device.receive_ok = true;
     assert(poll_received_packet(bytes, sizeof(bytes), &packet));
     assert(packet.size == 1 && packet.rssi_dbm == -77 && std::isnan(packet.snr_db) && bytes[0] == 0x42);

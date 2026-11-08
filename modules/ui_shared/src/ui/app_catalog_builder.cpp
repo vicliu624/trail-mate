@@ -89,6 +89,8 @@ extern "C" const lv_image_dsc_t music;
 #include "ui/screens/walkie_talkie/walkie_talkie_page_shell.h"
 
 #if !TRAIL_MATE_USE_MONO_SCREEN_240X320
+namespace ui::assets
+{
 extern "C"
 {
     extern const lv_image_dsc_t Chat;
@@ -114,7 +116,8 @@ extern "C"
     extern const lv_image_dsc_t walkie_talkie;
     extern const lv_image_dsc_t shutdown;
 }
-#define CATALOG_ICON(symbol) (&symbol)
+} // namespace ui::assets
+#define CATALOG_ICON(symbol) (&::ui::assets::symbol)
 #else
 // The T-Deck Pro's text shell does not render application images.  Keeping
 // the catalog icon-free also prevents the visual adapter from keeping the
