@@ -212,10 +212,10 @@ int main(int argc, char** argv)
     assert(chat_page_runtime.find("openComposeForConversation(requested)") !=
            std::string::npos);
 
-    // Rotary focus follows the visible compact layout, rather than append
-    // timing: IME, Symbols, Emoji, Send, optional Voice/Position, Cancel,
-    // then the top-bar Back button. The hidden IME proxy and text area are
-    // intentionally excluded from that cycle.
+    // The textarea stays registered for hardware keyboard commits. Controls
+    // follow their visible order: IME, Symbols, Emoji, Send, optional
+    // Voice/Position, Cancel, Back. Zero moves Send immediately after text.
+    // The hidden IME proxy is intentionally excluded.
     assert(chat_compose.find("void ChatComposeScreen::syncFocusOrder") !=
            std::string::npos);
     const std::size_t ime_focus = chat_compose.find("add_visible(ime_toggle)");
@@ -223,10 +223,10 @@ int main(int argc, char** argv)
     const std::size_t emoji_focus = chat_compose.find("add_visible(impl_->emoji_btn)");
     const std::size_t zero_focus_branch = chat_compose.find("#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)",
                                                             chat_compose.find("void ChatComposeScreen::syncFocusOrder"));
-    const std::size_t zero_text_focus = chat_compose.find("add_visible(impl_->w.textarea)", zero_focus_branch);
-    const std::size_t zero_send_focus = chat_compose.find("add_visible(impl_->w.send_btn)", zero_text_focus);
+    const std::size_t zero_text_focus = chat_compose.find("add_visible(impl_->w.textarea)");
+    const std::size_t zero_send_focus = chat_compose.find("add_visible(impl_->w.send_btn)", zero_focus_branch);
     const std::size_t zero_focus_end = chat_compose.find("#endif", zero_focus_branch);
-    assert(zero_focus_branch < zero_text_focus && zero_text_focus < zero_send_focus && zero_send_focus < zero_focus_end);
+    assert(zero_text_focus < zero_focus_branch && zero_focus_branch < zero_send_focus && zero_send_focus < zero_focus_end);
     const std::size_t rotary_focus_branch = chat_compose.find("#if !defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)", emoji_focus);
     const std::size_t send_focus = chat_compose.find("add_visible(impl_->w.send_btn)", rotary_focus_branch);
     const std::size_t auxiliary_focus =
