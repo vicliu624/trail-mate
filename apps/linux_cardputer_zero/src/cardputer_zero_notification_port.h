@@ -18,7 +18,7 @@ enum class NotificationUrgency : std::uint8_t
 
 struct NotificationRequest
 {
-    const char* app_name = "Trail Mate";
+    const char* app_name = "TrailMate";
     const char* summary = "";
     const char* body = "";
     const char* app_icon = "";

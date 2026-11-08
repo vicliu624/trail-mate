@@ -55,8 +55,16 @@ jobs:
         run: cmake --build --preset linux-cardputer-zero-debug-build
 
       - name: Run Cardputer Zero smoke tests
+        id: smoke
         working-directory: builds/linux_cmake
         run: ctest --preset linux-cardputer-zero-debug-test
+
+      - name: Diagnose failed map keyboard regression
+        if: ${{ failure() && steps.smoke.outcome == 'failure' }}
+        run: |
+          sudo apt-get install -y gdb
+          gdb --batch --return-child-result -ex run -ex 'thread apply all bt' --args \
+            builds/linux_cmake/build/linux-cardputer-zero-debug/apps/linux_cardputer_zero/trailmate_cardputer_zero_tmap_keyboard_test
 
       - name: Verify build stayed out of repository root
         run: python3 scripts/check_root_build_artifacts.py

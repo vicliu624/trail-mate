@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=Trail Mate Cardputer Zero
+Name=TrailMate
 Comment=Trail Mate shell for the Cardputer Zero portable Linux device
 Exec=/usr/lib/trailmate-cardputer-zero/trailmate-cardputer-zero-applaunch
 Icon=share/images/trailmate-cardputer-zero.png

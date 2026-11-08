@@ -120,6 +120,7 @@ int main(int argc, char** argv)
         "apps/linux_cardputer_zero/src/platform/wayland/wayland_presenter.cpp");
     assert(contains(wayland_presenter, "wl_display_connect"));
     assert(contains(wayland_presenter, "xdg_toplevel_set_app_id"));
+    assert(contains(wayland_presenter, "xdg_toplevel_set_title(toplevel, \"TrailMate\")"));
     assert(contains(wayland_presenter, "io.github.vicliu624.trailmate"));
     assert(contains(wayland_presenter, "xkb_state_key_get_utf8"));
     assert(not_contains(wayland_presenter, "LinuxFramebufferPlatform"));
@@ -135,6 +136,7 @@ int main(int argc, char** argv)
     const std::string desktop = read_file(
         repo_root /
         "apps/linux_cardputer_zero/packaging/trailmate-cardputer-zero.desktop");
+    assert(contains(desktop, "\nName=TrailMate\n") || contains(desktop, "\nName=TrailMate\r\n"));
     assert(contains(desktop, "Exec=/usr/lib/trailmate-cardputer-zero/trailmate-cardputer-zero-applaunch"));
     assert(contains(desktop, "Icon=share/images/trailmate-cardputer-zero.png"));
     assert(contains(desktop, "X-Zero-AppId=io.github.vicliu624.trailmate"));

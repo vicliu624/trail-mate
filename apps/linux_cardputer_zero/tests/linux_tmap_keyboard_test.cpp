@@ -1,6 +1,7 @@
 #include "app/input_event.h"
 #include "platform/ui/tmap_creation_runtime.h"
 #include "ui/app_runtime.h"
+#include "ui/menu/menu_layout.h"
 #include "ui/shell_ui_runner.h"
 #include <cassert>
 #include <chrono>
@@ -138,8 +139,7 @@ int main(int argc, char** argv)
         Service service;
         auto* previous_service = tc::service();
         tc::bind(&service);
-        for (unsigned i = 0; i < 10; ++i) key(Key::Next);
-        key(Key::Enter);
+        assert(ui::menu_layout::launchAppByStableId("extensions"));
         tick(300ms);
         key(Key::Character, 't');
         tick(300ms);
@@ -185,6 +185,13 @@ int main(int argc, char** argv)
             }
         };
         fill({"test district"});
+        auto* search_editor = get(&lv_textarea_class).front();
+        lv_obj_send_event(search_editor, LV_EVENT_READY, nullptr);
+        assert(service.search_state.busy && lv_obj_is_valid(search_editor));
+        tick(100ms);
+        assert(!std::strcmp(lv_textarea_get_text(get(&lv_textarea_class).front()), "test district"));
+        service.search_state.busy = false;
+        // Exercise the real keypad path as well as synchronous READY dispatch.
         key(Key::Enter);
         assert(service.search_state.busy && service.search_state.query == "test district");
         service.search_state.busy = false;

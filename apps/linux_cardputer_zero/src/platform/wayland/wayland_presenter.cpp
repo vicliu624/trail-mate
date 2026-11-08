@@ -203,7 +203,7 @@ struct WaylandPresenter::Impl
         xdg_surface_add_listener(xdg_surface_obj, &kSurfaceListener, this);
         toplevel = xdg_surface_get_toplevel(xdg_surface_obj);
         xdg_toplevel_add_listener(toplevel, &kToplevelListener, this);
-        xdg_toplevel_set_title(toplevel, "Trail Mate Cardputer Zero");
+        xdg_toplevel_set_title(toplevel, "TrailMate");
         xdg_toplevel_set_app_id(toplevel,
                                 "io.github.vicliu624.trailmate");
         xdg_toplevel_set_min_size(toplevel, kWidth, kHeight);

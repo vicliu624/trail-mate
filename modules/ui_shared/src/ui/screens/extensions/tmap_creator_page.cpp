@@ -324,6 +324,10 @@ void update_area_summary()
                   (area.north - area.south) * 111.32);
     lv_label_set_text(page->area_summary, (area.description + dimensions).c_str());
 }
+void render_after_search(void*)
+{
+    if (page && page->step == 0 && !page->coordinates_mode) render();
+}
 void search_area(lv_event_t*)
 {
     if (!page || !tc::service() || tc::service()->areaSearch().busy) return;
@@ -333,7 +337,10 @@ void search_area(lv_event_t*)
         return;
     }
     page->search_revision = tc::service()->areaSearch().revision;
-    render();
+    // READY is nested inside the textarea's key event. Keep its target alive
+    // until LVGL has finished dispatching that event and the input release.
+    lv_async_call_cancel(render_after_search, nullptr);
+    lv_async_call(render_after_search, nullptr);
 }
 bool collect()
 {
@@ -794,6 +801,7 @@ void open(lv_obj_t* parent, void (*closed)(void*), void* context)
 void shutdown()
 {
     if (!page) return;
+    lv_async_call_cancel(render_after_search, nullptr);
     lv_async_call_cancel(return_from_map, nullptr);
     if (page->map_open) ::gps::ui::runtime::exit(page->map_surface);
     if (page->map_surface) lv_obj_del(page->map_surface);

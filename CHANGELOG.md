@@ -37,6 +37,10 @@ target-specific; see the linked acceptance records below.
 
 ### Fixed
 
+- Linux application launchers display the product name `TrailMate`, including
+  the Cardputer Zero window title and notification source.
+- TMAP area searches defer page reconstruction until textarea input events have
+  completed, and cancel pending reconstruction when the wizard closes.
 - SX1262 transmit paths restore receive interrupts and support complete
   255-byte LoRa frames. LR2021 rearms continuous receive through standby.
   ESP-IDF receive paths preserve progress interrupts, read valid payloads before
