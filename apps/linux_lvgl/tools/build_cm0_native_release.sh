@@ -50,10 +50,11 @@ chmod 755 "$root/usr/sbin/policy-rc.d"
 printf 'deb https://archive.raspbian.org/raspbian trixie main\n' > "$root/etc/apt/sources.list"
 chroot "$root" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -eu -c '
     apt-get -o APT::Update::Error-Mode=any update
-    apt-get install -y --no-install-recommends ca-certificates build-essential g++-14 cmake ninja-build pkg-config dpkg-dev git curl python3 python3-dev python3-numpy pybind11-dev gnuradio gnuradio-dev libgsl-dev libsimde-dev libsdl2-dev libavformat-dev libavcodec-dev libavutil-dev libswresample-dev libswscale-dev libaribb24-dev ffmpeg libcurl4-openssl-dev libarchive-dev libsqlite3-dev libssl-dev libjpeg-dev libpng-dev libbluetooth-dev libicu76
+    apt-get install -y --no-install-recommends ca-certificates build-essential g++-14 cmake ninja-build pkg-config dpkg-dev file git curl python3 python3-dev python3-numpy pybind11-dev gnuradio gnuradio-dev libgsl-dev libsimde-dev libsdl2-dev libavformat-dev libavcodec-dev libavutil-dev libswresample-dev libswscale-dev libaribb24-dev ffmpeg libcurl4-openssl-dev libarchive-dev libsqlite3-dev libssl-dev libjpeg-dev libpng-dev libbluetooth-dev libicu76
 '
 chroot "$root" /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin HOME=/root LANG=C.UTF-8 \
     CC=gcc-14 CXX=g++-14 JOBS="$jobs" /bin/bash -eu -c '
+    file --version
     python3 /workspace/apps/linux_lvgl/tools/build_oneseg_backend.py --cm0 --work-dir /build/gr-isdbt --jobs "$JOBS"
     python3 /workspace/apps/linux_lvgl/tools/package_oneseg_backend.py --backend-work /build/gr-isdbt --output /build/release-packages
     cmake -S /workspace/apps/linux_lvgl -B /build/release-application -G Ninja \
