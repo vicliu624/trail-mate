@@ -999,6 +999,7 @@ jobs:
       - build
       - p4_contract
       - p4_rendered_ui
+      - oneseg_native_media
       - hostlink_management
       - build_c6
       - pages_contract

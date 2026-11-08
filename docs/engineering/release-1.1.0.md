@@ -32,7 +32,8 @@ sudo apt update
 sudo apt install ./trailmate-cardputer-zero_1.1.0_arm64.deb
 ```
 
-Open Trail Mate in APPLaunch. Automatic backend selection uses an existing
+Open `TrailMate` in APPLaunch. Both Linux launchers use this product name.
+Automatic backend selection uses an existing
 Wayland session, otherwise the detected ST7789V framebuffer or configured
 framebuffer path. Existing explicit display/input environment overrides are
 retained. The LoRa/GNSS Cap is detected separately from display selection.
