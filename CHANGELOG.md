@@ -41,6 +41,8 @@ target-specific; see the linked acceptance records below.
 
 - Recent Activity rows open their exact conversation by touch or A/D and Enter,
   using Chat's normal read-state workflow and preserving other unread threads.
+- Empty Recent Activity rows remain inert while allowing touch swipes to reach
+  the dashboard navigation owner.
 - Shared conversation summaries identify Reticulum private destinations by their
   full hash even when the numeric peer is zero, instead of labeling them Broadcast.
 - Dense route-preview zoom and Fit controls use compact dimensions and retain

@@ -267,6 +267,7 @@ void refresh_recent_widget(void* context)
             const auto& conv = conversations[i];
             recent.conversations[i] = conv.id;
             lv_obj_remove_state(recent.rows[i], LV_STATE_DISABLED);
+            lv_obj_add_flag(recent.rows[i], LV_OBJ_FLAG_CLICKABLE);
             if (had_selection && conv.id == selected) recent.focus.selected = i;
             // Let LVGL elide at a UTF-8 character boundary using actual pixels.
             // Byte-count substrings can split a localized name or message.
@@ -289,6 +290,9 @@ void refresh_recent_widget(void* context)
         else
         {
             lv_obj_add_state(recent.rows[i], LV_STATE_DISABLED);
+            // A disabled hit target suppresses LVGL's indev PRESSED event,
+            // preventing the dashboard from owning swipes started on this row.
+            lv_obj_clear_flag(recent.rows[i], LV_OBJ_FLAG_CLICKABLE);
             set_recent_text(recent.row_names[i], recent.row_name_text[i], i == 0 ? ::ui::i18n::tr("No recent traffic") : "");
             set_recent_text(recent.row_previews[i], recent.row_preview_text[i], i == 0 ? ::ui::i18n::tr("Messages and broadcasts show here") : "");
             lv_obj_add_flag(recent.row_badges[i], LV_OBJ_FLAG_HIDDEN);
