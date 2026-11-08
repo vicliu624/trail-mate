@@ -1,4 +1,5 @@
 #include "chat/delivery/chat_message_ledger.h"
+#include "chat/domain/conversation_name.h"
 
 #include "chat/delivery/chat_delivery_message_projection.h"
 #include "chat/delivery/chat_delivery_send_result_projection.h"
@@ -472,20 +473,7 @@ std::vector<ConversationMeta> ChatMessageLedger::loadConversationPage(
         {
             ConversationMeta meta{};
             meta.id = conversation;
-            if (conversation.peer == 0)
-            {
-                meta.name = "Broadcast";
-            }
-            else
-            {
-                char name[16]{};
-                std::snprintf(name,
-                              sizeof(name),
-                              "%04lX",
-                              static_cast<unsigned long>(conversation.peer &
-                                                         0xFFFFU));
-                meta.name = name;
-            }
+            meta.name = fallbackConversationName(conversation);
             conversations.push_back(meta);
             existing = conversations.end() - 1;
         }

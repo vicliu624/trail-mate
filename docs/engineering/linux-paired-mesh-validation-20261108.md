@@ -158,6 +158,28 @@ comparison against their device-local pre-test settings. Automatic reply is
 left disabled as originally configured, with no test reply text; enabling it
 continues to use the sleep-only policy.
 
+## Release rehearsal follow-up
+
+The `1.1.0+demo.20261108.5` Zero build completed a physical Recent Activity
+keyboard round trip with a real unread Reticulum message: select the populated
+row, open the exact full-destination conversation with Enter, read it, return
+through the message list and reopen the widget with V. The unread badge cleared.
+Disabled empty rows were skipped. Touch activation was covered by the host Shell
+regression; Zero itself has no touchscreen.
+
+A private reply after this application restart initially reached Failed and
+that record was retained. After a fresh CM0 Announce, another private reply
+(`E08C2EA9`, `Hello CM0 Reticulum ready`) received its remote proof and reached
+Delivered. This proves delivery with discovery available; it does not establish
+automatic cold-start path recovery. Rehearsal also exposed a shared metadata
+bug: a full Reticulum destination with numeric peer zero was labeled Broadcast.
+The model, RAM store, deferred-write projection and SQLite now use the same
+full-destination fallback label, covered by core and actual Shell regressions.
+
+The same physical build opened Walkie at 869.525 MHz / FSK with a green LISTEN
+state and no GPIO error. Monitor remained off and PTT was not pressed. This
+qualifies page initialization only, not microphone, speaker or RF voice exchange.
+
 ## Cross-platform scope
 
 The valid-frame/rearm fixes were checked against the ESP-IDF radio pump. Packet

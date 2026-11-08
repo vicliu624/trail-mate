@@ -1,4 +1,5 @@
 #include "chat/delivery/chat_message_ledger.h"
+#include "chat/domain/conversation_name.h"
 #include "chat/infra/store/ram_store.h"
 
 #include <cassert>
@@ -351,5 +352,30 @@ int main()
         true));
     assert(background_store.protocol_lookup_count == 0);
 
+    // Zero numeric peer is normal for full-destination Reticulum private text.
+    // Test both durable projections and the ledger's transient-write overlay.
+    chat::ChatModel reticulum_model;
+    TransientStore reticulum_store;
+    chat::delivery::ChatMessageLedger reticulum_ledger(reticulum_model, reticulum_store);
+    auto private_text = outgoing(800, chat::MessageStatus::Queued);
+    private_text.timestamp = 800;
+    private_text.protocol = chat::MeshProtocol::Reticulum;
+    private_text.peer = 0;
+    private_text.reticulum_identity.valid = true;
+    private_text.reticulum_identity.destination_hash[0] = 0x12;
+    private_text.reticulum_identity.destination_hash[15] = 0xAB;
+    const std::string expected_name = "RT 120000000000000000000000000000AB";
+    reticulum_store.append_failures = 1;
+    assert(reticulum_ledger.recordOutbound(private_text, true) == chat::delivery::LedgerPersistence::Deferred);
+    assert(reticulum_model.getConversations().size() == 1);
+    assert(reticulum_model.getConversations().front().name == expected_name);
+    assert(reticulum_ledger.loadConversationPage(chat::MeshProtocol::Reticulum, 0, 10, nullptr).front().name == expected_name);
+    assert(reticulum_ledger.flushPendingWrites(1) == 1);
+    assert(reticulum_store.loadConversationPage(0, 10, nullptr).front().name == expected_name);
+    assert(reticulum_ledger.loadConversationPage(chat::MeshProtocol::Reticulum, 0, 10, nullptr).front().name == expected_name);
+    private_text.reticulum_identity.destination_hash[15] = 0xAC;
+    assert(chat::fallbackConversationName(chat::conversationIdForMessage(private_text)) != expected_name);
+    assert(chat::fallbackConversationName({chat::ChannelId::PRIMARY, 0, chat::MeshProtocol::Meshtastic}) == "Broadcast");
+    assert(chat::fallbackConversationName({chat::ChannelId::PRIMARY, 0x12345678, chat::MeshProtocol::MeshCore}) == "5678");
     return 0;
 }

@@ -4,6 +4,7 @@
  */
 
 #include "chat/domain/chat_model.h"
+#include "chat/domain/conversation_name.h"
 #include <algorithm>
 #include <cstdio>
 
@@ -238,17 +239,7 @@ std::vector<ConversationMeta> ChatModel::getConversations() const
         meta.last_timestamp = pair.second.last_ts;
         meta.unread = pair.second.unread_count;
         meta.reticulum_identity = pair.second.messages.back().message.reticulum_identity;
-        // Naming: broadcast vs peer short id
-        if (pair.first.peer == 0)
-        {
-            meta.name = "Broadcast";
-        }
-        else
-        {
-            char buf[16];
-            snprintf(buf, sizeof(buf), "%04lX", static_cast<unsigned long>(pair.first.peer & 0xFFFF));
-            meta.name = buf;
-        }
+        meta.name = fallbackConversationName(meta.id);
         list.push_back(meta);
     }
 

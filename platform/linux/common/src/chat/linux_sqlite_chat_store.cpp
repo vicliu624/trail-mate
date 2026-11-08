@@ -1,4 +1,5 @@
 #include "chat/linux_sqlite_chat_store.h"
+#include "chat/domain/conversation_name.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -633,17 +634,7 @@ bool bindMessage(sqlite3_stmt* stmt, const ::chat::ChatMessage& msg)
 
 std::string conversationName(const ::chat::ConversationId& conv)
 {
-    if (conv.peer == 0)
-    {
-        return "Broadcast";
-    }
-
-    char buffer[16] = {};
-    std::snprintf(buffer,
-                  sizeof(buffer),
-                  "%04lX",
-                  static_cast<unsigned long>(conv.peer & 0xFFFFU));
-    return buffer;
+    return ::chat::fallbackConversationName(conv);
 }
 
 } // namespace

@@ -4,6 +4,7 @@
  */
 
 #include "chat/infra/store/ram_store.h"
+#include "chat/domain/conversation_name.h"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -99,17 +100,7 @@ std::vector<ConversationMeta> RamStore::loadConversationPage(size_t offset,
         meta.last_timestamp = latest.timestamp;
         meta.unread = storage.unread_count;
         meta.reticulum_identity = latest.reticulum_identity;
-        if (conv.peer == 0)
-        {
-            meta.name = "Broadcast";
-        }
-        else
-        {
-            char buf[16];
-            snprintf(buf, sizeof(buf), "%04lX",
-                     static_cast<unsigned long>(conv.peer & 0xFFFF));
-            meta.name = buf;
-        }
+        meta.name = fallbackConversationName(conv);
         list.push_back(meta);
     }
 

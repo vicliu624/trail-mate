@@ -109,6 +109,31 @@ int main()
         key(Key::Home);
         key(Key::Home);
         assert(!app::runtimeFacade().getChatUiRuntime());
+        // A full Reticulum destination remains private when its latest sent
+        // record uses numeric peer zero, including after reopening the widget.
+        assert(app::configFacade().switchMeshProtocol(chat::MeshProtocol::Reticulum, false));
+        message.protocol = chat::MeshProtocol::Reticulum;
+        message.peer = 0;
+        message.from = 0;
+        message.msg_id = message.timestamp = 103;
+        message.status = chat::MessageStatus::Failed;
+        message.text = "RT private reply";
+        message.reticulum_identity.valid = true;
+        message.reticulum_identity.destination_hash[0] = 0x12;
+        message.reticulum_identity.destination_hash[15] = 0xAB;
+        assert(store.appendDurably(message));
+        const auto summaries = app::messagingFacade().getChatService().getConversations(0, 3, nullptr);
+        assert(summaries.size() == 1);
+        assert(summaries.front().name == "RT 120000000000000000000000000000AB");
+        assert(summaries.front().id.reticulum_identity.destination_hash[15] == 0xAB);
+        key(Key::Character, 'v');
+        key(Key::Enter);
+        runtime = app::runtimeFacade().getChatUiRuntime();
+        assert(runtime && runtime->getState() == chat::ui::ChatUiState::Conversation);
+        assert(label(chat::ui::runtime::get_container(), "RT private reply"));
+        key(Key::Home);
+        key(Key::Home);
+        assert(!app::runtimeFacade().getChatUiRuntime());
     }
     std::filesystem::remove_all(root);
 }
