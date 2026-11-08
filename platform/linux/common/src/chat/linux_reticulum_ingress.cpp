@@ -111,29 +111,31 @@ bool LinuxReticulumIngress::receive(const uint8_t* bytes, size_t size, uint32_t 
         ++stats_.ignored;
         return false;
     }
-    const auto decision = runtime::evaluatePathAnnounce(paths_.findAnyPath(destination), packet.hops, announce.random_hash, now_ms, options_.path_ttl_ms);
-    if (!runtime::pathAnnounceAccepted(decision))
+    const auto* existing = paths_.findAnyPath(destination);
+    const auto decision = runtime::evaluatePathAnnounce(existing, packet.hops, announce.random_hash, now_ms, options_.path_ttl_ms);
+    // A solicited verified replay may recover a directory that was unavailable
+    // when this route was learned. Reuse its live path without refreshing it.
+    const bool cached_response = runtime::canRestoreCachedAnnounce(existing, decision, announce.random_hash, requested_response, now_ms, options_.path_ttl_ms);
+    if (!runtime::pathAnnounceAccepted(decision) && !cached_response)
     {
-        // A solicited cached response can resolve the request after verification,
-        // without replacing the cached route or extending its freshness.
-        if (requested_response && decision == runtime::PathAnnounceDecision::RejectReplay && path(destination, now_ms))
-        {
-            paths_.resolvePendingPathRequest(destination);
-            ++stats_.responses;
-            observeTrackDirectory(announce, identity, destination, now_s);
-            return true;
-        }
         ++stats_.replays;
         return false;
     }
-    if (!paths_.observeAnnouncePath(destination, packet.hops, announce.random_hash, now_ms, now_s, interface_id ? interface_id : options_.interface_id,
-                                    packet.transport_id, bytes, size, options_.paths))
+    if (cached_response)
     {
-        ++stats_.rejected;
-        return false;
+        paths_.resolvePendingPathRequest(destination);
     }
-    paths_.rememberPacket(hash, now_ms, options_.packet_filter);
-    ++stats_.accepted;
+    else
+    {
+        if (!paths_.observeAnnouncePath(destination, packet.hops, announce.random_hash, now_ms, now_s, interface_id ? interface_id : options_.interface_id,
+                                        packet.transport_id, bytes, size, options_.paths))
+        {
+            ++stats_.rejected;
+            return false;
+        }
+        paths_.rememberPacket(hash, now_ms, options_.packet_filter);
+        ++stats_.accepted;
+    }
     if (requested_response) ++stats_.responses;
     projection_ = {};
     projection_.announce = announce;
@@ -144,7 +146,7 @@ bool LinuxReticulumIngress::receive(const uint8_t* bytes, size_t size, uint32_t 
     projection_options.max_destinations = options_.peers;
     runtime::detail::projectVerifiedAnnounce(packet, projection_, destinations_, projection_options);
     observeTrackDirectory(announce, identity, destination, now_s);
-    if (projection_.propagation_announce && propagation_observer_)
+    if (!cached_response && projection_.propagation_announce && propagation_observer_)
     {
         PropagationAnnounce event;
         std::memcpy(event.destination.data(), destination, event.destination.size());

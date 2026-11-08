@@ -1,3 +1,4 @@
+#include "chat/infra/mesh_peer_directory_core.h"
 #include "chat/linux_reticulum_ingress.h"
 #include <cassert>
 #include <cstring>
@@ -8,6 +9,12 @@
 namespace rt = chat::reticulum;
 using Ingress = trailmate::linux_app::LinuxReticulumIngress;
 using Identity = platform::linux_runtime::LinuxReticulumIdentity;
+struct MemoryBlob final : chat::IMeshPeerDirectoryBlobStore
+{
+    chat::MeshPeerDirectoryBlobLoadResult loadBlob(std::vector<uint8_t>&) override { return chat::MeshPeerDirectoryBlobLoadResult::Missing; }
+    bool saveBlob(const uint8_t*, size_t) override { return true; }
+    void clearBlob() override {}
+};
 std::vector<uint8_t> unhex(const char* text)
 {
     std::vector<uint8_t> bytes;
@@ -102,6 +109,56 @@ void requests(Identity& local, Identity& remote)
     assert(wrapped.requestPath(other.data(), tag.data(), 3, send, &sender) == Result::CoolingDown);
     wrapped.tick(50);
     assert(!wrapped.pendingPath(other.data()));
+
+    // An early verified announce can learn a route before the asynchronous
+    // directory is ready. A solicited cached response must retry its projection.
+    MemoryBlob blob;
+    chat::MeshPeerDirectoryCore directory(blob);
+    directory.setAutoSaveEnabled(false);
+    Ingress recovering(local, options, &directory);
+    raw = announce(remote, 9, true);
+    assert(recovering.receive(raw.data(), raw.size(), 100, 200));
+    assert(recovering.statistics().directory_errors == 1);
+    const auto route_time = recovering.path(remote.destinationHash().data(), 100)->updated_ms;
+    assert(directory.beginEmpty().succeeded());
+    assert(recovering.requestPath(remote.destinationHash().data(), tag.data(), 101, send, &sender) == Result::Sent);
+    raw[18] = static_cast<uint8_t>(rt::PacketContext::PathResponse);
+    tampered = raw;
+    tampered.back() ^= 1;
+    assert(!recovering.receive(tampered.data(), tampered.size(), 102, 201));
+    assert(recovering.pendingPath(remote.destinationHash().data()));
+    assert(recovering.receive(raw.data(), raw.size(), 103, 201));
+    const auto key = chat::makeMeshPeerReticulumIdentity(chat::makeReticulumPeerIdentity(remote.destinationHash().data(), remote.identityHash().data()));
+    chat::MeshPeerRecord peer;
+    assert(directory.find(key, peer).succeeded() && peer.reticulum.has_public_keys);
+    assert(peer.reticulum.has_ratchet && !peer.flags.trusted && !peer.flags.favorite);
+    assert(!recovering.pendingPath(remote.destinationHash().data()) && recovering.statistics().responses == 1);
+    assert(recovering.path(remote.destinationHash().data(), 103)->updated_ms == route_time);
+    assert(recovering.statistics().accepted == 1);
+    assert(!recovering.receive(raw.data(), raw.size(), 104, 201));
+    chat::MeshPeerUserFlags flags;
+    flags.ignored = flags.trusted = flags.favorite = true;
+    assert(directory.setUserFlags(key, flags).succeeded() && directory.setUserAlias(key, "Local alias").succeeded());
+    assert(recovering.requestPath(remote.destinationHash().data(), tag.data(), 105, send, &sender) == Result::Sent);
+    auto stale = announce(remote, 8, true);
+    stale[18] = static_cast<uint8_t>(rt::PacketContext::PathResponse);
+    assert(!recovering.receive(stale.data(), stale.size(), 106, 202));
+    assert(recovering.pendingPath(remote.destinationHash().data()));
+    assert(recovering.receive(raw.data(), raw.size(), 107, 202));
+    assert(directory.find(key, peer).succeeded() && peer.flags.ignored && peer.flags.trusted && peer.flags.favorite);
+    assert(!std::strcmp(peer.user_alias, "Local alias"));
+    assert(recovering.path(remote.destinationHash().data(), 107)->updated_ms == route_time);
+    auto latest = announce(remote, 10, true);
+    assert(recovering.receive(latest.data(), latest.size(), 110, 203));
+    assert(recovering.requestPath(remote.destinationHash().data(), tag.data(), 111, send, &sender) == Result::Sent);
+    // A previously seen blob is a replay too, but it must not restore older
+    // peer metadata after a newer authenticated announce has been admitted.
+    assert(!recovering.receive(raw.data(), raw.size(), 112, 204));
+    assert(recovering.pendingPath(remote.destinationHash().data()));
+    latest[18] = static_cast<uint8_t>(rt::PacketContext::PathResponse);
+    assert(recovering.receive(latest.data(), latest.size(), 113, 204));
+    assert(!recovering.pendingPath(remote.destinationHash().data()));
+    assert(recovering.path(remote.destinationHash().data(), 113)->updated_ms == 110);
 }
 int main()
 {

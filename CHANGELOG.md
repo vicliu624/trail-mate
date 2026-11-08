@@ -39,6 +39,8 @@ target-specific; see the linked acceptance records below.
 
 ### Fixed
 
+- Reticulum solicited cached path responses restore verified peer keys after
+  directory recovery, preserving current metadata and the existing route's age.
 - Recent Activity rows open their exact conversation by touch or A/D and Enter,
   using Chat's normal read-state workflow and preserving other unread threads.
 - Empty Recent Activity rows remain inert while allowing touch swipes to reach
