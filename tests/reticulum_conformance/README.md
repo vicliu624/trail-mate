@@ -198,9 +198,14 @@ owner-manager slice verifies that destination registry, path manager, link
 manager, packet router, ping service, pending network-page client,
 propagation-client shell, and LXST telephony scratch owner remain explicit,
 non-copyable owners rather than collapsing back into adapter-local vectors or
-scratch fields. `AnnounceIngestor` is covered by the ESP build and scope guard
-because its verification path depends on embedded announce signing/Serial
-dependencies that do not belong in the parse-only native smoke. The current
+scratch fields. `AnnounceIngestor` also has a signed host regression in
+`tests/reticulum_gateway/test_announce_restore.cpp`. It compiles the production
+ingestor, verifier, crypto verification port, projection, registry and path
+manager; only Serial and carrier declarations substitute for device headers.
+It verifies requested cached-response peer recovery without refreshing route
+age or rolling back current metadata, and rejects unsolicited responses,
+expired requests/routes, historical announcements and invalid signatures.
+ESP builds and the scope guard continue to cover the full adapter. The current
 resource slice verifies incoming/outgoing transfer initialisation, hashmap
 window requests, hashmap updates, part receipt bookkeeping, split-resource
 assembly, proof completion, resource lookup/cancel helpers, and resource TTL

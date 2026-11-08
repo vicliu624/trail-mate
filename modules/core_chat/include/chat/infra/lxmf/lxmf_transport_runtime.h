@@ -40,6 +40,15 @@ enum class PathAnnounceDecision : uint8_t
 
 bool pathAnnounceAccepted(PathAnnounceDecision decision);
 bool pathExpired(const PathEntry& path, uint32_t now_ms, uint32_t path_ttl_ms);
+// Caller first verifies signature/destination binding and matches an active
+// PathResponse request. Restoring peer facts must not extend route lifetime or
+// roll metadata back to an older announcement in the route's replay history.
+bool canRestoreCachedAnnounce(const PathEntry* existing,
+                              PathAnnounceDecision decision,
+                              const uint8_t random_blob[kAnnounceRandomBlobSize],
+                              bool requested_response,
+                              uint32_t now_ms,
+                              uint32_t path_ttl_ms);
 PathAnnounceDecision evaluatePathAnnounce(
     const PathEntry* existing,
     uint8_t hops,

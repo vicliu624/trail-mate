@@ -4122,6 +4122,7 @@ bool LxmfAdapter::handleAnnouncePacket(const uint8_t* raw_packet, size_t raw_len
     options.now_ms = now_ms;
     options.now_s = now_s;
     options.path_ttl_ms = kPathTtlMs;
+    options.pending_path_request_ttl_ms = kPendingPathRequestTtlMs;
     options.directory_address_refresh_interval_s =
         kDirectoryAddressRefreshIntervalS;
     options.max_paths = kMaxPaths;

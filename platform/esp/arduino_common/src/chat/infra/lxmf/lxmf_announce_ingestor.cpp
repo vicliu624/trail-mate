@@ -128,7 +128,18 @@ bool AnnounceIngestor::ingest(const uint8_t* raw_packet,
                                                 result.announce.random_hash,
                                                 options.now_ms,
                                                 options.path_ttl_ms);
-    if (!pathAnnounceAccepted(result.path_decision))
+    const auto* pending = path_manager.findPendingPathRequest(packet.destination_hash);
+    const bool requested_response =
+        packet.context == static_cast<uint8_t>(reticulum::PacketContext::PathResponse) &&
+        pending && !pending->resolved && options.pending_path_request_ttl_ms != 0 &&
+        uint32_t(options.now_ms - pending->created_ms) < options.pending_path_request_ttl_ms;
+    const bool restore_cached = canRestoreCachedAnnounce(existing_path,
+                                                         result.path_decision,
+                                                         result.announce.random_hash,
+                                                         requested_response,
+                                                         options.now_ms,
+                                                         options.path_ttl_ms);
+    if (!pathAnnounceAccepted(result.path_decision) && !restore_cached)
     {
         char destination_hex[(reticulum::kTruncatedHashSize * 2U) + 1U] = {};
         formatHashHex(packet.destination_hash,
@@ -145,16 +156,23 @@ bool AnnounceIngestor::ingest(const uint8_t* raw_packet,
         return true;
     }
 
-    result.path = path_manager.observeAnnouncePath(packet.destination_hash,
-                                                   packet.hops,
-                                                   result.announce.random_hash,
-                                                   options.now_ms,
-                                                   options.now_s,
-                                                   options.ingress_interface_id,
-                                                   packet.transport_id,
-                                                   raw_packet,
-                                                   raw_len,
-                                                   options.max_paths);
+    if (restore_cached)
+    {
+        // Reuse the admitted route without refreshing its age, raw packet or
+        // replay history. Accepted below resumes the normal contact projection.
+        result.path = &path_manager.upsertPath(packet.destination_hash, options.max_paths);
+        path_manager.resolvePendingPathRequest(packet.destination_hash);
+    }
+    else result.path = path_manager.observeAnnouncePath(packet.destination_hash,
+                                                        packet.hops,
+                                                        result.announce.random_hash,
+                                                        options.now_ms,
+                                                        options.now_s,
+                                                        options.ingress_interface_id,
+                                                        packet.transport_id,
+                                                        raw_packet,
+                                                        raw_len,
+                                                        options.max_paths);
     if (!result.path)
     {
         result.reason = "path_observe_failed";

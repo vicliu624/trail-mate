@@ -25,6 +25,7 @@ struct AnnounceIngestOptions
     uint32_t now_ms = 0;
     uint32_t now_s = 0;
     uint32_t path_ttl_ms = 0;
+    uint32_t pending_path_request_ttl_ms = 0;
     uint32_t directory_address_refresh_interval_s = 0;
     std::size_t max_paths = 0;
     uint8_t max_transport_hops = 0;

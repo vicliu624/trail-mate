@@ -210,3 +210,42 @@ else()
     target_compile_options(reticulum_dispatch_status PRIVATE -UNDEBUG -Wall -Wextra)
 endif()
 add_test(NAME reticulum_dispatch_status COMMAND reticulum_dispatch_status)
+
+# Exercise the embedded ingestor, real signature port and shared projection.
+# Only Serial and carrier type declarations substitute for hardware headers.
+set(IDENTITY_SOURCE "${REPO}/platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_identity.cpp")
+set(CARRIER_HEADER "${REPO}/platform/esp/arduino_common/include/platform/esp/arduino_common/chat/infra/reticulum/reticulum_interfaces.h")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${IDENTITY_SOURCE}" "${CARRIER_HEADER}")
+file(READ "${IDENTITY_SOURCE}" SOURCE)
+extract_between("bool LxmfIdentity::verify(" "bool LxmfIdentity::deriveSharedSecret(" VERIFY_ANNOUNCE_SIGNATURE)
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/announce_verify_actual.inc" "${VERIFY_ANNOUNCE_SIGNATURE}")
+file(READ "${CARRIER_HEADER}" SOURCE)
+extract_between("enum class InterfaceKind" "constexpr InterfaceId kLoRaInterfaceId" CARRIER_TYPES)
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/announce_fakes/platform/esp/arduino_common/chat/infra/reticulum/reticulum_interfaces.h"
+    "#pragma once\n#include <cstdint>\nnamespace chat::reticulum::interfaces {\n${CARRIER_TYPES}\n}\n")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/announce_fakes/Arduino.h"
+    "#pragma once\nstruct AnnounceTestConsole { int printf(const char*, ...) { return 0; } };\ninline AnnounceTestConsole Serial;\n")
+add_executable(reticulum_announce_restore test_announce_restore.cpp
+    "${REPO}/platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_announce_ingestor.cpp"
+    "${REPO}/modules/core_chat/src/infra/lxmf/lxmf_announce_projection.cpp"
+    "${REPO}/modules/core_chat/src/infra/lxmf/lxmf_destination_registry.cpp"
+    "${REPO}/modules/core_chat/src/infra/lxmf/lxmf_path_manager.cpp"
+    "${REPO}/modules/core_chat/src/infra/lxmf/lxmf_transport_runtime.cpp"
+    "${REPO}/modules/core_chat/src/infra/lxmf/lxmf_wire.cpp"
+    "${REPO}/modules/core_chat/src/infra/reticulum/reticulum_wire.cpp"
+    "${REPO}/modules/core_chat/src/infra/reticulum/announce_verifier.cpp"
+    ${ED25519_DIR}/keypair.c ${ED25519_DIR}/sign.c ${ED25519_DIR}/verify.c
+    ${ED25519_DIR}/sha512.c ${ED25519_DIR}/ge.c ${ED25519_DIR}/fe.c ${ED25519_DIR}/sc.c)
+target_compile_features(reticulum_announce_restore PRIVATE cxx_std_17)
+target_compile_definitions(reticulum_announce_restore PRIVATE ARDUINO=1 TRAIL_MATE_RETICULUM_HASH_ONLY=1)
+target_include_directories(reticulum_announce_restore PRIVATE
+    "${CMAKE_CURRENT_BINARY_DIR}/announce_fakes" "${CMAKE_CURRENT_BINARY_DIR}"
+    "${REPO}/modules/core_chat/include" "${REPO}/modules/core_sys/include"
+    "${REPO}/platform/esp/arduino_common/include" "${REPO}/platform/esp/common/include")
+if(MSVC)
+    target_compile_options(reticulum_announce_restore PRIVATE /UNDEBUG)
+else()
+    target_compile_options(reticulum_announce_restore PRIVATE -UNDEBUG -Wall -Wextra)
+endif()
+add_test(NAME reticulum_announce_restore COMMAND reticulum_announce_restore)
+set_tests_properties(reticulum_announce_restore PROPERTIES TIMEOUT 30)

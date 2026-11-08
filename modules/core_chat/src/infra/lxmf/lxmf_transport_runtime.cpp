@@ -139,6 +139,21 @@ PathAnnounceDecision evaluatePathAnnounce(
                : PathAnnounceDecision::RejectStale;
 }
 
+bool canRestoreCachedAnnounce(const PathEntry* existing,
+                              PathAnnounceDecision decision,
+                              const uint8_t random_blob[kAnnounceRandomBlobSize],
+                              bool requested_response,
+                              uint32_t now_ms,
+                              uint32_t path_ttl_ms)
+{
+    if (!requested_response || decision != PathAnnounceDecision::RejectReplay ||
+        !existing || !random_blob || pathExpired(*existing, now_ms, path_ttl_ms) ||
+        existing->announce_random_blob_count == 0 ||
+        existing->announce_random_blob_count > kPathRandomBlobHistory) return false;
+    return std::memcmp(existing->announce_random_blobs[existing->announce_random_blob_count - 1],
+                       random_blob, kAnnounceRandomBlobSize) == 0;
+}
+
 void applyPathAnnounce(PathEntry& path,
                        uint8_t hops,
                        const uint8_t random_blob[kAnnounceRandomBlobSize],
