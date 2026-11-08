@@ -3852,9 +3852,12 @@ static void on_card_navigation(lv_event_t* event)
         else if (key == LV_KEY_UP || key == LV_KEY_LEFT) step_node_card(-1);
         else if (key == LV_KEY_ESC || key == LV_KEY_BACKSPACE)
         {
-            contacts_focus_to_filter();
             lv_event_stop_processing(event);
             lv_event_stop_bubbling(event);
+            // The filter menu already owns its first-level dismissal. Back
+            // from the card must leave Contacts, not reopen that same menu.
+            if (g_contacts_state.top_bar.back_btn)
+                lv_obj_send_event(g_contacts_state.top_bar.back_btn, LV_EVENT_CLICKED, nullptr);
         }
     }
     else if (lv_event_get_code(event) == LV_EVENT_GESTURE)

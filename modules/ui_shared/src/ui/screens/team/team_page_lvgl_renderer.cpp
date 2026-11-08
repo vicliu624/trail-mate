@@ -66,9 +66,18 @@ TeamPageLvglRenderer::TeamPageLvglRenderer(uint32_t now_s)
 void TeamPageLvglRenderer::render(
     TeamPageLvglRendererContext& context,
     const TeamPageLvglRendererInput& input,
-    const TeamPageLvglRendererHandlers& handlers,
+    const TeamPageLvglRendererHandlers& requested_handlers,
     const ITeamPageLvglNameResolver& names) const
 {
+    auto handlers = requested_handlers;
+    if (!input.pairing_available)
+    {
+        handlers.create_team = nullptr;
+        handlers.join_team = nullptr;
+        handlers.invite = nullptr;
+        handlers.join_retry = nullptr;
+        handlers.kicked_join = nullptr;
+    }
     clearContent(context);
     if (context.body)
     {
@@ -85,7 +94,7 @@ void TeamPageLvglRenderer::render(
     switch (input.page)
     {
     case TeamPage::StatusNotInTeam:
-        renderStatusNotInTeam(context, handlers);
+        renderStatusNotInTeam(context, handlers, input.pairing_available);
         break;
     case TeamPage::StatusInTeam:
         renderStatusInTeam(context, input.read_model, handlers);
@@ -109,8 +118,14 @@ void TeamPageLvglRenderer::render(
         renderKickedOut(context, handlers);
         break;
     default:
-        renderStatusNotInTeam(context, handlers);
+        renderStatusNotInTeam(context, handlers, input.pairing_available);
         break;
+    }
+    if (!input.pairing_available &&
+        (input.page == TeamPage::TeamHome || input.page == TeamPage::JoinPending ||
+         input.page == TeamPage::KickedOut))
+    {
+        addLabel(context.body, ::ui::i18n::tr("Team pairing is unavailable on this device"), false, true);
     }
 }
 
@@ -156,7 +171,7 @@ void TeamPageLvglRenderer::registerFocus(
     lv_obj_t* obj,
     bool is_default) const
 {
-    if (!obj || !context.focusables)
+    if (!obj || !context.focusables || lv_obj_has_state(obj, LV_STATE_DISABLED))
     {
         return;
     }
@@ -222,6 +237,10 @@ lv_obj_t* TeamPageLvglRenderer::createFittedButton(
     if (cb)
     {
         lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, nullptr);
+    }
+    else
+    {
+        lv_obj_add_state(btn, LV_STATE_DISABLED);
     }
     return btn;
 }
@@ -383,13 +402,16 @@ void TeamPageLvglRenderer::renderMemberChipsOrEmpty(
 
 void TeamPageLvglRenderer::renderStatusNotInTeam(
     TeamPageLvglRendererContext& context,
-    const TeamPageLvglRendererHandlers& handlers) const
+    const TeamPageLvglRendererHandlers& handlers,
+    bool pairing_available) const
 {
     updateTopBarTitle(context, ::ui::i18n::tr("Team"));
 
     addLabel(context.body, ::ui::i18n::tr("You are not in a team"), true, false);
     addLabel(context.body, ::ui::i18n::tr("- No shared map\n- No team awareness"), false, true);
-    addLabel(context.body, ::ui::i18n::tr("Keep devices within 5m"), false, false);
+    addLabel(context.body,
+             ::ui::i18n::tr(pairing_available ? "Keep devices within 5m" : "Team pairing is unavailable on this device"),
+             false, false);
 
     if (context.action_btns && context.action_btn_count > 0)
     {

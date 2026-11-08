@@ -818,27 +818,29 @@ bool ImeWidget::handle_key_code(uint32_t key)
     {
         if (key == LV_KEY_BACKSPACE)
         {
-            erase_last_utf8_char(committed_text_);
-            update_text = true;
+            lv_textarea_delete_char(textarea_);
             consumed = true;
         }
         else if (key == LV_KEY_ENTER)
         {
-            committed_text_ += "\n";
-            update_text = true;
+            lv_textarea_add_text(textarea_, "\n");
             consumed = true;
         }
         else if (key == ' ')
         {
-            committed_text_ += " ";
-            update_text = true;
+            lv_textarea_add_text(textarea_, " ");
             consumed = true;
         }
         else if (key >= 32 && key <= 126)
         {
-            committed_text_.push_back(static_cast<char>(key));
-            update_text = true;
+            const char text[] = {static_cast<char>(key), '\0'};
+            lv_textarea_add_text(textarea_, text);
             consumed = true;
+        }
+        if (consumed)
+        {
+            committed_text_ = lv_textarea_get_text(textarea_);
+            refresh_textarea_content_font(textarea_);
         }
     }
 
@@ -861,8 +863,9 @@ bool ImeWidget::handle_text_token(const char* token)
         return false;
     }
 
-    committed_text_ += token;
-    sync_textarea();
+    lv_textarea_add_text(textarea_, token);
+    committed_text_ = lv_textarea_get_text(textarea_);
+    refresh_textarea_content_font(textarea_);
     refresh_labels();
     return true;
 }
@@ -875,6 +878,18 @@ bool ImeWidget::handle_key(lv_event_t* e)
     }
 
     const uint32_t key = lv_event_get_key(e);
+    if (!pinyin_mode() && lv_event_get_target(e) == textarea_)
+    {
+        // The textarea class has already applied this physical key, including
+        // cursor movement and character constraints. Do not append it again
+        // through the proxy/touch path or reset the cursor to the end.
+        committed_text_ = lv_textarea_get_text(textarea_);
+        refresh_textarea_content_font(textarea_);
+        refresh_labels();
+        const bool text_key = key == LV_KEY_BACKSPACE || key == LV_KEY_ENTER || (key >= 32 && key <= 126);
+        if (text_key) lv_event_stop_processing(e);
+        return text_key;
+    }
     const bool consumed = handle_key_code(key);
     if (consumed)
     {

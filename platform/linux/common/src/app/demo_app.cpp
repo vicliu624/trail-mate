@@ -60,6 +60,12 @@ void DemoApp::handleInput(const InputEvent& event) noexcept
     {
     case InputKey::TextEdit:
         break; // Native text edits belong to the focused UI editor.
+    case InputKey::CursorHome:
+        status_text_ = "CURSOR HOME REQUESTED";
+        break;
+    case InputKey::CursorEnd:
+        status_text_ = "CURSOR END REQUESTED";
+        break;
     case InputKey::Character:
         if (event.text != '\0')
         {

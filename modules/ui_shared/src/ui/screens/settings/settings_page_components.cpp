@@ -43,6 +43,7 @@
 #include "platform/ui/wireless_companion_runtime.h"
 #include "ui/app_runtime.h"
 #include "ui/assets/fonts/font_utils.h"
+#include "ui/components/dialog_frame.h"
 #include "ui/localization.h"
 #include "ui/menu/menu_layout.h"
 #include "ui/page/page_profile.h"
@@ -2036,6 +2037,7 @@ static void on_modal_key(lv_event_t* e)
     {
         return;
     }
+    if (::ui::components::dialog_frame::handle_focus_key(e)) return;
     const uint32_t key = lv_event_get_key(e);
     if (key == LV_KEY_ESC)
     {

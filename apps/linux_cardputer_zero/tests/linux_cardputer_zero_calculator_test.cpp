@@ -73,11 +73,28 @@ int main()
         assert(hasLabel(lv_screen_active(), "CALCULATOR"));
         lv_obj_update_layout(lv_screen_active());
         checkButtons(lv_screen_active());
+        key(input::InputKey::Character, '1');
         key(input::InputKey::Character, '2');
         key(input::InputKey::Character, '+');
         key(input::InputKey::Character, '3');
+        key(input::InputKey::Left);
+        key(input::InputKey::Character, '9');
+        key(input::InputKey::Character, '=');
+        assert(hasResult(lv_screen_active(), "105")); // 12 + 93, preserving expression cursor movement.
+        const auto focused_control = []() -> lv_obj_t*
+        {
+            for (auto* indev = lv_indev_get_next(nullptr); indev; indev = lv_indev_get_next(indev))
+                if (lv_indev_get_type(indev) == LV_INDEV_TYPE_KEYPAD)
+                    return lv_group_get_focused(lv_indev_get_group(indev));
+            return nullptr;
+        };
+        key(input::InputKey::Tab);
+        assert(focused_control() && hasLabel(focused_control(), "8"));
+        key(input::InputKey::Right);
+        assert(focused_control() && hasLabel(focused_control(), "9"));
         key(input::InputKey::Enter);
-        assert(hasResult(lv_screen_active(), "5"));
+        key(input::InputKey::Character, '=');
+        assert(hasResult(lv_screen_active(), "9")); // Tab enters button navigation; Enter inputs 9; '=' evaluates it.
         key(input::InputKey::Home);
         tick(650ms);
         assert(!hasLabel(lv_screen_active(), "CALCULATOR"));

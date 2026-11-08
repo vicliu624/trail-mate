@@ -1447,8 +1447,22 @@ void handle_page_transition(TeamPage next_page)
     (void)next_page;
 }
 
+bool require_pairing_service()
+{
+    if (app::teamFacade().getTeamPairing())
+    {
+        return true;
+    }
+    ::ui::feedback::show_notice("Team pairing is unavailable on this device", 2000);
+    return false;
+}
+
 bool start_pairing_command(TeamPagePairingCommandRole role)
 {
+    if (!require_pairing_service())
+    {
+        return false;
+    }
     auto state = command_state_from_page();
     const auto effects = TeamPagePairingCommandAction().startPairing(
         state,
@@ -1468,6 +1482,10 @@ bool start_pairing_command(TeamPagePairingCommandRole role)
 
 void handle_create(lv_event_t*)
 {
+    if (!require_pairing_service())
+    {
+        return;
+    }
     auto command_state = command_state_from_page();
     auto key_state = key_event_state_from_page();
     TeamPageRandomByteAdapter random;
@@ -1683,6 +1701,10 @@ void handle_join_retry(lv_event_t*)
 
 void handle_kicked_join(lv_event_t*)
 {
+    if (!require_pairing_service())
+    {
+        return;
+    }
     reduce_command_state(
         [](TeamPageCommandReducer& reducer, TeamPageCommandState& state)
         {
@@ -1748,6 +1770,7 @@ void render_page()
     input.page = team_page_state().page;
     input.read_model = read_model_input;
     input.pairing_peer_id = team_page_state().pairing_peer_id;
+    input.pairing_available = app::teamFacade().getTeamPairing() != nullptr;
 
     TeamPageLvglRenderer(now_secs()).render(context, input, handlers, team_page_name_resolver());
 

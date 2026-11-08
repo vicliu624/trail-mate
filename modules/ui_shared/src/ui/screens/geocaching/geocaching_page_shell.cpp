@@ -265,7 +265,10 @@ void keyEvent(lv_event_t* event)
 void addFocusable(lv_obj_t* object)
 {
     if (page->group) lv_group_add_obj(page->group, object);
-    lv_obj_add_event_cb(object, keyEvent, LV_EVENT_KEY, nullptr);
+    const auto event = lv_obj_check_type(object, &lv_textarea_class)
+                           ? static_cast<lv_event_code_t>(LV_EVENT_KEY | LV_EVENT_PREPROCESS)
+                           : LV_EVENT_KEY;
+    lv_obj_add_event_cb(object, keyEvent, event, nullptr);
 }
 void setEnabled(lv_obj_t* object, bool enabled)
 {

@@ -1,4 +1,5 @@
 #include "lvgl.h"
+#include "ui/components/dialog_frame.h"
 #include <algorithm>
 #include <array>
 #include <cassert>

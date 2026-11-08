@@ -4,7 +4,14 @@
 #include "ui/widgets/top_bar.h"
 #include <cassert>
 #include <cstdio>
+#include <cstring>
 #include <vector>
+
+lv_group_t* app_g = nullptr;
+namespace ui::input::pager
+{
+bool open_help(lv_obj_t*, lv_group_t*) { return false; }
+} // namespace ui::input::pager
 
 // Keep the real LVGL layout, shared frame, TopBar and button code; replace only
 // app services that are irrelevant to the component's geometry and lifetime.
@@ -87,6 +94,11 @@ int main()
             ui::components::dialog_frame::bind_close_shortcuts(frame, group);
             lv_obj_update_layout(screen);
             auto* header = lv_obj_get_child(frame.panel, 0);
+            auto* heading = lv_obj_get_child(header, 0);
+            assert(lv_obj_check_type(heading, &lv_label_class));
+            assert(std::strcmp(lv_label_get_text(heading), "Navigation") == 0);
+            assert(lv_obj_get_height(heading) > 0);
+            assert(lv_obj_get_width(heading) > 0);
             assert(lv_obj_get_height(header) == lv_obj_get_height(page_bar.container));
             assert(lv_obj_get_width(frame.panel) <= width - 12);
             assert(lv_obj_get_width(frame.close) == lv_obj_get_height(frame.close));
@@ -96,6 +108,10 @@ int main()
             lv_obj_get_coords(frame.body, &body);
             lv_obj_get_coords(frame.close, &close);
             lv_obj_get_coords(header, &title);
+            lv_area_t caption{};
+            lv_obj_get_coords(heading, &caption);
+            assert(caption.x1 >= title.x1 && caption.x2 <= title.x2);
+            assert(caption.y1 >= title.y1 && caption.y2 <= title.y2);
             assert(close.x2 <= panel.x2 && close.y1 >= title.y1 && close.y2 <= title.y2);
             assert(body.y1 > title.y2 && body.y2 <= panel.y2);
             lv_obj_scroll_to_y(frame.body, 120, LV_ANIM_OFF);
@@ -113,12 +129,36 @@ int main()
             lv_group_del(group);
         }
         const auto compact = ui::components::dialog_frame::create(screen, {"Route Actions", 200, 180});
+        auto* action_group = lv_group_create();
+        lv_group_add_obj(action_group, compact.close);
         for (const auto text : {"Load", "Preview", "Delete"})
         {
             auto* row = ui::components::bottom_bar::add_button(compact.body, text);
             ui::components::bottom_bar::style_item(row);
             lv_obj_set_size(row, LV_PCT(100), 28);
+            lv_group_add_obj(action_group, row);
         }
+        ui::components::dialog_frame::bind_close_shortcuts(compact, action_group);
+        auto* load = lv_obj_get_child(compact.body, 0);
+        auto* preview = lv_obj_get_child(compact.body, 1);
+        auto* remove = lv_obj_get_child(compact.body, 2);
+        lv_group_focus_obj(load);
+        lv_group_send_data(action_group, LV_KEY_DOWN);
+        assert(lv_group_get_focused(action_group) == preview);
+        lv_group_send_data(action_group, LV_KEY_RIGHT);
+        assert(lv_group_get_focused(action_group) == remove);
+        lv_group_send_data(action_group, LV_KEY_LEFT);
+        assert(lv_group_get_focused(action_group) == preview);
+        lv_group_send_data(action_group, LV_KEY_UP);
+        assert(lv_group_get_focused(action_group) == load);
+        lv_obj_add_state(preview, LV_STATE_DISABLED);
+        lv_group_send_data(action_group, LV_KEY_DOWN);
+        assert(lv_group_get_focused(action_group) == remove);
+        lv_group_send_data(action_group, LV_KEY_DOWN);
+        assert(lv_group_get_focused(action_group) == compact.close);
+        lv_group_send_data(action_group, LV_KEY_DOWN);
+        assert(lv_group_get_focused(action_group) == load);
+        lv_group_del(action_group);
         ui::components::dialog_frame::fit_content_height(compact);
         lv_obj_update_layout(screen);
         assert(lv_obj_get_height(compact.panel) < 140);

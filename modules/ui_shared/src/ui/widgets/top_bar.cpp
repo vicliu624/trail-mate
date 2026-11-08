@@ -295,8 +295,19 @@ void top_bar_set_title(TopBar& bar, const char* title)
     // DOT can wrap when height is LV_SIZE_CONTENT. Constrain the label to
     // exactly one line, including when a fallback font handles a peer name.
     const auto* font = lv_obj_get_style_text_font(bar.title_label, LV_PART_MAIN);
+    auto available_height = lv_obj_get_content_height(bar.container);
+    if (available_height <= 0)
+    {
+        // A freshly created dialog has not completed flex layout yet. Its
+        // fixed declared height is already known; do not pin the title to zero.
+        available_height = std::max<lv_coord_t>(1,
+                                                lv_obj_get_style_height(bar.container, LV_PART_MAIN) -
+                                                    lv_obj_get_style_pad_top(bar.container, LV_PART_MAIN) -
+                                                    lv_obj_get_style_pad_bottom(bar.container, LV_PART_MAIN) -
+                                                    2 * lv_obj_get_style_border_width(bar.container, LV_PART_MAIN));
+    }
     lv_obj_set_height(bar.title_label, std::min<lv_coord_t>(
-                                           lv_font_get_line_height(font), lv_obj_get_content_height(bar.container)));
+                                           lv_font_get_line_height(font), available_height));
 #endif
 }
 

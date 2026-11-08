@@ -199,13 +199,35 @@ Chat, Contacts, Map, or Sky Plot page is not currently open. Pages consume
 runtime state and send commands; they do not own radio polling or GPS serial
 reads.
 
-On the framebuffer keyboard interface, press **S** in a Chat conversation to
-open Compose. Type the message, press **Tab** once to select **Send**, then
-press **Enter**. Enter inside the text field inserts a newline. A visible
-Compose hint describes this sequence, and the compact action bars preserve
-message space on the 320 × 170 panel. Further Tab presses reach the IME,
-symbols, emoji, voice and cancel controls. Press Esc briefly to go back, or
-hold it for approximately 1.5 seconds to exit cleanly to APPLaunch.
+The Zero has its own keyboard profile, following the official
+[key specifications](https://cardputer.cc/docs/en/CP0_keys.md). Outside text
+editors, **F/Z/X/C** move up/left/down/right without Fn. Text editors keep
+those letters and digits as ordinary input. **Tab / Shift+Tab** move between
+controls; **Enter** activates the selected control. **Fn+H** opens help.
+
+The **4–8** shortcuts depend on the current page:
+
+| Page | 4 | 5 | 6 | 7 | 8 |
+| --- | --- | --- | --- | --- | --- |
+| Main menu | Chat | Map | Tracker | Contacts | Settings |
+| Map | Zoom out | Zoom in | Position | Layer | Menu |
+| Tracker | Record / stop | Tracks | Routes | Actions | Menu |
+| Route preview | Zoom out | Zoom in | Fit | Load | Help |
+| Music | Previous | Play / pause | Next | Library | Menu |
+
+In a Chat conversation, **S** opens Compose. Type the message and press
+**Ctrl+Enter** to send, or **Tab → Enter** to select and activate Send.
+Enter inside the text field inserts a newline. Further Tab presses reach the
+IME, symbols, emoji, voice and cancel controls. **Fn+K / Fn+N** move to the
+start/end of an editor or the first/last available control outside an editor.
+**Esc** closes the current popup or returns to the previous page. Hold the
+upper-left Esc/Home key for approximately 1.5 seconds to exit cleanly to
+APPLaunch; a standard Home key held that long also exits on evdev.
+
+Calculator starts in expression editing mode: Left/Right move its cursor and
+`=` evaluates. Press Tab to select keypad controls, then use directions and
+Enter to activate them. Typing a digit or arithmetic operator resumes expression
+editing. This preserves calculator letter functions while editing an expression.
 
 Extensions → Make TMAP opens the five-step online creator. Search for a global
 city or district and select the result with the correct country/context; the

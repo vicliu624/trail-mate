@@ -252,8 +252,15 @@ void openMenuHelpModal()
         return;
     }
 
-    ::ui::components::shortcut_help_modal::Row rows[12] = {};
+    ::ui::components::shortcut_help_modal::Row rows[20] = {};
     std::size_t row_count = 0;
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    rows[row_count++] = {"F/Z/X/C", nullptr, "Up / left / down / right"};
+    rows[row_count++] = {"4 / 5", nullptr, "Chat / Map"};
+    rows[row_count++] = {"6 / 7 / 8", nullptr, "Tracker / Contacts / Settings"};
+    rows[row_count++] = {"V", nullptr, "Open or close widgets"};
+    rows[row_count++] = {"Fn+H", nullptr, "Context help"};
+#endif
     if (ui::menu::dashboard::isFeedOpen())
     {
 #if defined(ARDUINO_T_LORA_PAGER)

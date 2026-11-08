@@ -65,6 +65,23 @@ int main()
         lv_indev_set_group(keypad, group);
         ui::menu_runtime::setScene(ui::menu_runtime::Scene::App);
         {
+            auto* editor = lv_textarea_create(lv_screen_active());
+            lv_group_add_obj(group, editor);
+            lv_group_focus_obj(editor);
+            lv_textarea_set_text(editor, "safe");
+            trailmate::cardputer_zero::app::InputEvent reserved;
+            reserved.key = Key::Enter;
+            reserved.control = true;
+            shell.enqueueInputs({reserved});
+            tick(120ms);
+            assert(!std::strcmp(lv_textarea_get_text(editor), "safe"));
+            key(Key::F1);
+            assert(!std::strcmp(lv_textarea_get_text(editor), "safe"));
+            key(Key::Character, 'A');
+            assert(!std::strcmp(lv_textarea_get_text(editor), "safeA"));
+            lv_obj_delete(editor);
+        }
+        {
             chat::ui::ChatComposeScreen compose(lv_screen_active(), {chat::ChannelId::PRIMARY, 123, chat::MeshProtocol::Meshtastic});
             ui::widgets::ImeWidget ime;
             ime.init(compose.getContent(), compose.getTextarea());
@@ -78,20 +95,42 @@ int main()
                                       &sends);
             tick(150ms);
             assert(lv_group_get_focused(group) == compose.getTextarea());
-            for (char value : std::string("hwsv")) key(Key::Character, value);
-            assert(compose.getText() == "hwsv");
+            for (char value : std::string("hwsvfzxc478")) key(Key::Character, value);
+            assert(compose.getText() == "hwsvfzxc478");
+            key(Key::CursorHome);
+            assert(lv_textarea_get_cursor_pos(compose.getTextarea()) == 0);
+            key(Key::Character, 'A');
+            assert(compose.getText() == "Ahwsvfzxc478");
+            assert(lv_textarea_get_cursor_pos(compose.getTextarea()) == 1);
+            key(Key::Backspace);
+            assert(compose.getText() == "hwsvfzxc478");
+            key(Key::CursorEnd);
+            assert(lv_textarea_get_cursor_pos(compose.getTextarea()) == compose.getText().size());
             key(Key::Enter);
-            assert(compose.getText() == "hwsv\n" && sends == 0);
+            assert(compose.getText() == "hwsvfzxc478\n" && sends == 0);
             key(Key::Character, 'x');
             auto* send = lv_obj_get_parent(label(compose.getActionBar(), "Send"));
             assert(send);
             key(Key::Tab);
             assert(lv_group_get_focused(group) == send);
-            assert(compose.getText() == "hwsv\nx" && sends == 0);
+            trailmate::cardputer_zero::app::InputEvent reverse;
+            reverse.key = Key::Tab;
+            reverse.shift = true;
+            shell.enqueueInputs({reverse});
+            tick(120ms);
+            assert(lv_group_get_focused(group) == compose.getTextarea());
+            trailmate::cardputer_zero::app::InputEvent submit;
+            submit.key = Key::Enter;
+            submit.control = true;
+            shell.enqueueInputs({submit});
+            tick(120ms);
+            assert(compose.getText() == "hwsvfzxc478\nx" && sends == 1);
+            key(Key::Tab);
+            assert(lv_group_get_focused(group) == send);
             key(Key::Enter);
-            if (sends != 1) std::fprintf(stderr, "Send actions for one key press: %u\n", sends);
-            assert(sends == 1); // Key press/release must not duplicate the send.
-            assert(label(compose.getObj(), "Tab to Send, then Enter"));
+            if (sends != 2) std::fprintf(stderr, "Send actions for two submissions: %u\n", sends);
+            assert(sends == 2); // Each press/release pair produces exactly one send.
+            assert(label(compose.getObj(), "Ctrl+Enter Send / Tab controls"));
             lv_obj_update_layout(compose.getObj());
             assert(lv_obj_get_height(send) == 20);
             assert(lv_obj_get_height(compose.getActionBar()) == 26);

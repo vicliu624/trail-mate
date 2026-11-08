@@ -116,6 +116,13 @@ int main()
     fields(lv_screen_active(), text_fields);
     assert(text_fields.size() == 5 && !std::strcmp(lv_textarea_get_text(text_fields[0]), "UI draft"));
     assert(description == lv_textarea_get_text(text_fields[1]));
+    key(Key::Home); // Escape must leave an unchanged saved draft without dirtying it.
+    text_fields.clear();
+    fields(lv_screen_active(), text_fields);
+    assert(text_fields.empty());
+    click("UI draft");
+    fields(lv_screen_active(), text_fields);
+    assert(text_fields.size() == 5 && !std::strcmp(lv_textarea_get_text(text_fields[0]), "UI draft"));
     lv_textarea_set_text(text_fields[0], "Edited UI draft");
     click("Save");
     assert(label(lv_screen_active(), "Edited UI draft"));

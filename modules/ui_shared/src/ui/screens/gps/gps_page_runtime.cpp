@@ -3715,9 +3715,16 @@ void open_map_help_modal()
     };
 
     add_help_row("WASD", nullptr, "Move map");
-    add_help_row("Q", "E", "Zoom map");
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    add_help_row("FZXC", nullptr, "Up / left / down / right");
+    add_help_row("4/5", "6", "Zoom out / in / current position");
+    add_help_row("7/8", nullptr, "Change layer / open Menu");
+    add_help_row("Menu", nullptr, "Search for a place");
+#else
     add_help_row("C", "Pos", "Center current position");
     add_help_row("F", nullptr, "Find a place");
+#endif
+    add_help_row("Q", "E", "Zoom map");
     add_help_row("P", nullptr, "Show/hide route photos");
     add_help_row("L", nullptr, "Change base layer");
     add_help_row("O", "Ctr", "Toggle contour overlay");
@@ -4314,6 +4321,14 @@ bool handle_map_key(uint32_t key, lv_event_t* e)
             close_map_menu();
             open_map_menu();
             if (app_g && s_map_layer_btn) lv_group_focus_obj(s_map_layer_btn);
+            return true;
+        }
+        if (app_g && (key == LV_KEY_UP || key == LV_KEY_DOWN || key == LV_KEY_LEFT || key == LV_KEY_RIGHT))
+        {
+            consume_key_event(e);
+            if (key == LV_KEY_UP || key == LV_KEY_LEFT) lv_group_focus_prev(app_g);
+            else lv_group_focus_next(app_g);
+            if (auto* focused = lv_group_get_focused(app_g)) lv_obj_scroll_to_view(focused, LV_ANIM_OFF);
             return true;
         }
         return false;

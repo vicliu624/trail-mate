@@ -6,6 +6,10 @@
 
 namespace ui::map_poi
 {
+// This punctuation must also render with the built-in ASCII map fonts.
+inline constexpr char kAnnotationEllipsis[] = "...";
+inline constexpr std::size_t kAnnotationEllipsisBytes = sizeof(kAnnotationEllipsis) - 1;
+
 struct AnnotationCandidate
 {
     uint64_t key = 0;

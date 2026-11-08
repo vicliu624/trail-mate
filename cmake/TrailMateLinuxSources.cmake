@@ -743,6 +743,7 @@ set(TRAIL_MATE_LINUX_UI_SHELL_SOURCES
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/widgets/toast/toast_widget.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/widgets/top_bar.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/input/pager_navigation.cpp"
+    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/input/cardputer_keyboard.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/widgets/ble_pairing_popup.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/widgets/top_bar_power_presenter.cpp"
 )

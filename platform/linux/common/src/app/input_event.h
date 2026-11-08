@@ -27,6 +27,8 @@ enum class InputKey
     Down,
     F1,
     TextEdit,
+    CursorHome,
+    CursorEnd,
 };
 
 struct InputEvent
@@ -35,6 +37,9 @@ struct InputEvent
     std::string label{};
     char text{'\0'};
     app::TextEdit edit{};
+    bool shift = false;
+    bool control = false;
+    bool alt = false;
 };
 
 [[nodiscard]] inline InputEvent makeCharacterInput(char ch, std::string label = {})

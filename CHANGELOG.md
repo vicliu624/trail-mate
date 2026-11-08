@@ -24,6 +24,9 @@ target-specific; see the linked acceptance records below.
   detection, heading integration and the shared launcher/widget screens.
 - Cardputer Zero access to the shared music player, including its compact
   now-playing layout and launcher-widget controls.
+- A dedicated Cardputer Zero keyboard profile: F/Z/X/C navigation outside
+  editors, context-specific 4–8 actions, Shift+Tab, Fn+H help, native Home/End
+  cursor movement and Ctrl+Enter chat submission.
 - T-Display-CM0 Raspbian ARMHF application and matching native 1seg backend
   packages, preserving the target's GCC 14 C++ ABI and ARMv7 receive contract.
   CM0 also gains the LR2021 FM/1seg views, OFDM learning workbench and receiver
@@ -39,6 +42,27 @@ target-specific; see the linked acceptance records below.
 
 ### Fixed
 
+- Shared keypad text editors reject non-text control characters, and Escape
+  cancels the Music playlist-name editor without appending an invisible byte.
+- English IME input, touch tokens and Backspace respect the current text cursor;
+  Calculator preserves expression arrows and offers explicit Tab-based button
+  navigation on Zero. Consumed shortcuts refresh the display's activity timer.
+- Linux Canvas shutdown closes the active page before releasing its providers
+  and LVGL, preventing Map timers and marker bindings from outliving their owners.
+- Linux production modes no longer expose the synthetic Team pairing transport.
+  Devices without a real pairing service show disabled pairing actions and an
+  availability hint; existing team data remains accessible and Escape works.
+- Contacts leaves the page on Escape after closing its filter menu instead of
+  reopening the menu from the focused node card.
+- Route action/navigation dialogs and Map menus support directional keyboard
+  focus while retaining map panning, text editing and submenu back actions.
+- Zero dialog titles retain a visible height before their first flex layout;
+  shared map truncation uses punctuation supported by built-in ASCII fonts.
+- Holding Home for 1.5 seconds in the Cardputer Zero framebuffer application
+  exits cleanly to APPLaunch, alongside the existing Esc exit gesture.
+- Native CM0 packaging checks every required application/producer ELF while
+  keeping CoreCLR's optional LTTng tracing provider optional; clean builders
+  also verify the pinned producer can start before compiling the application.
 - Linux Reticulum retains the original private message until an IP delivery
   finishes, allowing one policy-permitted LoRa retry after a transport failure
   with the same message ID, timestamp and full destination identity.

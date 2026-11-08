@@ -39,8 +39,8 @@ constexpr auto kKeyMap = std::to_array<KeyMapping>({
     {KEY_DOWN, app::InputKey::Down},
     {KEY_LEFT, app::InputKey::Left},
     {KEY_RIGHT, app::InputKey::Right},
-    {KEY_HOME, app::InputKey::Home},
-    {KEY_END, app::InputKey::Next},
+    {KEY_HOME, app::InputKey::CursorHome},
+    {KEY_END, app::InputKey::CursorEnd},
 
     // Action keys
     {KEY_ENTER, app::InputKey::Enter},
@@ -49,6 +49,7 @@ constexpr auto kKeyMap = std::to_array<KeyMapping>({
     {KEY_TAB, app::InputKey::Tab},
     {KEY_ESC, app::InputKey::Power},
     {KEY_F1, app::InputKey::F1},
+    {KEY_HELP, app::InputKey::F1},
 
     // Modifiers (mapped as modifiers – input handling may need expansion later)
     {KEY_LEFTSHIFT, app::InputKey::Shift},
@@ -322,7 +323,11 @@ app::InputEvent makeInputEvent(const KeyMapping& mapping, bool shift_held)
             label_str = "Right";
             break;
         case app::InputKey::Home:
+        case app::InputKey::CursorHome:
             label_str = "Home";
+            break;
+        case app::InputKey::CursorEnd:
+            label_str = "End";
             break;
         case app::InputKey::Next:
             label_str = "Next";
@@ -427,8 +432,10 @@ struct EvdevInput::Impl
     bool ctrl_held{false};
     bool alt_held{false};
     bool escape_held{false};
+    bool home_held{false};
     bool quit_requested{false};
     std::chrono::steady_clock::time_point escape_pressed_at{};
+    std::chrono::steady_clock::time_point home_pressed_at{};
 
     bool openDevice(const std::string& path)
     {
@@ -464,6 +471,7 @@ struct EvdevInput::Impl
         ctrl_held = false;
         alt_held = false;
         escape_held = false;
+        home_held = false;
         quit_requested = false;
     }
 
@@ -615,6 +623,7 @@ std::vector<app::InputEvent> EvdevInput::drainInput()
         {
             // A lost release must never become an unintended long-press exit.
             impl_->escape_held = false;
+            impl_->home_held = false;
         }
         // We only emit EV_KEY events.
         if (raw.type != EV_KEY)
@@ -622,14 +631,20 @@ std::vector<app::InputEvent> EvdevInput::drainInput()
             continue;
         }
 
-        if (raw.code == KEY_ESC)
+        if (raw.code == KEY_ESC || raw.code == KEY_HOME)
         {
-            if (raw.value == 1 && !impl_->escape_held)
+            auto& held = raw.code == KEY_ESC ? impl_->escape_held : impl_->home_held;
+            auto& pressed_at = raw.code == KEY_ESC ? impl_->escape_pressed_at : impl_->home_pressed_at;
+            const auto now = std::chrono::steady_clock::now();
+            // Also recognize a completed hold if its release is waiting in
+            // this batch; releasing the key must not erase the exit request.
+            if (held && now - pressed_at >= std::chrono::milliseconds(1500)) impl_->quit_requested = true;
+            if (raw.value == 1 && !held)
             {
-                impl_->escape_held = true;
-                impl_->escape_pressed_at = std::chrono::steady_clock::now();
+                held = true;
+                pressed_at = now;
             }
-            else if (raw.value == 0) impl_->escape_held = false;
+            else if (raw.value == 0) held = false;
         }
 
         // Track modifier state.
@@ -660,9 +675,15 @@ std::vector<app::InputEvent> EvdevInput::drainInput()
             continue;
         }
 
-        events.push_back(makeInputEvent(*mapping, impl_->shift_held));
+        auto event = makeInputEvent(*mapping, impl_->shift_held);
+        event.shift = impl_->shift_held;
+        event.control = impl_->ctrl_held;
+        event.alt = impl_->alt_held;
+        events.push_back(std::move(event));
     }
-    if (impl_->escape_held && std::chrono::steady_clock::now() - impl_->escape_pressed_at >= std::chrono::milliseconds(1500))
+    const auto now = std::chrono::steady_clock::now();
+    if ((impl_->escape_held && now - impl_->escape_pressed_at >= std::chrono::milliseconds(1500)) ||
+        (impl_->home_held && now - impl_->home_pressed_at >= std::chrono::milliseconds(1500)))
         impl_->quit_requested = true;
 #endif
 

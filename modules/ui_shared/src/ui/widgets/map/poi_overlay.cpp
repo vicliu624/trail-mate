@@ -1,5 +1,6 @@
 #include "ui/widgets/map/poi_overlay.h"
 #include "ui/assets/fonts/font_utils.h"
+#include "ui_map_runtime/map_poi/annotation_layout.h"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -181,8 +182,8 @@ bool PoiOverlay::measure_text(void* view, const char* text, std::size_t bytes, b
     std::memcpy(prefix, text, bytes);
     if (ellipsis)
     {
-        std::memcpy(prefix + bytes, "\xE2\x80\xA6", 3);
-        bytes += 3;
+        std::memcpy(prefix + bytes, ::ui::map_poi::kAnnotationEllipsis, ::ui::map_poi::kAnnotationEllipsisBytes);
+        bytes += ::ui::map_poi::kAnnotationEllipsisBytes;
     }
     prefix[bytes] = '\0';
     // A missing glyph must not be laid out using LVGL's placeholder metrics.

@@ -28,12 +28,34 @@ struct Heap
 bool measure(void* context, const char*, std::size_t bytes, bool ellipsis, int16_t& width, int16_t& height)
 {
     if (context) return false;
-    width = static_cast<int16_t>(bytes * 6 + (ellipsis ? 6 : 0));
+    width = static_cast<int16_t>((bytes + (ellipsis ? kAnnotationEllipsisBytes : 0)) * 6);
     height = 14;
     return true;
 }
 int main()
 {
+    {
+        Heap heap;
+        AnnotationFrame frame(Heap::allocate, Heap::release, &heap);
+        ui::map::MapPoiSnapshot metadata;
+        metadata.enabled = true;
+        metadata.width = 240;
+        metadata.height = 120;
+        AnnotationLayoutOptions options;
+        options.width = 240;
+        options.height = 120;
+        options.max_text_width = 40;
+        AnnotationCandidate candidate;
+        candidate.key = candidate.feature_key = 1;
+        candidate.name = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        candidate.category = "road";
+        candidate.x = candidate.y = 30;
+        assert(frame.begin(1, metadata));
+        frame.add(candidate);
+        assert(frame.finish(options, measure, nullptr));
+        assert(frame.snapshot().item_count == 1);
+        assert(std::strcmp(frame.snapshot().items[0].label.c_str(), "ABC...") == 0);
+    }
     for (int failure = 0; failure < 5; ++failure)
     {
         Heap heap;

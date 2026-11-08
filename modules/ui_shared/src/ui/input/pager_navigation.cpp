@@ -2,6 +2,7 @@
 #include "platform/ui/radio_iq_runtime.h"
 #include "platform/ui/tmap_creation_runtime.h"
 #include "platform/ui/walkie_runtime.h"
+#include "ui/input/keyboard_shortcuts.h"
 #if defined(ARDUINO_T_LORA_PAGER) || defined(__linux__)
 #include "platform/memory/psram_ptr.h"
 #include "platform/ui/psram_ui_lease.h"
@@ -26,6 +27,18 @@ struct PageHelp
 };
 PageHelp* pages = nullptr;
 uint32_t consumed_key = 0;
+
+void reject_control_text(lv_event_t* event)
+{
+    const auto* text = static_cast<const unsigned char*>(lv_event_get_param(event));
+    if (!text) return;
+    for (; *text; ++text)
+        if (*text < 32 && *text != '\n' && *text != '\t')
+        {
+            lv_textarea_set_insert_replace(lv_event_get_target_obj(event), "");
+            return;
+        }
+}
 
 bool group_exists(lv_group_t* target)
 {
@@ -108,6 +121,22 @@ void show_help(PageHelp& page, lv_group_t* group)
     unsigned count = 5;
     const auto* app = ui_get_active_app();
     const char* id = app ? app->stable_id() : "";
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    rows[count++] = {"F/Z/X/C", nullptr, "Directions outside text editing"};
+    rows[count++] = {"Shift+Tab", nullptr, "Previous control"};
+    rows[count++] = {"Fn+H", nullptr, "Help without leaving the editor"};
+    if (!std::strcmp(id, "chat")) rows[count++] = {"Ctrl+Enter", nullptr, "Send from the message editor"};
+    if (!std::strcmp(id, "tracker"))
+    {
+        rows[count++] = {"4 / 5 / 6", nullptr, "Record / Tracks / Routes"};
+        rows[count++] = {"7 / 8", nullptr, "Actions / Menu"};
+    }
+    if (!std::strcmp(id, "music"))
+    {
+        rows[count++] = {"4 / 5 / 6", nullptr, "Previous / Play-pause / Next"};
+        rows[count++] = {"7 / 8", nullptr, "Library / Menu"};
+    }
+#endif
     if (id && !std::strcmp(id, "walkie_talkie")) platform::ui::walkie::set_ptt(false);
     if (simple_navigation(id)) rows[count++] = {"Up/Down", "W/S", "Previous / next control"};
     const char* title = page.title ? lv_label_get_text(page.title) : "";
@@ -285,6 +314,13 @@ void prepare_group(lv_group_t* group)
     for (unsigned i = 0; i < lv_group_get_obj_count(group); ++i)
     {
         auto* object = lv_group_get_obj_by_index(group, i);
+        if (lv_obj_check_type(object, &lv_textarea_class))
+        {
+            bool guarded = false;
+            for (uint32_t index = 0; index < lv_obj_get_event_count(object); ++index)
+                if (lv_event_dsc_get_cb(lv_obj_get_event_dsc(object, index)) == reject_control_text) guarded = true;
+            if (!guarded) lv_obj_add_event_cb(object, reject_control_text, LV_EVENT_INSERT, nullptr);
+        }
         // An inset outline is visible without joining the top bar or clipping
         // adjacent rows. Preserve each page's ordinary pointer/checked style.
         lv_style_value_t value;
@@ -298,6 +334,10 @@ void prepare_group(lv_group_t* group)
             lv_obj_set_style_outline_color(object, color, LV_STATE_FOCUS_KEY);
     }
 }
+bool page_owns_focus(lv_group_t* group)
+{
+    return group && page_for(lv_group_get_focused(group));
+}
 bool handle_key(uint32_t key, bool pressed, lv_group_t* group)
 {
     if (!pressed && consumed_key != 0 && consumed_key == key)
@@ -309,7 +349,8 @@ bool handle_key(uint32_t key, bool pressed, lv_group_t* group)
         ui::menu_runtime::currentScene() != ui::menu_runtime::Scene::App || !group) return false;
     auto* focused = lv_group_get_focused(group);
     auto* page = page_for(focused);
-    if (!page || in_text_editor(focused) || ui::widgets::ime_owns_text_focus(focused)) return false;
+    const bool explicit_help = key == ::ui::input::kHelpKey;
+    if (!page || ((!explicit_help) && (in_text_editor(focused) || ui::widgets::ime_owns_text_focus(focused)))) return false;
     auto* app = ui_get_active_app();
     const char* id = app ? app->stable_id() : nullptr;
     const bool dropdown_open = lv_obj_check_type(focused, &lv_dropdown_class) && lv_dropdown_is_open(focused);
@@ -324,14 +365,14 @@ bool handle_key(uint32_t key, bool pressed, lv_group_t* group)
         consumed_key = key;
         return true;
     }
-    if (key != 'h' && key != 'H') return false;
+    if (key != 'h' && key != 'H' && !explicit_help) return false;
     if (help::is_open(page->modal)) close_help(*page);
     else
     {
         if (ui_is_overlay_active()) return false;
         // Keep mature page-specific help (Map, Contacts, Network, chat
         // history), including their context-sensitive modal behavior.
-        if (native_help(*page, id))
+        if (native_help(*page, id) && !in_text_editor(focused))
         {
             lv_group_send_data(group, key);
             // Some focusable containers have no key bubbling route to the

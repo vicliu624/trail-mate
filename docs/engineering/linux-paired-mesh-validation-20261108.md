@@ -198,4 +198,65 @@ is claimed by this record.
 All started package builds and focused regressions reached terminal success.
 The final read-only audits reported no CRC, header, timeout, invalid-frame or
 read errors in either device's current Meshtastic radio counters. Both devices
-remain in CN / LongFast with their normal identities and profiles.
+remained in CN / LongFast with their normal identities and profiles at the end
+of that Meshtastic audit.
+
+## All/Direct IP failure to physical LoRa delivery (2026-11-09)
+
+Zero `1.1.0+demo.20261109.11` completed a controlled transport-failure test with
+the real CM0. Its original network projection was missing, so the rehearsal
+used the production `build_defaults` policy and typed network store. The
+temporary configuration retained the five interface slots, selected All and
+Direct delivery, enabled integrated LoRa and one loopback TCP test endpoint,
+and disabled other IP interfaces for a deterministic failure path.
+
+The TCP peer replayed a previously captured, real signed CM0 delivery Announce
+without changing its keys or signature. It closed immediately after receiving
+the real 86-byte LinkRequest. The test did not emulate a successful delivery
+or a radio receipt. Zero submitted `all direct fallback 0309` through its real
+Compose editor using physical evdev Ctrl+Enter.
+
+The Zero log records the same local message ID `167620162` throughout:
+
+- `19:09:43.904Z`: network queue accepted, `ready=1`, `radio_path=0`.
+- `19:09:43.957Z`: failed network delivery falls back to LoRa.
+- `19:09:45.943Z`: radio link queue accepted, `path=1`, `hops=1`.
+
+Zero stored one new outgoing row (sequence 41) with status Delivered. CM0
+stored the matching plaintext once (sequence 41, incoming ID `2820774652`)
+with `RxOrigin::LoRa` (3). Incoming Reticulum IDs are independently derived;
+the retained outgoing ID above belongs to Zero's original submission.
+
+After normal application exit, the helper verified the complete temporary
+projection against the expected test configuration, removed only its owned
+network key, and confirmed the original Missing projection and default
+delivery preference (2). Zero restarted successfully. No application config
+blob, identity, map or historical message record was replaced.
+
+## Final keyboard and lifecycle rehearsal (2026-11-09)
+
+Zero `1.1.0+demo.20261109.15` passed the 68-test native Shell/service suite,
+including production Local/Mesh and explicit Demo Team capabilities. Production
+Linux no longer returns the synthetic pairing service. The physical Team page
+shows its unavailable hint and disabled Create/Join controls; Tab, directions
+and Escape return to the launcher without creating team state. Existing Team
+services and data remain available; real Linux Team pairing is not qualified.
+
+The independent keyboard audit covered 12 combined navigation/editor paths and
+23 normal exits while an activity, editor or modal was still active. Actual Map
+shutdown previously reproduced a timer/provider use-after-free. After fixing
+the page/provider/LVGL release order, its Valgrind run terminated successfully
+with zero invalid-access contexts. Zero also exited from the active Map
+Navigation dialog to APPLaunch after a 1.8-second Escape hold; the old process
+ended normally and Map runtime destruction occurred while LVGL and its data
+providers were alive. Navigation, Route Actions and Help titles remained visible.
+
+On the same physical build, the online wizard searched `Singapore` through
+Photon, returned `Singapore / SG`, displayed an enclosing area of approximately
+111.9 by 42.7 km and enabled Next. No new download was started for this check;
+the earlier complete online production/install and existing Kunming maps were
+preserved. The previous loopback proxy forward had disconnected and the
+previous LAN proxy address was unreachable. A separate reconnecting SSH forward
+restored access to the user's local Clash for this test. Online access currently
+requires that desktop and Clash to remain running; this is an environment
+prerequisite, not a permanent LAN-proxy recovery or a new application service.

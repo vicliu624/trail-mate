@@ -172,8 +172,8 @@ bool AnnotationFrame::finish(const AnnotationLayoutOptions& options, AnnotationM
             std::size_t bytes = placement.text_bytes;
             if (placement.ellipsis)
             {
-                std::memcpy(item.label.data + bytes, "\xE2\x80\xA6", 3);
-                bytes += 3;
+                std::memcpy(item.label.data + bytes, kAnnotationEllipsis, kAnnotationEllipsisBytes);
+                bytes += kAnnotationEllipsisBytes;
             }
             item.label.data[bytes] = '\0';
         }

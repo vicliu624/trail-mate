@@ -108,7 +108,7 @@ void create(lv_obj_t* parent, const Spec& spec, Widgets& w)
 #if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
     lv_obj_set_style_pad_all(w.textarea, 4, 0);
     auto* keyboard_hint = lv_label_create(w.content);
-    ::ui::i18n::set_label_text(keyboard_hint, "Tab to Send, then Enter");
+    ::ui::i18n::set_label_text(keyboard_hint, "Ctrl+Enter Send / Tab controls");
     lv_obj_set_style_text_font(keyboard_hint, ::ui::page_profile::resolve_tiny_font(), 0);
     lv_obj_set_style_text_color(keyboard_hint, lv_color_hex(0x6A5646), 0);
 #endif

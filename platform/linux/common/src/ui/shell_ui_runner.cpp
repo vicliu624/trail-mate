@@ -1,5 +1,7 @@
 #include "ui/shell_ui_runner.h"
 #include "platform/linux/tmap_creation.h"
+#include "ui/app_runtime.h"
+#include "ui/input/keyboard_shortcuts.h"
 #include "ui/input/pager_navigation.h"
 
 #include <chrono>
@@ -65,11 +67,15 @@ std::chrono::steady_clock::time_point g_lvgl_start_time = clock::now();
     case app::InputKey::Backspace:
         return LV_KEY_BACKSPACE;
     case app::InputKey::Enter:
-        return LV_KEY_ENTER;
+        return event.control ? ::ui::input::kControlEnter : static_cast<uint32_t>(LV_KEY_ENTER);
     case app::InputKey::Tab:
-        return LV_KEY_NEXT;
+        return event.shift ? LV_KEY_PREV : LV_KEY_NEXT;
     case app::InputKey::Home:
         return LV_KEY_ESC;
+    case app::InputKey::CursorHome:
+        return LV_KEY_HOME;
+    case app::InputKey::CursorEnd:
+        return LV_KEY_END;
     case app::InputKey::Next:
         return LV_KEY_NEXT;
     case app::InputKey::Power:
@@ -176,6 +182,13 @@ ShellSession::~ShellSession()
 void ShellSession::releaseUiBindings()
 {
     impl_->text_input.reset();
+    // Pages own LVGL timers and borrow binding-owned providers. Close them
+    // while both are alive, including direct process exit from a Map modal.
+    if (auto* active = ui_get_active_app())
+    {
+        ui_detach_app(active);
+        active->exit(nullptr);
+    }
     impl_->voice.reset();
     if (impl_->agenda) impl_->agenda->releaseUi();
     if (!impl_->geocaching_bound) return;
@@ -370,7 +383,15 @@ void CanvasLvglHost::readInputCb(lv_indev_t* indev, lv_indev_data_t* d)
     {
         if (!host->shell_.dequeueKeyEvent(&key, &state)) return;
         auto* group = lv_indev_get_group(indev);
-        if (state == LV_INDEV_STATE_PRESSED) ::ui::input::pager::prepare_group(group);
+        if (state == LV_INDEV_STATE_PRESSED)
+        {
+            // A shortcut consumed before LVGL dispatch is still user activity.
+            lv_display_trigger_activity(lv_indev_get_display(indev));
+            ::ui::input::pager::prepare_group(group);
+        }
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+        if (::ui::input::cardputer::handle_key(key, state == LV_INDEV_STATE_PRESSED, group, host->keyboard_profile_)) continue;
+#endif
         if (!::ui::input::pager::handle_key(key, state == LV_INDEV_STATE_PRESSED, group)) break;
     }
 

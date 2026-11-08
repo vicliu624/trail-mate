@@ -2387,7 +2387,13 @@ void open_route_preview_help_modal()
     add_help_row("WASD", nullptr, "Pan map (images hidden)");
     add_help_row("Q / -", nullptr, "Zoom out");
     add_help_row("E / +", nullptr, "Zoom in");
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    add_help_row("FZXC", nullptr, "Up / left / down / right");
+    add_help_row("4/5", "6", "Zoom out / in / fit route");
+    add_help_row("7/8", nullptr, "Change layer / Help");
+#else
     add_help_row("F", nullptr, "Fit whole route");
+#endif
     add_help_row("R", nullptr, "Load/off route");
     add_help_row("L", nullptr, "Change base layer");
     add_help_row("V", nullptr, "Show/hide profile");

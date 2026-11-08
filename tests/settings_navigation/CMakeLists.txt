@@ -34,7 +34,7 @@ extract_between("static void settings_back_cb(" "static void bind_dynamic_option
 extract_between("static lv_obj_t* create_modal_root(" "static void on_text_save_clicked(" LAYOUT)
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/settings_lifecycle_actual.inc" "${MODAL}\n${BACK}\n${LAYOUT}")
 add_executable(settings_navigation test_navigation.cpp)
-target_include_directories(settings_navigation PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(settings_navigation PRIVATE "${CMAKE_CURRENT_BINARY_DIR}" "${REPO}/modules/ui_shared/include")
 target_link_libraries(settings_navigation PRIVATE lvgl)
 if(MSVC)
     target_compile_options(settings_navigation PRIVATE /UNDEBUG)

@@ -83,7 +83,7 @@ void refresh_team_input(const TeamPageInputContext& context)
 
     if (back_button())
     {
-        lv_group_add_obj(s_group, back_button());
+        add_if(back_button());
     }
 
     if (s_context.focusables)

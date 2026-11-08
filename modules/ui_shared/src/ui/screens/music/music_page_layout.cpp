@@ -372,6 +372,13 @@ void draw()
         ui::fonts::apply_content_font(self.editor, "", &lv_font_montserrat_14);
         lv_obj_add_event_cb(self.editor, playlist_name_changed, LV_EVENT_VALUE_CHANGED, nullptr);
         lv_obj_add_event_cb(self.editor, editor_ready, LV_EVENT_READY, nullptr);
+        lv_obj_add_event_cb(
+            self.editor, [](lv_event_t* event)
+            {
+                if (lv_event_get_key(event) != LV_KEY_ESC) return;
+                lv_event_stop_bubbling(event);
+                key_event(event); },
+            static_cast<lv_event_code_t>(LV_EVENT_KEY | LV_EVENT_PREPROCESS), nullptr);
         ui::widgets::attach_touch_text_editor(self.editor);
         lv_group_focus_obj(self.editor);
         self.notice = label(panel, "Keep a short, clear name", 12, 88, w - 24, &lv_font_montserrat_12, true);

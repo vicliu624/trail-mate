@@ -64,6 +64,7 @@ struct TeamPageLvglRendererInput
     TeamPage page = TeamPage::StatusNotInTeam;
     TeamPageReadModelInput read_model;
     uint32_t pairing_peer_id = 0;
+    bool pairing_available = true;
 };
 
 class TeamPageLvglRenderer
@@ -107,7 +108,8 @@ class TeamPageLvglRenderer
         const TeamPageReadModelInput& input) const;
 
     void renderStatusNotInTeam(TeamPageLvglRendererContext& context,
-                               const TeamPageLvglRendererHandlers& handlers) const;
+                               const TeamPageLvglRendererHandlers& handlers,
+                               bool pairing_available) const;
     void renderStatusInTeam(TeamPageLvglRendererContext& context,
                             const TeamPageReadModelInput& input,
                             const TeamPageLvglRendererHandlers& handlers) const;

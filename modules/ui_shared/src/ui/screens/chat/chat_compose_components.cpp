@@ -1,6 +1,7 @@
 #if !defined(ARDUINO_T_WATCH_S3)
 #include "ui/screens/chat/chat_compose_components.h"
 
+#include "ui/input/keyboard_shortcuts.h"
 #include "ui/screens/chat/chat_compose_input.h"
 #include "ui/screens/chat/chat_compose_layout.h"
 #include "ui/screens/chat/chat_compose_styles.h"
@@ -198,6 +199,12 @@ ChatComposeScreen::ChatComposeScreen(lv_obj_t* parent, chat::ConversationId conv
     init_topbar();
 
     input::bind_textarea_events(impl_->w, this, on_key, on_text_changed);
+    lv_obj_add_event_cb(
+        impl_->w.textarea, [](lv_event_t* event)
+        {
+            const auto key = lv_event_get_key(event);
+            if (key == LV_KEY_ESC || key == ::ui::input::kControlEnter) on_key(event); },
+        static_cast<lv_event_code_t>(LV_EVENT_KEY | LV_EVENT_PREPROCESS), this);
     input::setup_default_group_focus(impl_->w);
     syncFocusOrder();
 
@@ -719,6 +726,14 @@ void ChatComposeScreen::on_key(lv_event_t* e)
     lv_obj_t* const target = static_cast<lv_obj_t*>(lv_event_get_target(e));
     lv_indev_t* indev = lv_indev_get_act();
     const bool is_encoder = indev && lv_indev_get_type(indev) == LV_INDEV_TYPE_ENCODER;
+    if (key == ::ui::input::kControlEnter)
+    {
+        lv_event_stop_bubbling(e);
+        lv_event_stop_processing(e);
+        if (screen->impl_->w.send_btn && !lv_obj_has_state(screen->impl_->w.send_btn, LV_STATE_DISABLED))
+            lv_obj_send_event(screen->impl_->w.send_btn, LV_EVENT_CLICKED, nullptr);
+        return;
+    }
     if (key == LV_KEY_ESC)
     {
         if (screen->back_cb_)

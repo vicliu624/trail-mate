@@ -1,4 +1,5 @@
 #pragma once
+#include "ui/input/cardputer_keyboard.h"
 
 #include <chrono>
 #include <cstdint>
@@ -130,6 +131,7 @@ class CanvasLvglHost
     core::Canvas canvas_;
     std::vector<std::uint16_t> frame_buffer_{};
     bool dirty_{true};
+    ::ui::input::cardputer::State keyboard_profile_{};
 };
 
 // ---------------------------------------------------------------------------

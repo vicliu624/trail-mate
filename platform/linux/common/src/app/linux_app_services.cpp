@@ -2490,7 +2490,8 @@ const ::chat::IMeshAdapter* LinuxAppServices::getMeshAdapter() const
 
 ::team::TeamPairingService* LinuxAppServices::getTeamPairing()
 {
-    return &impl().pairing_service;
+    // This transport synthesizes peers; production Linux has no pairing bearer yet.
+    return impl().demo_world_enabled ? &impl().pairing_service : nullptr;
 }
 
 ::team::TeamService* LinuxAppServices::teamService()
@@ -2653,7 +2654,10 @@ void LinuxAppServices::tickEventRuntime()
         return;
     }
 
-    impl_->pairing_service.update();
+    if (impl_->demo_world_enabled)
+    {
+        impl_->pairing_service.update();
+    }
     ::sys::EventBus::publish(new ::sys::Event(::sys::EventType::SystemTick), 0);
 }
 

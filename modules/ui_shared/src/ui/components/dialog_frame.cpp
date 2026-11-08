@@ -11,6 +11,7 @@ namespace
 {
 void close_key(lv_event_t* event)
 {
+    if (handle_focus_key(event)) return;
     const auto key = lv_event_get_key(event);
     auto* close = static_cast<lv_obj_t*>(lv_event_get_user_data(event));
     if (key != 'x' && key != 'X' && !(key == LV_KEY_ENTER && lv_event_get_target(event) == close)) return;

@@ -54,6 +54,21 @@ Both application packages retain private settings and radio identities. They
 do not attempt to reconstruct previously corrupted chat databases. Online map
 creation requires network access; installed maps remain available offline.
 
+Cardputer Zero follows the device's native keyboard conventions. F/Z/X/C act
+as directions outside text editors, and 4–8 expose frequent page actions.
+Shift+Tab reverses control traversal, Fn+H opens help, and Ctrl+Enter sends a
+composed chat message. Fn+K/Fn+N retain Home/End cursor behavior. Hold the
+upper-left Esc/Home key for approximately 1.5 seconds to return to APPLaunch.
+See the [keyboard action table](../../apps/linux_cardputer_zero/README.md)
+for each page. Shared Contacts, Route, Map and Settings focus fixes also apply
+to other targets using those pages; the Zero key aliases are target-specific.
+
+Linux production modes do not currently provide a real Team pairing transport.
+Create, Join and Invite are disabled when that service is absent, with an
+availability hint. Existing team data and its normal service remain available.
+Synthetic Team pairing belongs only to explicitly enabled demonstration mode
+and is not evidence of physical pairing support on either Linux device.
+
 On the Recent Activity widget, use A/D or Left/Right to select a conversation
 and Enter to open it; touch users can tap either populated row. Chat owns the
 read-state update. Back/Home returns through the message list to the launcher;

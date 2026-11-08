@@ -1093,7 +1093,7 @@ std::string renderBottomHelpText(const char* text)
 {
 #if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
     (void)text;
-    return ui::menu::dashboard::isFeedOpen() ? "#D6403A V# Menu" : "#D6403A V# Widgets";
+    return ui::menu::dashboard::isFeedOpen() ? "#D6403A V# Menu" : "#D6403A 4#Chat #D6403A 5#Map #D6403A 6#Track #D6403A 7#Nodes #D6403A 8#Set";
 #else
     const char* safe_text = text ? text : "";
     const size_t prefix_len = std::strlen(kBottomHelpPlainPrefix);

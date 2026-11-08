@@ -648,6 +648,28 @@ void restoreFocus()
 namespace calculator::ui::runtime
 {
 
+bool activate_control(lv_obj_t* button)
+{
+    if (!s_ui.root || !button || !lv_obj_is_valid(button)) return false;
+    if (button == s_ui.top_bar.back_btn)
+    {
+        requestExit();
+        return true;
+    }
+    bool owned = false;
+    for (auto* control : s_ui.function_buttons) owned = owned || control == button;
+    for (auto* control : s_ui.keypad_buttons) owned = owned || control == button;
+    if (!owned) return false;
+    for (uint32_t index = 0; index < lv_obj_get_event_count(button); ++index)
+    {
+        auto* descriptor = lv_obj_get_event_dsc(button, index);
+        if (lv_event_dsc_get_cb(descriptor) != clicked) continue;
+        applyAction(static_cast<KeyAction>(reinterpret_cast<uintptr_t>(lv_event_dsc_get_user_data(descriptor))));
+        return true;
+    }
+    return false;
+}
+
 void enter(const ::ui::page::Host* host, lv_obj_t* parent)
 {
     if (!parent)
