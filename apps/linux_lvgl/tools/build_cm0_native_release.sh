@@ -55,6 +55,12 @@ chroot "$root" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -eu -c '
 chroot "$root" /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin HOME=/root LANG=C.UTF-8 \
     CC=gcc-14 CXX=g++-14 JOBS="$jobs" /bin/bash -eu -c '
     file --version
+    # The pinned CLI exits 2 with its usage text when invoked without a command.
+    # Run the actual ARM producer in the target userspace before the long build.
+    producer_status=0
+    /tmap-producer/TmapTool > /build/tmap-producer-startup.log 2>&1 || producer_status=$?
+    test "$producer_status" -eq 2
+    grep -q "^TMAP:" /build/tmap-producer-startup.log
     python3 /workspace/apps/linux_lvgl/tools/build_oneseg_backend.py --cm0 --work-dir /build/gr-isdbt --jobs "$JOBS"
     python3 /workspace/apps/linux_lvgl/tools/package_oneseg_backend.py --backend-work /build/gr-isdbt --output /build/release-packages
     cmake -S /workspace/apps/linux_lvgl -B /build/release-application -G Ninja \

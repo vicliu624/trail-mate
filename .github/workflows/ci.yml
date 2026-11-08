@@ -703,6 +703,7 @@ jobs:
           test -n "$package"
           /usr/bin/python3 apps/linux_lvgl/tests/oneseg_backend_package_test.py --package "$package" --decoder apps/linux_lvgl/tools/oneseg_decode.py
           /usr/bin/python3 apps/linux_lvgl/tests/oneseg_package_config_test.py --ffmpeg-prefix / --host-backend-package "$package"
+          /usr/bin/python3 apps/linux_lvgl/tests/native_package_dependencies_test.py
       - name: Retain native validation evidence
         if: always()
         uses: actions/upload-artifact@v4

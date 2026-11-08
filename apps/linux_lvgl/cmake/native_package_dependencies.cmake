@@ -1,0 +1,51 @@
+# CPack's native scanner treats every bundled ELF plugin as mandatory. CoreCLR
+# deliberately tolerates unavailable LTTng dependencies; retain that optional
+# provider unchanged in the pinned producer, but do not require its legacy ABI.
+# https://github.com/dotnet/runtime/blob/v8.0.0/src/coreclr/pal/src/misc/tracepointprovider.cpp
+# All application binaries and every other producer ELF remain strict inputs.
+find_program(TRAIL_MATE_DPKG_SHLIBDEPS dpkg-shlibdeps REQUIRED)
+if(NOT IS_DIRECTORY "${TRAIL_MATE_NATIVE_DEPENDENCY_PRODUCER}")
+    message(FATAL_ERROR "Pinned producer directory is missing")
+endif()
+set(dependency_inputs ${TRAIL_MATE_NATIVE_DEPENDENCY_BINARIES})
+file(GLOB producer_files LIST_DIRECTORIES false "${TRAIL_MATE_NATIVE_DEPENDENCY_PRODUCER}/*")
+foreach(input IN LISTS producer_files)
+    get_filename_component(name "${input}" NAME)
+    if(name STREQUAL "libcoreclrtraceptprovider.so")
+        message(STATUS "LTTng tracing remains optional: ${name}")
+        continue()
+    endif()
+    file(READ "${input}" magic OFFSET 0 LIMIT 4 HEX)
+    if(magic STREQUAL "7f454c46")
+        list(APPEND dependency_inputs "${input}")
+    endif()
+endforeach()
+if(NOT dependency_inputs)
+    message(FATAL_ERROR "Native package dependency inputs are missing")
+endif()
+set(dependency_arguments)
+foreach(input IN LISTS dependency_inputs)
+    if(NOT EXISTS "${input}")
+        message(FATAL_ERROR "Missing native package dependency input: ${input}")
+    endif()
+    list(APPEND dependency_arguments "-e${input}")
+endforeach()
+file(MAKE_DIRECTORY "${TRAIL_MATE_NATIVE_DEPENDENCY_WORK}/debian")
+file(WRITE "${TRAIL_MATE_NATIVE_DEPENDENCY_WORK}/debian/control"
+    "Source: ${CPACK_PACKAGE_NAME}\n\nPackage: ${CPACK_PACKAGE_NAME}\nArchitecture: any\nDescription: Native dependency analysis\n")
+execute_process(COMMAND "${TRAIL_MATE_DPKG_SHLIBDEPS}" --ignore-missing-info -O ${dependency_arguments}
+    WORKING_DIRECTORY "${TRAIL_MATE_NATIVE_DEPENDENCY_WORK}"
+    RESULT_VARIABLE dependency_result OUTPUT_VARIABLE dependency_output ERROR_VARIABLE dependency_errors
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+if(NOT dependency_result EQUAL 0 OR NOT dependency_output MATCHES "^shlibs:Depends=")
+    message(FATAL_ERROR "Native package dependency analysis failed: ${dependency_errors}")
+endif()
+string(REGEX REPLACE "^shlibs:Depends=" "" dependency_output "${dependency_output}")
+if(dependency_output)
+    if(CPACK_DEBIAN_PACKAGE_DEPENDS)
+        string(APPEND CPACK_DEBIAN_PACKAGE_DEPENDS ", ${dependency_output}")
+    else()
+        set(CPACK_DEBIAN_PACKAGE_DEPENDS "${dependency_output}")
+    endif()
+endif()
+message(STATUS "Native application and producer dependencies verified")

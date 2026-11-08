@@ -1058,6 +1058,20 @@ if(TRAIL_MATE_LINUX_BUILD_APP)
             set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS OFF)
             set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "${TRAIL_MATE_DEBIAN_ARCH}")
             set(CPACK_DEBIAN_PACKAGE_DEPENDS "${TRAIL_MATE_DEVICE_DEBIAN_DEPENDS}")
+        elseif(TRAIL_MATE_TMAP_PRODUCER_DIR)
+            # Analyze the native application and pinned producer explicitly so
+            # CoreCLR's optional LTTng provider does not force a legacy OS ABI.
+            set(native_dependency_files "$<TARGET_FILE:trailmate-linux>")
+            foreach(native_target trailmate-linux-audio-probe trailmate-linux-oneseg-iq)
+                if(TARGET ${native_target})
+                    list(APPEND native_dependency_files "$<TARGET_FILE:${native_target}>")
+                endif()
+            endforeach()
+            set(CPACK_PROJECT_CONFIG_FILE "${CMAKE_CURRENT_BINARY_DIR}/native-package-dependencies.cmake")
+            file(GENERATE OUTPUT "${CPACK_PROJECT_CONFIG_FILE}" CONTENT
+                "set(TRAIL_MATE_NATIVE_DEPENDENCY_BINARIES [==[${native_dependency_files}]==])\nset(TRAIL_MATE_NATIVE_DEPENDENCY_PRODUCER [==[${TRAIL_MATE_TMAP_PRODUCER_DIR}]==])\nset(TRAIL_MATE_NATIVE_DEPENDENCY_WORK [==[${CMAKE_CURRENT_BINARY_DIR}/native-package-dependencies]==])\ninclude([==[${CMAKE_CURRENT_LIST_DIR}/cmake/native_package_dependencies.cmake]==])\n")
+            # The project script above performs strict dpkg-shlibdeps analysis.
+            set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS OFF)
         endif()
         include(CPack)
     endif()
