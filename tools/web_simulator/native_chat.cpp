@@ -12,6 +12,7 @@ static std::unique_ptr<chat::ui::ChatConversationScreen> conversation;
 static std::unique_ptr<chat::ui::ChatComposeScreen> compose;
 static chat::ConversationId selected(chat::ChannelId::PRIMARY, 0x12345678);
 static std::vector<std::string> sent_messages;
+static int requested_page = 5;
 
 void preview_chat_exit()
 {
@@ -24,13 +25,25 @@ namespace chat::ui::runtime
 bool requestCompose(const chat::ConversationId& id)
 {
     selected = id;
+    requested_page = 7;
     return true;
 }
-void clearRequestedCompose() {}
+bool requestConversation(const chat::ConversationId& id)
+{
+    selected = id;
+    requested_page = 6;
+    return true;
+}
+void clearRequestedCompose() { requested_page = 5; }
 } // namespace chat::ui::runtime
 namespace chat::ui::shell
 {
-void enter(void*, lv_obj_t*) { native_open_page(5); }
+void enter(void*, lv_obj_t*)
+{
+    const int page = requested_page;
+    requested_page = 5;
+    native_open_page(page);
+}
 void exit(void*, lv_obj_t*) { preview_chat_exit(); }
 lv_obj_t* get_container()
 {

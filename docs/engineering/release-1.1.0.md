@@ -54,6 +54,13 @@ Both application packages retain private settings and radio identities. They
 do not attempt to reconstruct previously corrupted chat databases. Online map
 creation requires network access; installed maps remain available offline.
 
+On the Recent Activity widget, use A/D or Left/Right to select a conversation
+and Enter to open it; touch users can tap either populated row. Chat owns the
+read-state update. Back/Home returns through the message list to the launcher;
+V reopens the same widget
+page, showing updated badges while preserving unread messages in other threads.
+W/S and the wheel continue to switch widget pages.
+
 ## Build provenance and publication
 
 `linux-device-packages.yml` publishes Center's self-contained producers from

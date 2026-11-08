@@ -130,6 +130,7 @@ struct PendingComposeRoute
 {
     chat::ConversationId conversation{};
     bool pending = false;
+    bool view_conversation = false;
 };
 
 PendingComposeRoute s_pending_compose_route{};
@@ -202,6 +203,14 @@ bool requestCompose(const chat::ConversationId& conversation)
     }
     s_pending_compose_route.conversation = conversation;
     s_pending_compose_route.pending = true;
+    s_pending_compose_route.view_conversation = false;
+    return true;
+}
+
+bool requestConversation(const chat::ConversationId& conversation)
+{
+    if (!requestCompose(conversation)) return false;
+    s_pending_compose_route.view_conversation = true;
     return true;
 }
 
@@ -412,9 +421,14 @@ void enter(const shell::Host* host, lv_obj_t* parent)
     if (s_pending_compose_route.pending)
     {
         const chat::ConversationId requested = s_pending_compose_route.conversation;
+        const bool view_conversation = s_pending_compose_route.view_conversation;
         s_pending_compose_route.pending = false;
-        const bool opened = s_ui_controller->openComposeForConversation(requested);
-        std::printf("[Chat][Route] compose target protocol=%u channel=%u peer=%08lX opened=%u\n",
+        if (view_conversation) s_ui_controller->onChannelClicked(requested);
+        const bool opened = view_conversation
+                                ? s_ui_controller->getState() == chat::ui::ChatUiState::Conversation
+                                : s_ui_controller->openComposeForConversation(requested);
+        std::printf("[Chat][Route] %s target protocol=%u channel=%u peer=%08lX opened=%u\n",
+                    view_conversation ? "conversation" : "compose",
                     static_cast<unsigned>(requested.protocol),
                     static_cast<unsigned>(requested.channel),
                     static_cast<unsigned long>(requested.peer),

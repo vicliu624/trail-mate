@@ -9,7 +9,10 @@
 #include "chat/domain/chat_types.h"
 #include "chat/usecase/chat_service.h"
 #include "ui/localization.h"
+#include "ui/menu/dashboard/dashboard_key_focus.h"
 #include "ui/menu/dashboard/dashboard_style.h"
+#include "ui/menu/menu_layout.h"
+#include "ui/screens/chat/chat_page_runtime.h"
 
 #if !defined(LV_FONT_MONTSERRAT_12) || !LV_FONT_MONTSERRAT_12
 #define lv_font_montserrat_12 lv_font_montserrat_14
@@ -23,6 +26,8 @@ namespace
 struct RecentWidgetUi : WidgetLifetime
 {
     DashboardCardChrome chrome{};
+    DashboardKeyFocus focus{};
+    chat::ConversationId conversations[2]{};
     lv_obj_t* rows[2]{};
     lv_obj_t* row_dots[2]{};
     lv_obj_t* row_names[2]{};
@@ -37,6 +42,48 @@ struct RecentWidgetUi : WidgetLifetime
 };
 
 constexpr size_t kVisibleRows = 2;
+
+void open_recent(RecentWidgetUi& recent, unsigned index)
+{
+    if (!recent.focus.available(index)) return;
+    // Navigation can release this widget. Copy its complete protocol-specific
+    // destination before handing ownership to the application shell.
+    const auto conversation = recent.conversations[index];
+    if (!chat::ui::runtime::requestConversation(conversation)) return;
+    if (!::ui::menu_layout::launchAppByStableId("chat"))
+        chat::ui::runtime::clearRequestedCompose();
+}
+
+bool recent_key(void* context, uint32_t key)
+{
+    auto& recent = *static_cast<RecentWidgetUi*>(context);
+#if defined(ARDUINO_T_LORA_PAGER) || defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    if (key == 'a' || key == 'A' || key == LV_KEY_LEFT ||
+        key == 'd' || key == 'D' || key == LV_KEY_RIGHT)
+    {
+        recent.focus.move(key == 'a' || key == 'A' || key == LV_KEY_LEFT ? -1 : 1);
+        return true;
+    }
+#endif
+    if (key == LV_KEY_ENTER)
+    {
+        open_recent(recent, recent.focus.selected);
+        return true;
+    }
+    return false;
+}
+
+void recent_clicked(lv_event_t* event)
+{
+    auto& recent = *static_cast<RecentWidgetUi*>(lv_event_get_user_data(event));
+    auto* target = lv_event_get_target_obj(event);
+    for (unsigned i = 0; i < kVisibleRows; ++i)
+        if (recent.rows[i] == target)
+        {
+            open_recent(recent, i);
+            return;
+        }
+}
 
 template <size_t N>
 void set_recent_text(lv_obj_t* label, std::array<char, N>& cached, const char* text)
@@ -108,6 +155,9 @@ WidgetHandle create_recent_widget(lv_obj_t* parent, lv_coord_t card_w, lv_coord_
     for (size_t i = 0; i < kVisibleRows; ++i)
     {
         recent.rows[i] = lv_obj_create(recent.chrome.body);
+        recent.focus.add(recent.rows[i]);
+        lv_group_remove_obj(recent.rows[i]);
+        lv_obj_add_event_cb(recent.rows[i], recent_clicked, LV_EVENT_CLICKED, memory);
         lv_obj_set_size(recent.rows[i], body_w, row_h);
         lv_obj_set_pos(recent.rows[i], 0, static_cast<lv_coord_t>(i * (row_h + gap)));
         lv_obj_set_style_bg_color(recent.rows[i], i == 0 ? color_soft_amber() : lv_color_hex(0xF6E7C5), 0);
@@ -121,6 +171,8 @@ WidgetHandle create_recent_widget(lv_obj_t* parent, lv_coord_t card_w, lv_coord_
         lv_obj_clear_flag(recent.rows[i], LV_OBJ_FLAG_SCROLLABLE);
 
         recent.row_dots[i] = lv_obj_create(recent.rows[i]);
+        lv_obj_clear_flag(recent.row_dots[i], LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_clear_flag(recent.row_dots[i], LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_set_size(recent.row_dots[i], 10, 10);
         lv_obj_set_style_radius(recent.row_dots[i], LV_RADIUS_CIRCLE, 0);
         lv_obj_set_style_bg_color(recent.row_dots[i], i == 0 ? color_amber_dark() : color_info(), 0);
@@ -145,6 +197,8 @@ WidgetHandle create_recent_widget(lv_obj_t* parent, lv_coord_t card_w, lv_coord_
         ::ui::i18n::set_label_text_raw(recent.row_previews[i], "");
 
         recent.row_badges[i] = lv_obj_create(recent.rows[i]);
+        lv_obj_clear_flag(recent.row_badges[i], LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_clear_flag(recent.row_badges[i], LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_set_size(recent.row_badges[i], LV_SIZE_CONTENT, 16);
         lv_obj_align(recent.row_badges[i], LV_ALIGN_RIGHT_MID, 0, 0);
         lv_obj_set_style_radius(recent.row_badges[i], 8, 0);
@@ -182,7 +236,10 @@ WidgetHandle create_recent_widget(lv_obj_t* parent, lv_coord_t card_w, lv_coord_
     style_footer_label(recent.footer_label);
     lv_obj_align(recent.footer_label, LV_ALIGN_RIGHT_MID, 0, 0);
     ::ui::i18n::set_label_text(recent.footer_label, "no recent traffic");
-    return own_widget(recent.chrome.card, memory, refresh_recent_widget, 2000);
+    auto handle = own_widget(recent.chrome.card, memory, refresh_recent_widget, 2000);
+    handle.key = recent_key;
+    refresh_recent_widget(memory);
+    return handle;
 }
 
 void refresh_recent_widget(void* context)
@@ -195,6 +252,8 @@ void refresh_recent_widget(void* context)
 
     size_t total = 0;
     const auto conversations = app::messagingFacade().getChatService().getConversations(0, 3, &total);
+    const bool had_selection = recent.focus.available(recent.focus.selected);
+    const auto selected = recent.conversations[recent.focus.selected];
 
     set_status_chip(recent.chrome,
                     total > 0 ? "LIVE" : "IDLE",
@@ -206,6 +265,9 @@ void refresh_recent_widget(void* context)
         if (i < conversations.size())
         {
             const auto& conv = conversations[i];
+            recent.conversations[i] = conv.id;
+            lv_obj_remove_state(recent.rows[i], LV_STATE_DISABLED);
+            if (had_selection && conv.id == selected) recent.focus.selected = i;
             // Let LVGL elide at a UTF-8 character boundary using actual pixels.
             // Byte-count substrings can split a localized name or message.
             set_recent_text(recent.row_names[i], recent.row_name_text[i], conv.name.c_str());
@@ -226,17 +288,23 @@ void refresh_recent_widget(void* context)
         }
         else
         {
+            lv_obj_add_state(recent.rows[i], LV_STATE_DISABLED);
             set_recent_text(recent.row_names[i], recent.row_name_text[i], i == 0 ? ::ui::i18n::tr("No recent traffic") : "");
             set_recent_text(recent.row_previews[i], recent.row_preview_text[i], i == 0 ? ::ui::i18n::tr("Messages and broadcasts show here") : "");
             lv_obj_add_flag(recent.row_badges[i], LV_OBJ_FLAG_HIDDEN);
             lv_obj_set_style_bg_color(recent.row_dots[i], color_line(), 0);
         }
     }
+    recent.focus.ensure();
 
     char footer[64];
     std::snprintf(
         footer, sizeof(footer), "%s", ::ui::i18n::format("%u threads active", static_cast<unsigned>(total)).c_str());
+#if defined(ARDUINO_T_LORA_PAGER) || defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    set_label_text_if_changed(recent.footer_label, "A/D select  Enter open");
+#else
     set_label_text_if_changed_raw(recent.footer_label, footer);
+#endif
 
     // Keep the footer accent subtle; continuously animating it forces a redraw
     // every dashboard tick even when no conversation state changed.

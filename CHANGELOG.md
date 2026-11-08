@@ -39,6 +39,8 @@ target-specific; see the linked acceptance records below.
 
 ### Fixed
 
+- Recent Activity rows open their exact conversation by touch or A/D and Enter,
+  using Chat's normal read-state workflow and preserving other unread threads.
 - Dense route-preview zoom and Fit controls use compact dimensions and retain
   their keyboard actions without obscuring as much of the map.
 - Walkie startup rejects disabled or missing Linux radios before opening GPIO,
