@@ -75,10 +75,15 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends debootstrap gnupg ca-certificates
+      - name: Set up broadcast font generator
+        if: matrix.device == 't-display-cm0'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.11.1'
       - name: Build CM0 Raspbian ARMHF app and 1seg backend
         if: matrix.device == 't-display-cm0'
         run: |
-          sudo env TRAIL_MATE_CM0_RELEASE_WORK="$RUNNER_TEMP/cm0-release" TRAIL_MATE_TMAP_PRODUCER_DIR="$TRAIL_MATE_TMAP_PRODUCER_DIR" TRAIL_MATE_PACKAGE_JOBS=4 bash apps/linux_lvgl/tools/build_cm0_native_release.sh
+          sudo env PATH="$PATH" TRAIL_MATE_CM0_RELEASE_WORK="$RUNNER_TEMP/cm0-release" TRAIL_MATE_TMAP_PRODUCER_DIR="$TRAIL_MATE_TMAP_PRODUCER_DIR" TRAIL_MATE_PACKAGE_JOBS=4 bash apps/linux_lvgl/tools/build_cm0_native_release.sh
       - name: Verify release package payloads
         run: python3 scripts/verify_linux_release_packages.py --directory build --version "$(python3 scripts/project_version.py --debian)" --device '${{ matrix.device }}'
       - uses: actions/upload-artifact@v4

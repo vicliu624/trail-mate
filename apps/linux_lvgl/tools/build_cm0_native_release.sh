@@ -7,12 +7,20 @@ work="${TRAIL_MATE_CM0_RELEASE_WORK:-/tmp/trailmate-cm0-release}"
 root="${TRAIL_MATE_CM0_ROOTFS:-$work/rootfs}"
 jobs="${TRAIL_MATE_PACKAGE_JOBS:-4}"
 producer="${TRAIL_MATE_TMAP_PRODUCER_DIR:?A published linux-arm TMAP producer is required}"
+font_root="$work/broadcast-font"
 test "$(id -u)" = 0
 test "$root" != / && test "$root" != "$repo"
 test -f "$producer/producer-manifest.json"
 mkdir -p "$work" "$repo/build/cm0-deb"
 
 if [ "${1:-}" != --namespace ]; then
+    mkdir -p "$font_root"
+    python3 "$repo/tools/generate_binfont_with_lv_font_conv.py" \
+        --font "$repo/tools/fonts/NotoSansCJKjp-Regular.otf" \
+        --fallback-font "$repo/tools/fonts/NotoSansMath-Regular.ttf" \
+        --charset-file "$repo/packs/ja-broadcast/fonts/ja-broadcast-cjk/charset.txt" \
+        --output "$font_root/font.bin" --size 16 --bpp 2 --no-compress --no-kerning \
+        --package-spec lv_font_conv@1.5.3 --node-exe "$(command -v node)"
     if [ ! -f "$root/etc/os-release" ]; then
         curl --fail --location --retry 3 https://archive.raspbian.org/raspbian.public.key -o "$work/raspbian.key"
         fingerprint=$(gpg --show-keys --with-colons "$work/raspbian.key" | awk -F: '$1=="fpr" {print $10; exit}')
@@ -27,13 +35,16 @@ fi
 
 grep -q '^ID=raspbian$' "$root/etc/os-release"
 test "$(chroot "$root" dpkg --print-architecture)" = armhf
-mkdir -p "$root/proc" "$root/workspace" "$root/tmap-producer"
+test -s "$font_root/font.bin"
+mkdir -p "$root/proc" "$root/workspace" "$root/tmap-producer" "$root/broadcast-font"
 mount -t proc proc "$root/proc"
 mount --bind "$repo" "$root/workspace"
 mount -o remount,bind,ro "$root/workspace"
 mount --bind "$producer" "$root/tmap-producer"
 mount -o remount,bind,ro "$root/tmap-producer"
-trap 'umount "$root/tmap-producer"; umount "$root/workspace"; umount "$root/proc"' EXIT
+mount --bind "$font_root" "$root/broadcast-font"
+mount -o remount,bind,ro "$root/broadcast-font"
+trap 'umount "$root/broadcast-font"; umount "$root/tmap-producer"; umount "$root/workspace"; umount "$root/proc"' EXIT
 printf '#!/bin/sh\nexit 101\n' > "$root/usr/sbin/policy-rc.d"
 chmod 755 "$root/usr/sbin/policy-rc.d"
 printf 'deb https://archive.raspbian.org/raspbian trixie main\n' > "$root/etc/apt/sources.list"
@@ -53,7 +64,7 @@ chroot "$root" /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin HOME=/root LAN
         -DTRAIL_MATE_LINUX_ENABLE_ONESEG_MEDIA=ON -DTRAIL_MATE_LINUX_DEB=ON -DBUILD_TESTING=OFF \
         -DTRAIL_MATE_TMAP_PRODUCER_DIR=/tmap-producer \
         -DTRAIL_MATE_ONESEG_GENERATE_BROADCAST_FONT=OFF \
-        -DTRAIL_MATE_ONESEG_BROADCAST_FONT_FILE=/workspace/packs/ja-broadcast/fonts/ja-broadcast-cjk/font.bin
+        -DTRAIL_MATE_ONESEG_BROADCAST_FONT_FILE=/broadcast-font/font.bin
     cmake --build /build/release-application --parallel "$JOBS"
     cpack --config /build/release-application/CPackConfig.cmake -G DEB -B /build/release-packages
 '

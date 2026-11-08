@@ -33,6 +33,10 @@ def verify(directory, version, device):
         header = executable.read_bytes()[:20]
         assert header[:4] == b"\x7fELF" and struct.unpack_from("<H", header, 18)[0] == machine, "Incorrect ELF architecture"
         assert executable.stat().st_mode & 0o111, "Application is not executable"
+        if device == "t-display-cm0":
+            font = root / "usr/share/trailmate/packs/fonts/ja-broadcast-cjk"
+            assert (font / "font.bin").stat().st_size > 0, "Missing broadcast content font"
+            assert (font / "LICENSE-Noto.txt").is_file() and (font / "LICENSE-NotoMath.txt").is_file()
         producer = root / "usr/lib/trailmate/tmap-producer"
         manifest = json.loads((producer / "producer-manifest.json").read_text(encoding="utf-8-sig"))
         assert manifest["runtime"] == runtime
