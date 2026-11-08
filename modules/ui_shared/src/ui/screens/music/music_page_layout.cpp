@@ -126,16 +126,21 @@ void cover(lv_obj_t* parent, lv_coord_t x, lv_coord_t y, lv_coord_t edge)
 void now_playing(lv_coord_t width, lv_coord_t height)
 {
     auto& self = *state();
+    const bool short_screen = !self.wide && height < 150;
     const lv_coord_t margin = self.wide ? std::max<lv_coord_t>(24, (width - 1040) / 2) : 8;
     const lv_coord_t gap = 20;
     const lv_coord_t w = self.wide ? (width - 2 * margin - gap) / 2 : width - 2 * margin;
     const lv_coord_t h = self.wide ? std::min<lv_coord_t>(400, height - 40) : height - 8;
     const lv_coord_t y = (height - h) / 2;
     auto* panel = card(self.body, margin, y, w, h);
-    lv_coord_t title_y = 10, text_x = 14;
+    lv_coord_t title_y = short_screen ? 4 : 10, text_x = 14;
+    const lv_coord_t controls_y = h - (short_screen ? 28 : 44);
+    const lv_coord_t progress_y = controls_y - (short_screen ? 26 : 34);
     // Include the slider knob's painted extent, not just its five-pixel track.
-    const lv_coord_t edge = self.wide ? std::min<lv_coord_t>(200, h - 210) : std::min<lv_coord_t>(96, h - 96);
-    cover(panel, self.wide ? (w - edge) / 2 : 12, self.wide ? 16 : 10, edge);
+    const lv_coord_t edge = self.wide      ? std::min<lv_coord_t>(200, h - 210)
+                            : short_screen ? std::max<lv_coord_t>(16, std::min<lv_coord_t>(48, progress_y - 8))
+                                           : std::min<lv_coord_t>(96, h - 96);
+    cover(panel, self.wide ? (w - edge) / 2 : 12, self.wide ? 16 : title_y, edge);
     if (self.wide)
     {
         title_y = edge + 32;
@@ -143,21 +148,20 @@ void now_playing(lv_coord_t width, lv_coord_t height)
     else text_x = edge + 24;
     const lv_coord_t text_w = w - text_x - 14;
     self.title = content_label(panel, self.snapshot.current.title[0] ? self.snapshot.current.title : ui::i18n::tr("Choose a song"),
-                               text_x, title_y, text_w, &lv_font_montserrat_16);
+                               text_x, title_y, text_w, short_screen ? &lv_font_montserrat_14 : &lv_font_montserrat_16);
     lv_label_set_long_mode(self.title, LV_LABEL_LONG_DOT);
-    lv_obj_set_height(self.title, 20);
-    self.artist = content_label(panel, self.snapshot.current.artist, text_x, title_y + 26, text_w, &lv_font_montserrat_14, true);
+    lv_obj_set_height(self.title, short_screen ? 18 : 20);
+    self.artist = content_label(panel, self.snapshot.current.artist, text_x, title_y + (short_screen ? 18 : 26), text_w,
+                                short_screen ? &lv_font_montserrat_12 : &lv_font_montserrat_14, true);
     lv_label_set_long_mode(self.artist, LV_LABEL_LONG_DOT);
-    self.album = content_label(panel, self.snapshot.current.album, text_x, title_y + 46, text_w - 44, &lv_font_montserrat_12, true);
+    self.album = content_label(panel, self.snapshot.current.album, text_x, title_y + (short_screen ? 34 : 46), text_w - 44, &lv_font_montserrat_12, true);
     lv_label_set_long_mode(self.album, LV_LABEL_LONG_DOT);
     char volume[16];
     std::snprintf(volume, sizeof(volume), "%u%%", self.snapshot.volume);
-    self.volume = label(panel, volume, w - 54, title_y + 46, 40, &lv_font_montserrat_12, true);
+    self.volume = label(panel, volume, w - 54, title_y + (short_screen ? 34 : 46), 40, &lv_font_montserrat_12, true);
     self.playback_status = label(panel, "", text_x, title_y + 64, text_w, &lv_font_montserrat_12, true);
     lv_label_set_long_mode(self.playback_status, LV_LABEL_LONG_DOT);
     lv_obj_set_height(self.playback_status, lv_font_get_line_height(&lv_font_montserrat_12));
-    const lv_coord_t controls_y = h - 44;
-    const lv_coord_t progress_y = controls_y - 34;
     self.progress = lv_slider_create(panel);
     lv_obj_set_pos(self.progress, 14, progress_y);
     lv_obj_set_size(self.progress, w - 28, 5);
@@ -168,14 +172,15 @@ void now_playing(lv_coord_t width, lv_coord_t height)
     lv_obj_set_style_pad_all(self.progress, 3, LV_PART_KNOB);
     lv_obj_add_event_cb(self.progress, action_event, LV_EVENT_RELEASED, reinterpret_cast<void*>(99));
     lv_obj_add_event_cb(self.progress, key_event, LV_EVENT_KEY, nullptr);
-    self.elapsed = label(panel, "0:00", 14, progress_y + 12, 70, &lv_font_montserrat_12, true);
-    self.duration = label(panel, "--:--", w - 84, progress_y + 12, 70, &lv_font_montserrat_12, true);
+    const lv_coord_t time_y = progress_y + (short_screen ? 8 : 12);
+    self.elapsed = label(panel, "0:00", 14, time_y, 70, &lv_font_montserrat_12, true);
+    self.duration = label(panel, "--:--", w - 84, time_y, 70, &lv_font_montserrat_12, true);
     lv_obj_set_style_text_align(self.duration, LV_TEXT_ALIGN_RIGHT, 0);
     if (!self.wide)
     {
         // Status shares the time row on compact screens, leaving the cover,
         // metadata and the slider's painted knob area independent.
-        lv_obj_set_pos(self.playback_status, 92, progress_y + 12);
+        lv_obj_set_pos(self.playback_status, 92, time_y);
         lv_obj_set_width(self.playback_status, w - 184);
         lv_obj_set_style_text_align(self.playback_status, LV_TEXT_ALIGN_CENTER, 0);
     }
@@ -189,7 +194,7 @@ void now_playing(lv_coord_t width, lv_coord_t height)
     lv_obj_set_pos(previous, (w - 256) / 2 + 104, controls_y);
     lv_obj_set_pos(play, (w - 256) / 2 + 148, controls_y);
     lv_obj_set_pos(next, (w - 256) / 2 + 220, controls_y);
-    for (auto* control : {mode, previous, play, next}) lv_obj_set_height(control, 30);
+    for (auto* control : {mode, previous, play, next}) lv_obj_set_height(control, short_screen ? 24 : 30);
     lv_obj_set_style_bg_color(play, ui::theme::accent(), 0);
     lv_group_focus_obj(play);
     if (self.wide)

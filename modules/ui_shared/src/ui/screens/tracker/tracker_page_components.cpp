@@ -187,6 +187,7 @@ lv_coord_t modal_button_width();
 lv_coord_t action_menu_button_height();
 lv_coord_t action_menu_row_gap();
 void update_record_status();
+void refresh_record_list();
 void refresh_route_list();
 void update_start_stop_button();
 void update_record_page();
@@ -898,7 +899,6 @@ void refresh_preview_image_storage_state(bool include_cache_state)
         {
             ++saved_count;
         }
-        image.view_ready = false;
     }
     s_preview_saved_image_count_hint = saved_count;
     s_preview_image_saved_state_known = true;
@@ -3297,8 +3297,18 @@ void update_item_card()
         state.card_next = view.next;
         state.card_actions = view.actions;
         ::ui::i18n::set_label_text(lv_obj_get_child(view.actions, 0), "Actions");
+        state.card_storage_ready = platform::ui::device::sd_ready();
         state.card_timer = lv_timer_create([](lv_timer_t*)
-                                           { update_card_location(); },
+                                           {
+                                               auto& current = g_tracker_state;
+                                               const bool ready = platform::ui::device::sd_ready();
+                                               if (!is_any_modal_open() && current.card_storage_ready != ready)
+                                               {
+                                                   current.card_storage_ready = ready;
+                                                   refresh_record_list();
+                                                   refresh_route_list();
+                                               }
+                                               update_card_location(); },
                                            500, nullptr);
         lv_obj_add_event_cb(card, on_list_item_clicked, LV_EVENT_CLICKED, nullptr);
         lv_obj_add_event_cb(

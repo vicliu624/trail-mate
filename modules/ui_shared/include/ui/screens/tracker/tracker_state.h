@@ -41,6 +41,7 @@ struct TrackerPageState
     lv_obj_t* card_distance = nullptr;
     ::ui::support::CardLocation* card_location_model = nullptr;
     lv_timer_t* card_timer = nullptr;
+    bool card_storage_ready = false;
     lv_obj_t* card_counter = nullptr;
     lv_obj_t* card_previous = nullptr;
     lv_obj_t* card_next = nullptr;

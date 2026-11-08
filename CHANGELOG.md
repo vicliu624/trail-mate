@@ -22,6 +22,8 @@ target-specific; see the linked acceptance records below.
 - Cardputer Zero ARM64 Debian package with APPLaunch integration, framebuffer
   rendering, physical keyboard navigation, hardware permissions, Cap LoRa/GNSS
   detection, heading integration and the shared launcher/widget screens.
+- Cardputer Zero access to the shared music player, including its compact
+  now-playing layout and launcher-widget controls.
 - T-Display-CM0 Raspbian ARMHF application and matching native 1seg backend
   packages, preserving the target's GCC 14 C++ ABI and ARMv7 receive contract.
   CM0 also gains the LR2021 FM/1seg views, OFDM learning workbench and receiver
@@ -37,6 +39,10 @@ target-specific; see the linked acceptance records below.
 
 ### Fixed
 
+- Tracker file cards refresh automatically when storage availability changes,
+  including completion of the initial asynchronous Linux storage probe.
+- Shared route-photo preview state preserves verified fullscreen-cache readiness
+  instead of falling back to original JPEG files and showing corrupted images.
 - Linux application launchers display the product name `TrailMate`, including
   the Cardputer Zero window title and notification source.
 - TMAP area searches defer page reconstruction until textarea input events have

@@ -948,15 +948,14 @@ function(trailmate_add_linux_ui_shell target_name common_target)
             "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/cardputer_cap.cpp")
     elseif(UI_UX_PACK STREQUAL "t_display_p4_touch")
         target_compile_definitions(${target_name} PRIVATE TRAIL_MATE_UI_P4_TOUCH=1)
-        target_sources(${target_name} PRIVATE
-            "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/music/music_page_layout.cpp"
-            "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/music/music_page_input.cpp"
-            "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/music/music_state.cpp"
-            "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/music/music_page_shell.cpp")
     else()
         message(FATAL_ERROR "Unsupported Linux LVGL UX pack: ${UI_UX_PACK}")
     endif()
     target_sources(${target_name} PRIVATE
+        "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/music/music_page_layout.cpp"
+        "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/music/music_page_input.cpp"
+        "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/music/music_state.cpp"
+        "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/music/music_page_shell.cpp"
         "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/assets/calc.c"
         "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/assets/geocaching.c"
         "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/screens/calculator/calculator_engine.cpp"

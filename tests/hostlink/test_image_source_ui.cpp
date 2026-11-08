@@ -305,6 +305,11 @@ int main()
     assert(first.downloaded && first.preview_ready && first.view_ready);
     assert(preview::s_preview_saved_image_count_hint == 1);
     assert(preview::s_preview_images[0].downloaded && preview::s_preview_images[0].preview_ready && !preview::s_preview_images[1].downloaded);
+    assert(preview::s_preview_images[0].view_ready);
+    preview::refresh_preview_image_storage_state(false);
+    assert(preview::s_preview_images[0].downloaded && !preview::s_preview_images[0].preview_ready && !preview::s_preview_images[0].view_ready);
+    preview::refresh_preview_image_storage_state(true);
+    assert(preview::s_preview_images[0].preview_ready && preview::s_preview_images[0].view_ready);
     platform::ui::route_storage::RouteImageDownloadStatus status;
     status.asset_id = "test";
     status.busy = true;

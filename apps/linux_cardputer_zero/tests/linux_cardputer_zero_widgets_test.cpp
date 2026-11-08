@@ -1,14 +1,20 @@
+#include "../../../modules/ui_shared/src/ui/screens/music/music_state.h"
 #include "app/input_event.h"
 #include "platform/ui/orientation_runtime.h"
 #include "ui/app_runtime.h"
 #include "ui/menu/dashboard/dashboard_state.h"
 #include "ui/menu/menu_dashboard.h"
+#include "ui/menu/menu_layout.h"
+#include "ui/screens/tracker/tracker_state.h"
 #include "ui/shell_ui_runner.h"
+#include "ui/widgets/route_image_strip.h"
 
 #include <cassert>
 #include <chrono>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <thread>
 #include <unistd.h>
 
@@ -84,6 +90,80 @@ int main()
         assert(ui::menu::dashboard::isFeedOpen());
         key(InputKey::Home);
         assert(!ui::menu::dashboard::isFeedOpen());
+        assert(ui::menu_layout::launchAppByStableId("music"));
+        tick(100ms);
+        auto* music = ui::music_page::state();
+        assert(music && music->service && music->root);
+        ui::music_page::navigate(ui::music_page::View::Playing);
+        lv_obj_update_layout(music->root);
+        lv_area_t album, progress, elapsed;
+        lv_obj_get_coords(music->album, &album);
+        lv_obj_get_coords(music->progress, &progress);
+        lv_obj_get_coords(music->elapsed, &elapsed);
+        assert(album.y2 + 3 < progress.y1);
+        assert(progress.y2 < elapsed.y1 && elapsed.y2 < 146);
+        key(InputKey::Home);
+        const auto storage = root / "sd";
+        const auto retained = root / "sd-retained";
+        std::filesystem::create_directories(storage / "tracks");
+        std::ofstream(storage / "tracks/storage-ready.gpx")
+            << "<gpx><trk><name>Storage ready</name><trkseg><trkpt lat=\"51.5\" lon=\"-0.17\"/></trkseg></trk></gpx>";
+        assert(ui::menu_layout::launchAppByStableId("tracker"));
+        tick(1600ms);
+        auto& tracker = ::tracker::ui::g_tracker_state;
+        assert(tracker.card_counter && !std::strcmp(lv_label_get_text(tracker.card_counter), "1 / 1"));
+        // Exercise the real asynchronous storage probe: recover the open page
+        // after its root becomes unavailable, without leaving/reentering it.
+        std::filesystem::rename(storage, retained);
+        std::ofstream(storage) << "temporarily unavailable volume";
+        tick(1600ms);
+        assert(!std::strcmp(lv_label_get_text(tracker.card_name), "No SD Card"));
+        std::filesystem::remove(storage);
+        std::filesystem::rename(retained, storage);
+        tick(1600ms);
+        assert(!std::strcmp(lv_label_get_text(tracker.card_counter), "1 / 1"));
+        key(InputKey::Home);
+        std::vector<uint8_t> bitmap(54 + 320 * 180 * 3, 0);
+        const auto integer = [&](size_t offset, uint32_t value)
+        { for (unsigned byte=0;byte<4;++byte) bitmap[offset+byte]=uint8_t(value>>(byte*8)); };
+        bitmap[0] = 'B';
+        bitmap[1] = 'M';
+        bitmap[26] = 1;
+        bitmap[28] = 24;
+        integer(2, bitmap.size());
+        integer(10, 54);
+        integer(14, 40);
+        integer(18, 320);
+        integer(22, 180);
+        for (unsigned y = 0; y < 180; ++y)
+            for (unsigned x = 0; x < 320; ++x) bitmap[54 + ((179 - y) * 320 + x) * 3 + (y < 60 ? 2 : y < 120 ? 1
+                                                                                                             : 0)] = 255;
+        const auto image_path = (root / "fullscreen.bmp").string();
+        std::ofstream(image_path, std::ios::binary).write(reinterpret_cast<const char*>(bitmap.data()), bitmap.size());
+        ui::widgets::route_image_strip::Widget photos;
+        ui::widgets::route_image_strip::create(lv_screen_active(), photos);
+        ui::widgets::route_image_strip::Item photo;
+        photo.downloaded = true;
+        photo.local_path = image_path;
+        photo.preview_path = image_path;
+        photo.view_path = image_path;
+        ui::widgets::route_image_strip::set_items(photos, &photo, 1);
+        ui::widgets::route_image_strip::set_hidden(photos, false);
+        assert(ui::widgets::route_image_strip::handle_key(photos, LV_KEY_ENTER));
+        tick(400ms);
+        lv_obj_invalidate(photos.fullscreen_root);
+        tick(400ms);
+        for (unsigned y : {30U, 85U, 150U})
+        {
+            for (unsigned x : {80U, 240U})
+            {
+                const auto& pixel = host.canvas().pixel(x, y);
+                if (y == 30) assert(pixel.r > 240 && pixel.g < 8 && pixel.b < 8);
+                else if (y == 85) assert(pixel.r < 8 && pixel.g > 240 && pixel.b < 8);
+                else assert(pixel.r < 8 && pixel.g < 8 && pixel.b > 240);
+            }
+        }
+        ui::widgets::route_image_strip::destroy(photos);
     }
     std::filesystem::remove_all(root);
 }
