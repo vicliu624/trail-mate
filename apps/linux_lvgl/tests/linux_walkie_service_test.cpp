@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <stdexcept>
+#include <string>
 #include <thread>
 
 void require(bool value, const char* message)
@@ -42,16 +43,21 @@ int main()
         trailmate::cardputer_zero::linux_ui::MinimalLinuxAppFacade facade({.runtime_mode = platform::linux_runtime::LinuxRuntimeMode::DeviceLocal});
         require(facade.initialize(), "application initialization");
         require(facade.getSelfNodeId() != 0, "application has no node identity");
-        require(port::start(), "worker request rejected");
+        require(!port::start(), "missing radio accepted a worker request");
         settled();
         const auto status = port::get_status();
         require(!status.tx && status.tx_level == 0 && status.rx_level == 0 && *port::last_error(), "missing radio fabricated audio/ready state");
         require(!platform::audio::music_blocked(), "failed worker leaked audio focus");
-        require(port::set_monitor_enabled(true), "monitor request rejected");
+        require(port::capability_status().state == platform::ui::CapabilityState::Degraded, "missing hardware reported a runtime error");
+        require(std::string(port::last_error()).find("not detected") != std::string::npos, "missing radio exposed a transport error");
+        require(!port::set_monitor_enabled(true), "missing radio accepted a monitor request");
         settled();
         require(!port::monitor_enabled(), "failed monitor retained active state");
         port::set_ptt(true);
         require(!port::get_status().tx, "PTT activated a failed session");
+        require(platform::linux_runtime::set_packet_radio_enabled(false), "disable radio");
+        require(!port::start() && std::string(port::last_error()).find("Radio is off") != std::string::npos, "disabled radio was opened");
+        require(port::capability_status().state == platform::ui::CapabilityState::Degraded, "disabled radio reported an error");
         port::stop();
         platform::linux_runtime::shutdown_native_walkie();
         require(!port::start(), "shutdown service accepted new work");

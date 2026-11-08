@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <string>
 
 #if !defined(LV_FONT_MONTSERRAT_18) || !LV_FONT_MONTSERRAT_18
 #define lv_font_montserrat_18 lv_font_montserrat_14
@@ -340,7 +341,7 @@ void refresh_cb(lv_timer_t*)
 {
     platform::ui::walkie::Status st = platform::ui::walkie::get_status();
     ui_update_top_bar_battery(s_top_bar);
-    if (!st.active)
+    if (!st.active || st.freq_mhz <= 0)
     {
         const char* error = platform::ui::walkie::last_error();
         set_error_text(error && *error ? error : "Starting...");
@@ -400,6 +401,9 @@ void set_freq_text(float freq_mhz)
 
 void set_error_text(const char* message)
 {
+    const std::string supplied = message ? message : "Walkie not available";
+    const auto capability = platform::ui::walkie::capability_status();
+    const bool error = capability.state == platform::ui::CapabilityState::Error;
     if (s_freq_label)
     {
         ::ui::i18n::set_label_text(s_freq_label, "Walkie Talkie");
@@ -408,7 +412,8 @@ void set_error_text(const char* message)
     }
     if (s_mod_label)
     {
-        ::ui::i18n::set_label_text(s_mod_label, "ERR");
+        ::ui::i18n::set_label_text(s_mod_label, error ? "ERR" : s_started ? "WAIT"
+                                                                          : "OFF");
     }
     if (s_mode_label)
     {
@@ -418,9 +423,11 @@ void set_error_text(const char* message)
         lv_label_set_long_mode(s_mode_label, LV_LABEL_LONG_WRAP);
         lv_obj_set_style_text_font(s_mode_label, ::ui::page_profile::resolve_body_font(), 0);
         lv_obj_set_height(row, LV_SIZE_CONTENT);
-        ::ui::i18n::set_label_text(s_mode_label,
-                                   message ? message : "Walkie not available");
-        lv_obj_set_style_text_color(s_mode_label, lv_color_hex(kWarn), LV_PART_MAIN);
+        const char* detail = !error && !s_started && capability.message ? capability.message : supplied.c_str();
+        ::ui::i18n::set_label_text(s_mode_label, !error && s_started ? "Starting radio..."
+                                                 : detail            ? detail
+                                                                     : "Walkie not available");
+        lv_obj_set_style_text_color(s_mode_label, lv_color_hex(error ? kWarn : kTextDim), LV_PART_MAIN);
     }
     update_vu(s_left_fill, 0);
     update_vu(s_right_fill, 0);

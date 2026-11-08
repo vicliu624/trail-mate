@@ -39,6 +39,10 @@ target-specific; see the linked acceptance records below.
 
 ### Fixed
 
+- Dense route-preview zoom and Fit controls use compact dimensions and retain
+  their keyboard actions without obscuring as much of the map.
+- Walkie startup rejects disabled or missing Linux radios before opening GPIO,
+  and shared pages distinguish expected unavailability and startup from errors.
 - Tracker file cards refresh automatically when storage availability changes,
   including completion of the initial asynchronous Linux storage probe.
 - Shared route-photo preview state preserves verified fullscreen-cache readiness

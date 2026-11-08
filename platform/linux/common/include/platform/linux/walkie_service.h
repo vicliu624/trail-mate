@@ -3,6 +3,7 @@
 namespace platform::linux_runtime
 {
 bool native_walkie_built();
+const char* native_walkie_unavailable_reason();
 bool start_native_walkie();
 void stop_native_walkie();
 void shutdown_native_walkie();

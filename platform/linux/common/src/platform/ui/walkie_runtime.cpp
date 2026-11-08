@@ -12,6 +12,7 @@ CapabilityStatus capability_status()
 {
     using namespace ::platform::linux_runtime;
     if (!native_walkie_built()) return {CapabilityState::Unsupported, "Native walkie audio is not built."};
+    if (const char* reason = native_walkie_unavailable_reason()) return {CapabilityState::Degraded, reason};
     if (*native_walkie_error()) return {CapabilityState::Error, native_walkie_error()};
     if (!native_audio_snapshot().playback_available)
         return {CapabilityState::Degraded, "FSK/Codec2 backend built; audio readiness is not established."};

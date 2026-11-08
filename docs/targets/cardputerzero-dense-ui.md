@@ -40,6 +40,9 @@ slice:
 | side/filter button height | 24 px |
 | list/form row height | 24 px |
 | control button height | 24 px |
+| route map zoom buttons | 24 x 20 px |
+| route map Fit button | 36 x 20 px |
+| route map control group | 90 x 20 px, 3 px gaps |
 | content/list gaps | 1-2 px |
 | modal margin | 6 px |
 | modal pad | 5 px |

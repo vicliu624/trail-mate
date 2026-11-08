@@ -118,6 +118,12 @@ void toggle_route_preview_elevation() {}
 void toggle_route_preview_image_strip() {}
 void open_route_preview_help_modal() {}
 void consume_route_preview_key_event(lv_event_t* event) { lv_event_stop_bubbling(event); }
+struct
+{
+    bool dense = false;
+    const lv_font_t* tiny_font = &lv_font_montserrat_14;
+} test_profile;
+const auto& page_profile() { return test_profile; }
 lv_obj_t* create_preview_page_button(lv_obj_t* parent, const char* text, lv_event_cb_t, lv_coord_t width)
 {
     auto* button = lv_button_create(parent);
@@ -210,6 +216,21 @@ int main()
     lv_obj_update_layout(host);
     assert(lv_obj_get_width(s_preview_map_controls) == 122 && lv_obj_get_height(s_preview_map_controls) == 36);
     assert(lv_obj_get_content_width(lv_obj_get_child(s_preview_map_controls, 2)) >= 30);
+    lv_obj_delete(s_preview_map_controls);
+    s_preview_map_controls = nullptr;
+    test_profile.dense = true;
+    create_preview_map_controls();
+    lv_obj_update_layout(host);
+    assert(lv_obj_get_width(s_preview_map_controls) == 90 && lv_obj_get_height(s_preview_map_controls) == 20);
+    for (unsigned index = 0; index < 3; ++index)
+    {
+        auto* control = lv_obj_get_child(s_preview_map_controls, index);
+        assert(lv_obj_get_width(control) == (index == 2 ? 36 : 24) && lv_obj_get_height(control) == 20);
+        auto* caption = lv_obj_get_child(control, 0);
+        lv_point_t text_size{};
+        lv_text_get_size(&text_size, lv_label_get_text(caption), test_profile.tiny_font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+        assert(text_size.x <= lv_obj_get_content_width(control));
+    }
     s_preview_view.reset();
     s_preview_images = {{true, 0, 0}, {true, 0.001, 0.001}};
     refresh_route_preview_map();

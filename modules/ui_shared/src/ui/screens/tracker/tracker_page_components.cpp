@@ -2055,22 +2055,31 @@ void create_preview_map_controls()
     if (!host || !lv_obj_is_valid(host)) return;
     if (!s_preview_map_controls || !lv_obj_is_valid(s_preview_map_controls))
     {
+        const auto& profile = page_profile();
+        const bool dense = profile.dense;
+        const lv_coord_t height = dense ? 20 : 36;
         s_preview_map_controls = lv_obj_create(host);
         lv_obj_add_flag(s_preview_map_controls, LV_OBJ_FLAG_IGNORE_LAYOUT);
         lv_obj_clear_flag(s_preview_map_controls, LV_OBJ_FLAG_SCROLLABLE);
-        lv_obj_set_size(s_preview_map_controls, 122, 36);
+        lv_obj_set_size(s_preview_map_controls, dense ? 90 : 122, height);
         lv_obj_align(s_preview_map_controls, LV_ALIGN_TOP_LEFT, 4, 4);
         lv_obj_set_flex_flow(s_preview_map_controls, LV_FLEX_FLOW_ROW);
         lv_obj_set_style_bg_opa(s_preview_map_controls, LV_OPA_TRANSP, 0);
         lv_obj_set_style_border_width(s_preview_map_controls, 0, 0);
         lv_obj_set_style_pad_all(s_preview_map_controls, 0, 0);
-        lv_obj_set_style_pad_column(s_preview_map_controls, 4, 0);
+        lv_obj_set_style_pad_column(s_preview_map_controls, dense ? 3 : 4, 0);
         const char* labels[] = {"+", "-", "Fit"};
         for (int index = 0; index < 3; ++index)
         {
-            auto* button = create_preview_page_button(s_preview_map_controls, labels[index], nullptr, 38);
-            lv_obj_set_height(button, 36);
+            auto* button = create_preview_page_button(s_preview_map_controls, labels[index], nullptr,
+                                                      dense ? (index == 2 ? 36 : 24) : 38);
+            lv_obj_set_height(button, height);
             lv_obj_set_style_pad_all(button, 2, 0);
+            if (dense)
+            {
+                lv_obj_set_style_radius(button, 4, 0);
+                lv_obj_set_style_text_font(lv_obj_get_child(button, 0), profile.tiny_font, 0);
+            }
             lv_obj_add_event_cb(button, preview_map_control, LV_EVENT_CLICKED,
                                 reinterpret_cast<void*>(intptr_t(index == 0 ? 1 : index == 1 ? -1
                                                                                              : 0)));

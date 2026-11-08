@@ -2,6 +2,7 @@
 #if defined(TRAIL_MATE_LINUX_HAS_MEDIA)
 #include "app/app_facade_access.h"
 #include "platform/audio/media_volume.h"
+#include "platform/linux/packet_radio.h"
 #include "platform/linux/sdl_pcm_input.h"
 #include "platform/linux/sdl_pcm_output.h"
 #include "platform/linux/walkie_session.h"
@@ -69,6 +70,11 @@ class Service
         if (!app::hasAppFacade() || !(self_ = static_cast<uint32_t>(app::messagingFacade().getSelfNodeId())))
         {
             error_ = "Device identity is not initialized";
+            return false;
+        }
+        if (const char* reason = native_walkie_unavailable_reason())
+        {
+            error_ = reason;
             return false;
         }
         status_ = {};
@@ -208,6 +214,14 @@ Service& service()
 }
 } // namespace
 bool native_walkie_built() { return true; }
+const char* native_walkie_unavailable_reason()
+{
+    if (!app::hasAppFacade()) return "Device identity is not initialized";
+    if (!packet_radio_enabled()) return "Radio is off. Enable it in Settings.";
+    if (!foreground_packet_radio().hardwareCandidatePresent())
+        return "LoRa radio not detected. Check its connection.";
+    return nullptr;
+}
 bool start_native_walkie() { return service().start(); }
 void stop_native_walkie() { service().stop(); }
 void shutdown_native_walkie()
@@ -228,6 +242,7 @@ const char* native_walkie_error()
 namespace platform::linux_runtime
 {
 bool native_walkie_built() { return false; }
+const char* native_walkie_unavailable_reason() { return "Native walkie audio is not built"; }
 bool start_native_walkie() { return false; }
 void stop_native_walkie() {}
 void shutdown_native_walkie() {}

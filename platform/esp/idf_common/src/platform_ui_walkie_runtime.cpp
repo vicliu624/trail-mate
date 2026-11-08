@@ -64,4 +64,13 @@ const char* last_error()
     return ::walkie::get_last_error();
 }
 
+CapabilityStatus capability_status()
+{
+    if (!is_supported()) return {CapabilityState::Unsupported, "Walkie is not supported on this device."};
+    const char* error = last_error();
+    if (error && *error) return {CapabilityState::Error, error};
+    return is_active() ? CapabilityStatus{CapabilityState::Available, "Walkie radio session is active."}
+                       : CapabilityStatus{CapabilityState::Degraded, "Walkie radio is not active."};
+}
+
 } // namespace platform::ui::walkie
