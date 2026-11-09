@@ -1,0 +1,31 @@
+{
+  "package_name": "trailmate",
+  "version": "1.1.0",
+  "app_name": "TrailMate",
+  "bin_name": "trailmate-cardputer-zero-fbdev",
+  "description": "Offline maps, LoRa messaging and outdoor tools for Cardputer Zero.",
+  "store": {
+    "summary": "Offline maps, LoRa messaging and outdoor tools for Cardputer Zero.",
+    "description": "TrailMate brings offline TMAP maps, route viewing and navigation, track recording, geocaching and LoRa messaging to Cardputer Zero. With a Cap LoRa-1262 module, it supports Meshtastic, MeshCore and Reticulum, node discovery, broadcasts, private chats, delivery status and GNSS satellite reception. Incoming messages update in real time. Optional private-message auto-replies activate only while the screen is asleep. Online map creation supports worldwide administrative-area search, area and layer selection, progress and cancellation. The keyboard interface includes directional focus, Fn+H help, Ctrl+Enter to send in Chat, widget screens and long Home/Escape to return to APPLaunch. Music, agenda, calculator and route photos are also included. LoRa and GNSS require the external Cap; online map creation requires an internet connection. Installable package and device acceptance: https://github.com/vicliu624/trail-mate/releases/tag/v1.1.0 . Physical-device demo: https://youtu.be/eBIRhOy7cJc",
+    "categories": ["Radio & Comms", "Lifestyle"],
+    "screenshots": ["packaging/store/screenshots/main.png", "packaging/store/screenshots/map.png"],
+    "icon": "packaging/trailmate-cardputer-zero.png",
+    "license": "AGPL-3.0-only",
+    "source_repo": "https://github.com/vicliu624/trail-mate",
+    "author": {"github": "vicliu624", "display_name": "vicliu624"},
+    "share_code": "TMAT",
+    "permissions": {
+      "camera": false,
+      "microphone": true,
+      "imu": true,
+      "network": true,
+      "additional_hardware": true,
+      "background_service": false,
+      "external_display": false
+    },
+    "locales": {
+      "zh-CN": {"title": "TrailMate", "summary": "为 Cardputer Zero 提供离线地图、LoRa 聊天、轨迹记录与户外工具。"},
+      "ja": {"title": "TrailMate", "summary": "Cardputer Zero向けのオフライン地図、LoRaメッセージ、軌跡記録、アウトドアツール。"}
+    }
+  }
+}

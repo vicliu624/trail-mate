@@ -10,6 +10,13 @@ stable firmware release. Hardware support and validation remain target-specific.
 
 ## [Unreleased]
 
+### Added
+
+- CardputerZero Store listing and a reproducible `trailmate` package adapter
+  that preserves the verified 1.1.0 runtime, removes development-only files,
+  uses systemd-tmpfiles for non-root Cap power access, and declares replacement
+  of the original `trailmate-cardputer-zero` package without changing user data.
+
 ## [1.1.0] - 2026-11-09
 
 This minor release adds installable Cardputer Zero and T-Display-CM0 Linux
