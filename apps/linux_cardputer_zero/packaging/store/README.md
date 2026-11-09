@@ -37,3 +37,24 @@ Add the real-device demo to the resulting PR's comments as required by the
 [submission guide](https://cardputer.cc/#/documents/cp0-submit):
 <https://youtu.be/eBIRhOy7cJc>. First submissions require a store maintainer's
 review and are not automatically listed.
+
+## Listing maintenance
+
+The Store and website display `pool/main/trailmate/meta.json` from the packages
+repository through the generated registry. A pull request description does not
+update that listing. Keep the upstream metadata and this project's
+`app-builder.json` synchronized when updating product text or screenshots.
+
+Maintain `summary`, `description`, `locales`, `screenshots` and
+`author.website`. The description is plain text in the current website detail
+view; Markdown images belong in the PR, while the listing uses its separate
+screenshot gallery. The project website is linked through `author.website`.
+The English summary must be no longer than 80 characters, and the gallery must
+contain one to six native 320 x 170 PNG captures.
+
+The gallery uses real Zero captures: launcher, Reticulum messaging, OSM map,
+route elevation, offline Geocaching and online TMAP area selection. Frames from
+the rehearsal's RGB565 captures are decoded directly at native resolution.
+Team is described as a project capability, with the Zero update scope explicit.
+Do not substitute screenshots from other hardware or present demo cache data
+as a physical hide or an established GNSS fix.

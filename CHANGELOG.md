@@ -16,6 +16,10 @@ stable firmware release. Hardware support and validation remain target-specific.
   that preserves the verified 1.1.0 runtime, removes development-only files,
   uses systemd-tmpfiles for non-root Cap power access, and declares replacement
   of the original `trailmate-cardputer-zero` package without changing user data.
+- Store-facing English and Chinese product descriptions centered on Reticulum,
+  user-owned identity, decentralized Geocaching and trail sharing; a project
+  website link and six native Cardputer Zero screenshots are kept in sync with
+  the submission metadata.
 
 ## [1.1.0] - 2026-11-09
 
