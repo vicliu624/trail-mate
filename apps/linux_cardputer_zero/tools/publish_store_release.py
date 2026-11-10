@@ -149,6 +149,8 @@ def verify_package(package, version):
         result = subprocess.run(dpkg_command(["-f", package, field]), check=True, capture_output=True,
                                 text=True, encoding="utf-8", errors="replace")
         require(result.stdout.strip() == expected, f"Published DEB has an incorrect {field}")
+    subprocess.run([sys.executable, str(Path(__file__).with_name("check_store_package.py")),
+                    "--deb", str(package), "--version", version], check=True)
 
 
 def api_pool_commit(client, owner, repository, branch, package, app_dir, store_meta, meta_out, extra, message):

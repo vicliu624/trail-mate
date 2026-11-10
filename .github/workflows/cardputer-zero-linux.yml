@@ -45,6 +45,9 @@ jobs:
       - name: Verify Store release publication gates
         run: python3 apps/linux_cardputer_zero/tests/store_release_gate_test.py
 
+      - name: Verify Store multiarch package layout
+        run: python3 apps/linux_cardputer_zero/tests/store_package_layout_test.py
+
       - name: Verify UI translation coverage and source parser
         run: |
           python3 tools/validate_locale_packs.py

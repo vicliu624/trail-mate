@@ -10,6 +10,18 @@ stable firmware release. Hardware support and validation remain target-specific.
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-11-10
+
+### Fixed
+
+- Cardputer Zero Store packaging removes TMAP development libraries and CMake
+  exports from both plain and Debian multiarch library directories. Runtime
+  application and producer files retain their original contents and locations.
+- Final Store archives are checked for package-owned install paths during
+  packaging, release publication and Store submission. Regression tests cover
+  both TMAP library layouts and reject the misplaced SDK files that blocked the
+  1.2.0 Store submission.
+
 ## [1.2.0] - 2026-11-10
 
 ### Added

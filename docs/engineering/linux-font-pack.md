@@ -39,7 +39,7 @@ Install the compatible application first, then install the matching font DEB
 downloaded from the same published GitHub Release:
 
 ```sh
-sudo apt install ./trailmate-linux-fonts_1.2.0_all.deb
+sudo apt install ./trailmate-linux-fonts_1.2.1_all.deb
 ```
 
 Restart TrailMate to rescan system resources. Simplified Chinese then appears in

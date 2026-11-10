@@ -13,6 +13,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 from pathlib import Path
@@ -47,8 +48,11 @@ with tempfile.TemporaryDirectory(prefix="trailmate-store-") as temporary:
     # Transitive TMAP CMake installs include development-only files. These are
     # unnecessary at runtime and do not belong in an AppStore application.
     removed = []
-    for relative in ("usr/include/tmap", "usr/lib/cmake/tmap", "usr/lib/libtmap.a",
-                     "usr/lib/udev/rules.d/70-trailmate-cardputer-zero.rules"):
+    development_paths = ["usr/include/tmap", "usr/lib/cmake/tmap", "usr/lib/libtmap.a",
+                         "usr/lib/udev/rules.d/70-trailmate-cardputer-zero.rules"]
+    for pattern in ("usr/lib/*/cmake/tmap", "usr/lib/*/libtmap.a"):
+        development_paths.extend(str(path.relative_to(root)) for path in root.glob(pattern))
+    for relative in development_paths:
         target = root / relative
         assert target.resolve().is_relative_to(root.resolve())
         removed.extend(k for k in original if k == relative or k.startswith(relative + "/"))
@@ -92,6 +96,9 @@ with tempfile.TemporaryDirectory(prefix="trailmate-store-") as temporary:
     (root / "DEBIAN/md5sums").write_text("".join(
         hashlib.md5(p.read_bytes()).hexdigest() + "  " + str(p.relative_to(root)) + "\n" for p in files))
     subprocess.run(["dpkg-deb", "--root-owner-group", "-b", str(root), str(output)], check=True)
+
+subprocess.run([sys.executable, str(Path(__file__).with_name("check_store_package.py")),
+                "--deb", str(output), "--version", version], check=True)
 
 report = {"input_sha256": args.sha256.lower(), "package": "trailmate", "version": version,
           "architecture": architecture, "output": output.name,
