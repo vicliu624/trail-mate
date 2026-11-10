@@ -71,49 +71,64 @@ struct LinuxFramebufferPlatform::Impl
                          "Set TRAIL_MATE_INPUT_DEVICE to override.\n");
         }
 
-        file_descriptor = ::open(framebuffer_path.c_str(), O_RDWR);
+        file_descriptor = ::open(framebuffer_path.c_str(), O_RDWR | O_CLOEXEC);
         if (file_descriptor < 0)
         {
             throw makeSystemError("open framebuffer");
         }
 
-        if (::ioctl(file_descriptor, FBIOGET_FSCREENINFO, &finfo) == -1)
+        try
         {
-            throw makeSystemError("FBIOGET_FSCREENINFO");
-        }
-        if (::ioctl(file_descriptor, FBIOGET_VSCREENINFO, &vinfo) == -1)
-        {
-            throw makeSystemError("FBIOGET_VSCREENINFO");
-        }
+            if (::ioctl(file_descriptor, FBIOGET_FSCREENINFO, &finfo) == -1)
+            {
+                throw makeSystemError("FBIOGET_FSCREENINFO");
+            }
+            if (::ioctl(file_descriptor, FBIOGET_VSCREENINFO, &vinfo) == -1)
+            {
+                throw makeSystemError("FBIOGET_VSCREENINFO");
+            }
 
-        bytes_per_pixel = static_cast<int>(vinfo.bits_per_pixel / 8U);
-        if (bytes_per_pixel < 2 || bytes_per_pixel > 4)
-        {
-            throw std::runtime_error("unsupported framebuffer pixel depth");
-        }
+            bytes_per_pixel = static_cast<int>(vinfo.bits_per_pixel / 8U);
+            if (bytes_per_pixel < 2 || bytes_per_pixel > 4)
+            {
+                throw std::runtime_error("unsupported framebuffer pixel depth");
+            }
 
-        const auto mapped_size = static_cast<std::size_t>(finfo.line_length) * static_cast<std::size_t>(vinfo.yres_virtual);
-        framebuffer_size = mapped_size;
-        void* mapped = ::mmap(nullptr, framebuffer_size, PROT_READ | PROT_WRITE, MAP_SHARED, file_descriptor, 0);
-        if (mapped == MAP_FAILED)
-        {
-            framebuffer_memory = nullptr;
-            throw makeSystemError("mmap framebuffer");
-        }
+            const auto mapped_size = static_cast<std::size_t>(finfo.line_length) * static_cast<std::size_t>(vinfo.yres_virtual);
+            framebuffer_size = mapped_size;
+            void* mapped = ::mmap(nullptr, framebuffer_size, PROT_READ | PROT_WRITE, MAP_SHARED, file_descriptor, 0);
+            if (mapped == MAP_FAILED)
+            {
+                framebuffer_memory = nullptr;
+                throw makeSystemError("mmap framebuffer");
+            }
 
-        framebuffer_memory = static_cast<std::byte*>(mapped);
-        staging.resize(framebuffer_size);
+            framebuffer_memory = static_cast<std::byte*>(mapped);
+            staging.resize(framebuffer_size);
+        }
+        catch (...)
+        {
+            closeFramebuffer();
+            throw;
+        }
     }
 
     ~Impl()
     {
+        closeFramebuffer();
+    }
+
+    void closeFramebuffer() noexcept
+    {
         if (framebuffer_memory)
         {
             ::munmap(framebuffer_memory, framebuffer_size);
+            framebuffer_memory = nullptr;
         }
         if (file_descriptor >= 0)
         {
             ::close(file_descriptor);
+            file_descriptor = -1;
         }
     }
 

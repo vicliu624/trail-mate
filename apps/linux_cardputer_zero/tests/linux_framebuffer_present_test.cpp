@@ -1,11 +1,14 @@
+#include "platform/device/evdev_input.h"
 #include "platform/device/linux_framebuffer_platform.h"
 #include <cassert>
+#include <cerrno>
 #include <cstdarg>
 #include <cstring>
 #include <fcntl.h>
 #include <filesystem>
 #include <linux/fb.h>
 #include <poll.h>
+#include <stdexcept>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <vector>
@@ -13,7 +16,41 @@
 namespace
 {
 constexpr std::size_t kBytes = 320 * 170 * 2;
+enum class Failure
+{
+    None,
+    FixedInfo,
+    VariableInfo,
+    PixelDepth,
+    Mapping
+};
+Failure failure = Failure::None;
+
+std::size_t descriptorCount()
+{
+    std::size_t count = 0;
+    for (const auto& entry : std::filesystem::directory_iterator("/proc/self/fd"))
+    {
+        (void)entry;
+        ++count;
+    }
+    return count;
 }
+
+void checkPrivateDescriptor(const char* path, int fixture)
+{
+    bool found = false;
+    for (const auto& entry : std::filesystem::directory_iterator("/proc/self/fd"))
+    {
+        const int descriptor = std::stoi(entry.path().filename().string());
+        if (descriptor == fixture || std::filesystem::read_symlink(entry.path()) != path) continue;
+        const auto flags = fcntl(descriptor, F_GETFD);
+        assert(flags >= 0 && (flags & FD_CLOEXEC) != 0);
+        found = true;
+    }
+    assert(found);
+}
+} // namespace
 
 extern "C" int __wrap_ioctl(int, unsigned long request, ...)
 {
@@ -23,19 +60,29 @@ extern "C" int __wrap_ioctl(int, unsigned long request, ...)
     va_end(arguments);
     if (request == FBIOGET_FSCREENINFO)
     {
+        if (failure == Failure::FixedInfo)
+        {
+            errno = EIO;
+            return -1;
+        }
         auto& info = *static_cast<fb_fix_screeninfo*>(output);
         info = {};
-        info.line_length = 320 * 2;
+        info.line_length = failure == Failure::Mapping ? 0 : 320 * 2;
         info.smem_len = kBytes;
         return 0;
     }
     if (request == FBIOGET_VSCREENINFO)
     {
+        if (failure == Failure::VariableInfo)
+        {
+            errno = EIO;
+            return -1;
+        }
         auto& info = *static_cast<fb_var_screeninfo*>(output);
         info = {};
         info.xres = info.xres_virtual = 320;
         info.yres = info.yres_virtual = 170;
-        info.bits_per_pixel = 16;
+        info.bits_per_pixel = failure == Failure::PixelDepth ? 8 : 16;
         info.red = {11, 5, 0};
         info.green = {5, 6, 0};
         info.blue = {0, 5, 0};
@@ -53,8 +100,29 @@ int main()
     const int fd = mkstemp(path);
     assert(fd >= 0 && ftruncate(fd, kBytes) == 0);
     setenv("TRAIL_MATE_INPUT_DEVICE", "/dev/trailmate-test-missing-keyboard", 1);
+    const auto baseline = descriptorCount();
+    for (const auto mode : {Failure::FixedInfo, Failure::VariableInfo, Failure::PixelDepth, Failure::Mapping})
+    {
+        failure = mode;
+        for (unsigned attempt = 0; attempt < 20; ++attempt)
+        {
+            bool failed = false;
+            try
+            {
+                LinuxFramebufferPlatform presenter(path);
+            }
+            catch (const std::runtime_error&)
+            {
+                failed = true;
+            }
+            assert(failed);
+            assert(descriptorCount() == baseline);
+        }
+    }
+    failure = Failure::None;
     {
         LinuxFramebufferPlatform presenter(path);
+        checkPrivateDescriptor(path, fd);
         Canvas canvas(320, 170);
         canvas.clear(rgba(255, 255, 255));
         presenter.present(canvas);
@@ -107,6 +175,18 @@ int main()
         assert(presenter.statistics().commits == 101);
         assert(presenter.statistics().bytes_written == kBytes * 101);
     }
+    assert(descriptorCount() == baseline);
+    {
+        trailmate::cardputer_zero::platform::device::EvdevInput input(path);
+        assert(input.isOpen());
+        for (unsigned attempt = 0; attempt < 100; ++attempt)
+        {
+            checkPrivateDescriptor(path, fd);
+            assert(descriptorCount() == baseline + 1);
+            assert(input.reopen(path));
+        }
+    }
+    assert(descriptorCount() == baseline);
     close(fd);
     std::filesystem::remove(path);
 }

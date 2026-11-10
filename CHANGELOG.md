@@ -10,6 +10,16 @@ stable firmware release. Hardware support and validation remain target-specific.
 
 ## [Unreleased]
 
+### Fixed
+
+- Linux framebuffer initialization closes its device descriptor and mapping
+  when screen-info queries, pixel-depth validation, mapping or buffer allocation
+  fail. Framebuffer and keyboard descriptors also close on exec instead of being
+  inherited by unrelated helper programs; reopening the keyboard retains one
+  owned descriptor.
+- Wayland initialization releases its display connection, protocol objects and
+  any allocated buffers when a compositor is incomplete or setup fails.
+
 ## [1.1.1] - 2026-11-10
 
 ### Fixed
