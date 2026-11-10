@@ -10,9 +10,10 @@ Cardputer Zero portable Linux device.
 
 ## Renderer Family
 
-Linux device renderer. The product package defaults to the Wayland runtime
-inside the Cardputer Zero user session. The framebuffer/evdev executable exists
-only as an explicit device-debug fallback, not as the APPLaunch product path.
+Linux device renderer. The stock APPLaunch framebuffer/evdev handoff selects the
+built-in display ahead of an inherited Wayland session. Desktop Wayland remains
+available through auto-detection without a framebuffer handoff or an explicit
+backend selection.
 
 The shared LVGL main-menu profile is not simulator-owned. Cardputer Zero selects
 `make_cardputer_zero_profile()`, the Pager-style adaptive grid constrained to
@@ -66,8 +67,8 @@ May:
 - select the `cardputerzero` target profile
 - select the Cardputer Zero device UX profile
 - bind Cardputer Zero board facts into Linux runtime startup
-- own Wayland APPLaunch packaging and launch details for this device
-- own explicit framebuffer/evdev debug fallback details for this device
+- own APPLaunch packaging and framebuffer/evdev launch details for this device
+- own optional Wayland presentation details for this device
 - own future Trail Mate Linux SX1262 packet-radio wiring for the documented
   Cardputer Zero LoRa endpoint
 - own future Trail Mate Linux GPS serial wiring for the documented Cap
@@ -103,8 +104,8 @@ trail_mate_linux_cardputer_zero_start(target_profile)
 Device app shell baseline. This establishes the product target, board facts, UX
 selection, CMake wiring, Linux session contracts, page manifest alignment, the
 Pager-derived main-menu profile guard, and shared-LVGL 320 x 170 screenshot
-evidence for the compact page set. The installed `0.1.38-alpha` APPLaunch
-package defaults to Wayland and retains `trailmate-cardputer-zero-fbdev` only as
-an explicit framebuffer debug fallback. Real Wayland session startup,
-Fcitx5/notifyd session validation, hardware framebuffer debug fallback, and
-live interaction remain hardware-closure slices.
+evidence for the compact page set. Version 1.1.1 corrects clean Store startup
+on the stock framebuffer launcher, including sessions that inherit a headless
+Wayland display. Framebuffer rendering, keyboard navigation and retained-data
+acceptance are device-qualified. Fcitx5 integration through a visible Wayland
+session remains a separate hardware-closure slice.

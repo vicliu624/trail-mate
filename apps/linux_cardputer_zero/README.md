@@ -155,10 +155,12 @@ The package installs the Cardputer Zero APPLaunch layout:
 - `/usr/share/APPLaunch/applications/trailmate.desktop`
 - `/usr/share/APPLaunch/share/images/trailmate-cardputer-zero.png`
 
-In `auto` mode APPLaunch uses Wayland when `WAYLAND_DISPLAY` is present.
-Otherwise it selects framebuffer/evdev when the stock `fb_st7789v` or current
-`panel-mipi-dbid` display is detected in `/proc/fb`, or a framebuffer path is
-supplied by the device environment.
+In `auto` mode an explicit `TRAIL_MATE_FRAMEBUFFER` or the launcher's
+`APPLAUNCH_LINUX_FBDEV_DEVICE` selects framebuffer/evdev first, even when the
+parent session exports `WAYLAND_DISPLAY`. This prevents a headless desktop
+compositor from receiving the device UI. Without a framebuffer override,
+`WAYLAND_DISPLAY` selects Wayland; otherwise the stock `fb_st7789v` or current
+`panel-mipi-dbid` display is detected in `/proc/fb`.
 The wrapper honors `APPLAUNCH_LINUX_FBDEV_DEVICE` and
 `APPLAUNCH_LINUX_KEYBOARD_DEVICE`; it prefers `/dev/input/cardputer-zero-internal`
 when that keyboard endpoint exists, then uses the legacy by-path endpoint.
@@ -305,18 +307,22 @@ those console tokens, then reboot.
 To watch the app launch logs directly from a terminal:
 
 ```bash
-WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-0} \
-  /usr/lib/trailmate-cardputer-zero/trailmate-cardputer-zero-applaunch \
+/usr/lib/trailmate-cardputer-zero/trailmate-cardputer-zero-applaunch \
   2>&1 | tee /tmp/trailmate-cardputer-zero.log
 ```
 
-The product path requires Wayland. For explicit framebuffer debugging only:
+The stock framebuffer launcher supplies its display and keyboard endpoints.
+For a terminal session, explicitly select the physical display when needed:
 
 ```bash
 TRAIL_MATE_DISPLAY_BACKEND=fbdev \
   /usr/lib/trailmate-cardputer-zero/trailmate-cardputer-zero-applaunch \
   2>&1 | tee /tmp/trailmate-cardputer-zero-fbdev.log
 ```
+
+Use `TRAIL_MATE_DISPLAY_BACKEND=wayland` only when intentionally displaying the
+application through a visible Wayland compositor. An inherited headless
+Wayland session does not display on the Cardputer Zero's built-in screen.
 
 Runtime packet logs are written under the Trail Mate settings root. By default
 that is `$HOME/.trailmate_cardputer_zero/logs/`. If `TRAIL_MATE_SETTINGS_ROOT`
