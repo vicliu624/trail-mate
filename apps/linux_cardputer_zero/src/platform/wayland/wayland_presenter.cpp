@@ -180,55 +180,68 @@ struct WaylandPresenter::Impl
             throw std::runtime_error("wl_display_connect failed");
         }
 
-        registry = wl_display_get_registry(display);
-        wl_registry_add_listener(registry, &kRegistryListener, this);
-        wl_display_roundtrip(display);
-        wl_display_roundtrip(display);
-
-        if (compositor == nullptr || shm == nullptr || wm == nullptr)
+        try
         {
-            throw std::runtime_error(
-                "Wayland compositor is missing wl_compositor, wl_shm, or "
-                "xdg_wm_base");
-        }
+            registry = wl_display_get_registry(display);
+            wl_registry_add_listener(registry, &kRegistryListener, this);
+            wl_display_roundtrip(display);
+            wl_display_roundtrip(display);
 
-        surface = wl_compositor_create_surface(compositor);
-        if (surface == nullptr)
+            if (compositor == nullptr || shm == nullptr || wm == nullptr)
+            {
+                throw std::runtime_error(
+                    "Wayland compositor is missing wl_compositor, wl_shm, or "
+                    "xdg_wm_base");
+            }
+
+            surface = wl_compositor_create_surface(compositor);
+            if (surface == nullptr)
+            {
+                throw std::runtime_error("wl_compositor_create_surface failed");
+            }
+            if (text_manager && seat) text_input = std::make_unique<WaylandTextInput>(text_manager, seat, surface, pending_inputs);
+
+            xdg_surface_obj = xdg_wm_base_get_xdg_surface(wm, surface);
+            xdg_surface_add_listener(xdg_surface_obj, &kSurfaceListener, this);
+            toplevel = xdg_surface_get_toplevel(xdg_surface_obj);
+            xdg_toplevel_add_listener(toplevel, &kToplevelListener, this);
+            xdg_toplevel_set_title(toplevel, "TrailMate");
+            xdg_toplevel_set_app_id(toplevel,
+                                    "io.github.vicliu624.trailmate");
+            xdg_toplevel_set_min_size(toplevel, kWidth, kHeight);
+            xdg_toplevel_set_max_size(toplevel, kWidth, kHeight);
+            if (decoration_manager != nullptr)
+            {
+                decoration =
+                    zxdg_decoration_manager_v1_get_toplevel_decoration(
+                        decoration_manager,
+                        toplevel);
+                zxdg_toplevel_decoration_v1_set_mode(
+                    decoration,
+                    ZXDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE);
+            }
+
+            if (!createBuffer(buffers[0]) || !createBuffer(buffers[1]))
+            {
+                throw std::runtime_error("Wayland shm buffer allocation failed");
+            }
+
+            wl_surface_commit(surface);
+            wl_display_flush(display);
+        }
+        catch (...)
         {
-            throw std::runtime_error("wl_compositor_create_surface failed");
+            releaseResources();
+            throw;
         }
-        if (text_manager && seat) text_input = std::make_unique<WaylandTextInput>(text_manager, seat, surface, pending_inputs);
-
-        xdg_surface_obj = xdg_wm_base_get_xdg_surface(wm, surface);
-        xdg_surface_add_listener(xdg_surface_obj, &kSurfaceListener, this);
-        toplevel = xdg_surface_get_toplevel(xdg_surface_obj);
-        xdg_toplevel_add_listener(toplevel, &kToplevelListener, this);
-        xdg_toplevel_set_title(toplevel, "TrailMate");
-        xdg_toplevel_set_app_id(toplevel,
-                                "io.github.vicliu624.trailmate");
-        xdg_toplevel_set_min_size(toplevel, kWidth, kHeight);
-        xdg_toplevel_set_max_size(toplevel, kWidth, kHeight);
-        if (decoration_manager != nullptr)
-        {
-            decoration =
-                zxdg_decoration_manager_v1_get_toplevel_decoration(
-                    decoration_manager,
-                    toplevel);
-            zxdg_toplevel_decoration_v1_set_mode(
-                decoration,
-                ZXDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE);
-        }
-
-        if (!createBuffer(buffers[0]) || !createBuffer(buffers[1]))
-        {
-            throw std::runtime_error("Wayland shm buffer allocation failed");
-        }
-
-        wl_surface_commit(surface);
-        wl_display_flush(display);
     }
 
     ~Impl()
+    {
+        releaseResources();
+    }
+
+    void releaseResources() noexcept
     {
         text_input.reset();
         if (text_manager) zwp_text_input_manager_v3_destroy(text_manager);

@@ -221,6 +221,18 @@ if(TRAIL_MATE_CARDPUTER_ZERO_BUILD_DEVICE AND CMAKE_SYSTEM_NAME STREQUAL "Linux"
             target_link_options(trailmate_linux_wayland_text_input_test PRIVATE -fsanitize=address,undefined)
         endif()
         add_test(NAME trailmate_linux_wayland_text_input COMMAND trailmate_linux_wayland_text_input_test)
+        add_executable(trailmate_linux_wayland_resource_test
+            tests/linux_wayland_resource_test.cpp
+            src/platform/wayland/wayland_presenter.cpp
+            "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/core/canvas.cpp")
+        target_include_directories(trailmate_linux_wayland_resource_test PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/src" "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}")
+        target_link_libraries(trailmate_linux_wayland_resource_test PRIVATE
+            trailmate_cardputer_zero_wayland_protocol PkgConfig::WAYLAND_SERVER
+            PkgConfig::XKBCOMMON Threads::Threads)
+        target_compile_features(trailmate_linux_wayland_resource_test PRIVATE cxx_std_20)
+        target_compile_options(trailmate_linux_wayland_resource_test PRIVATE -UNDEBUG)
+        add_test(NAME trailmate_linux_wayland_resources COMMAND trailmate_linux_wayland_resource_test)
     endif()
 
     add_executable(trailmate_cardputer_zero_wayland

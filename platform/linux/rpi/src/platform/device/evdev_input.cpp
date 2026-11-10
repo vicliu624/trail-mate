@@ -446,7 +446,7 @@ struct EvdevInput::Impl
             return false;
         }
 
-        fd = ::open(path.c_str(), O_RDONLY | O_NONBLOCK);
+        fd = ::open(path.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
         if (fd < 0)
         {
             std::fprintf(stderr, "[evdev] Failed to open %s: %s\n",
