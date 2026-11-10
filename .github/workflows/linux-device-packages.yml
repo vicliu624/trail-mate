@@ -84,6 +84,14 @@ jobs:
         if: matrix.device == 't-display-cm0'
         run: |
           sudo env PATH="$PATH" TRAIL_MATE_CM0_RELEASE_WORK="$RUNNER_TEMP/cm0-release" TRAIL_MATE_TMAP_PRODUCER_DIR="$TRAIL_MATE_TMAP_PRODUCER_DIR" TRAIL_MATE_PACKAGE_JOBS=4 bash apps/linux_lvgl/tools/build_cm0_native_release.sh
+      - name: Build the Zero Store package before publishing our release
+        if: matrix.device == 'cardputer-zero'
+        run: |
+          version=$(python3 scripts/project_version.py --debian)
+          source="build/cardputer-zero-deb/trailmate-cardputer-zero_${version}_arm64.deb"
+          python3 apps/linux_cardputer_zero/tools/package_store.py \
+            --deb "$source" --sha256 "$(sha256sum "$source" | cut -d ' ' -f 1)" \
+            --output "build/cardputer-zero-deb/trailmate_${version}_arm64.deb"
       - name: Verify release package payloads
         run: python3 scripts/verify_linux_release_packages.py --directory build --version "$(python3 scripts/project_version.py --debian)" --device '${{ matrix.device }}'
       - uses: actions/upload-artifact@v4
