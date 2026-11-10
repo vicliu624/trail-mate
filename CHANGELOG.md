@@ -12,6 +12,9 @@ stable firmware release. Hardware support and validation remain target-specific.
 
 ### Fixed
 
+- Website dependencies use the canonical npm registry with their existing pinned
+  versions and integrity hashes, avoiding a third-party mirror timeout during
+  release-page deployment.
 - Cardputer Zero Store submissions require an already published stable release
   in the TrailMate repository, successful tagged CI and device builds, matching
   source and listing versions, and a release-owned package with verified SHA256.
