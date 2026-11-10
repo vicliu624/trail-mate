@@ -273,9 +273,8 @@ adaptation. It does not render pixels.
 
 ## Launch And Package
 
-The Cardputer Zero product executable is `trailmate-cardputer-zero`. It is the
-Wayland runtime. In the installed package it lives in the private app libdir and
-is started through the APPLaunch wrapper:
+The Cardputer Zero package provides framebuffer/evdev and Wayland executables
+in its private app libdir, selected through the APPLaunch wrapper:
 
 - `/usr/lib/trailmate-cardputer-zero/trailmate-cardputer-zero`
 - `/usr/lib/trailmate-cardputer-zero/trailmate-cardputer-zero-fbdev`
@@ -283,20 +282,20 @@ is started through the APPLaunch wrapper:
 - `/usr/share/APPLaunch/applications/trailmate.desktop`
 - `/usr/share/APPLaunch/share/images/trailmate-cardputer-zero.png`
 
-The APPLaunch wrapper's default `auto` mode starts the Wayland runtime only
-when `WAYLAND_DISPLAY` is present. If no Wayland session exists, it exits with a
-diagnostic instead of silently falling back to framebuffer. The desktop metadata
-therefore records `X-Zero-Display=wayland`.
+The APPLaunch wrapper's default `auto` mode honors an explicit
+`TRAIL_MATE_FRAMEBUFFER` or `APPLAUNCH_LINUX_FBDEV_DEVICE` first. The stock
+launcher supplies the physical screen even when its parent session exports a
+headless Wayland compositor. Without a framebuffer handoff, `WAYLAND_DISPLAY`
+selects Wayland; otherwise `/proc/fb` detects supported ST7789V or panel-mipi-dbi
+framebuffers. Startup fails with a diagnostic when neither backend is available.
 
-`trailmate-cardputer-zero-fbdev` is retained only for explicit framebuffer
-debugging. It is reached by setting `TRAIL_MATE_DISPLAY_BACKEND=fbdev` or
-another explicit framebuffer alias. That debug path honors
-`APPLAUNCH_LINUX_FBDEV_DEVICE` and `APPLAUNCH_LINUX_KEYBOARD_DEVICE`, detects
-the ST7789V framebuffer from `/proc/fb`, and falls back to `/dev/fb1` plus the
-documented Cardputer Zero keyboard by-path event device.
+`trailmate-cardputer-zero-fbdev` is the stock framebuffer launcher's device
+runtime. The wrapper honors `APPLAUNCH_LINUX_KEYBOARD_DEVICE`, prefers
+`/dev/input/cardputer-zero-internal`, then uses the documented keyboard by-path
+device. `TRAIL_MATE_DISPLAY_BACKEND=fbdev` and `wayland` explicitly select a
+backend for terminal sessions.
 `TRAIL_MATE_FRAMEBUFFER=/dev/fbN` and
-`TRAIL_MATE_INPUT_DEVICE=/dev/input/eventN` remain manual debug overrides
-outside the product Wayland session.
+`TRAIL_MATE_INPUT_DEVICE=/dev/input/eventN` remain explicit device overrides.
 
 The Debian package route is owned by `apps/linux_cardputer_zero` and is built
 from the Docker helper:

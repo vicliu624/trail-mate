@@ -107,7 +107,10 @@ sh -n "${launcher}"
 grep -q '^Exec=/usr/lib/trailmate-cardputer-zero/trailmate-cardputer-zero-applaunch$' "${desktop}"
 grep -q '^Icon=share/images/trailmate-cardputer-zero.png$' "${desktop}"
 grep -q '^X-Zero-AppId=io.github.vicliu624.trailmate$' "${desktop}"
-grep -q '^X-Zero-Display=wayland$' "${desktop}"
+if grep -q '^X-Zero-Display=wayland$' "${desktop}"; then
+    printf 'APPLaunch entry must allow the physical framebuffer handoff.\n' >&2
+    exit 1
+fi
 grep -q 'TRAIL_MATE_DISPLAY_BACKEND' "${launcher}"
 grep -q 'WAYLAND_DISPLAY' "${launcher}"
 grep -q 'TRAIL_MATE_RUNTIME_MODE:=mesh' "${launcher}"
