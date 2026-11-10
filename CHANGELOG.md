@@ -10,6 +10,14 @@ stable firmware release. Hardware support and validation remain target-specific.
 
 ## [Unreleased]
 
+### Fixed
+
+- Cardputer Zero Store submissions require an already published stable release
+  in the TrailMate repository, successful tagged CI and device builds, matching
+  source and listing versions, and a release-owned package with verified SHA256.
+  Drafts, pending/failed builds and local or unrelated artifacts block submission.
+  Linux release packaging now includes the Store DEB before publishing our release.
+
 ## [1.1.1] - 2026-11-10
 
 ### Fixed

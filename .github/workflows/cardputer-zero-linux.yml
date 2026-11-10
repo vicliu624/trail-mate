@@ -42,6 +42,9 @@ jobs:
       - name: Verify APPLaunch backend selection
         run: python3 apps/linux_cardputer_zero/tests/launcher_backend_test.py apps/linux_cardputer_zero/packaging/trailmate-cardputer-zero-applaunch
 
+      - name: Verify Store release publication gates
+        run: python3 apps/linux_cardputer_zero/tests/store_release_gate_test.py
+
       - name: Install Cardputer Zero build dependencies
         run: |
           sudo apt-get update
