@@ -39,7 +39,19 @@ with tempfile.TemporaryDirectory(prefix="trailmate-launcher-") as temporary:
     assert result == f"fbdev|{framebuffer}|{keyboard}", result
     environment["WAYLAND_DISPLAY"] = "wayland-test"
     result = subprocess.check_output(["sh", str(wrapper)], env=environment, text=True)
+    assert result == f"fbdev|{framebuffer}|{keyboard}", result
+    environment.pop("TRAIL_MATE_FRAMEBUFFER")
+    environment["APPLAUNCH_LINUX_FBDEV_DEVICE"] = str(framebuffer)
+    result = subprocess.check_output(["sh", str(wrapper)], env=environment, text=True)
+    assert result == f"fbdev|{framebuffer}|{keyboard}", result
+    environment["TRAIL_MATE_DISPLAY_BACKEND"] = "wayland"
+    result = subprocess.check_output(["sh", str(wrapper)], env=environment, text=True)
     assert result.startswith("wayland|"), result
+    environment["TRAIL_MATE_DISPLAY_BACKEND"] = "auto"
+    environment.pop("APPLAUNCH_LINUX_FBDEV_DEVICE")
+    result = subprocess.check_output(["sh", str(wrapper)], env=environment, text=True)
+    assert result.startswith("wayland|"), result
+    environment["APPLAUNCH_LINUX_FBDEV_DEVICE"] = str(framebuffer)
     environment["TRAIL_MATE_DISPLAY_BACKEND"] = "fbdev"
     result = subprocess.check_output(["sh", str(wrapper)], env=environment, text=True)
     assert result == f"fbdev|{framebuffer}|{keyboard}", result

@@ -10,6 +10,16 @@ stable firmware release. Hardware support and validation remain target-specific.
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-10
+
+### Fixed
+
+- Cardputer Zero APPLaunch now honors the launcher's physical framebuffer and
+  explicit framebuffer settings before an inherited Wayland session. A clean
+  Store install no longer renders into a headless desktop while the device
+  remains on the launcher's Loading screen. Explicit Wayland selection and
+  desktop Wayland auto-detection remain available.
+
 ### Added
 
 - CardputerZero Store listing and a reproducible `trailmate` package adapter

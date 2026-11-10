@@ -74,7 +74,11 @@ case "$backend" in
         exec "$script_dir/trailmate-cardputer-zero" "$@"
         ;;
     auto|"")
-        if [ -n "${WAYLAND_DISPLAY:-}" ]; then
+        # APPLaunch supplies its physical display even when its parent session
+        # also exports a headless Wayland compositor. Honor that handoff first.
+        if [ -z "${TRAIL_MATE_FRAMEBUFFER:-}" ] &&
+           [ -z "${APPLAUNCH_LINUX_FBDEV_DEVICE:-}" ] &&
+           [ -n "${WAYLAND_DISPLAY:-}" ]; then
             exec "$script_dir/trailmate-cardputer-zero" "$@"
         fi
         if [ -z "${TRAIL_MATE_FRAMEBUFFER:-}" ] &&

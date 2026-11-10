@@ -8,4 +8,3 @@ Terminal=false
 Categories=Utility;Network;
 StartupNotify=false
 X-Zero-AppId=io.github.vicliu624.trailmate
-X-Zero-Display=wayland

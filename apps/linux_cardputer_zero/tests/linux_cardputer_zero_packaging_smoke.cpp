@@ -140,8 +140,7 @@ int main(int argc, char** argv)
     assert(contains(desktop, "Exec=/usr/lib/trailmate-cardputer-zero/trailmate-cardputer-zero-applaunch"));
     assert(contains(desktop, "Icon=share/images/trailmate-cardputer-zero.png"));
     assert(contains(desktop, "X-Zero-AppId=io.github.vicliu624.trailmate"));
-    assert(contains(desktop, "X-Zero-Display=wayland"));
-    assert(not_contains(desktop, "X-Zero-Display=fbdev"));
+    assert(not_contains(desktop, "X-Zero-Display=wayland"));
 
     const std::string launcher = read_file(
         repo_root /
