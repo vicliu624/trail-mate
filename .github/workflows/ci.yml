@@ -672,7 +672,7 @@ jobs:
       - name: Install native decoder and media build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends build-essential cmake ninja-build pkg-config dpkg-dev gnuradio gnuradio-dev python3-numpy pybind11-dev libgsl-dev libsdl2-dev libavformat-dev libavcodec-dev libavutil-dev libswresample-dev libswscale-dev libaribb24-dev ffmpeg libcurl4-openssl-dev libarchive-dev libsqlite3-dev libssl-dev libjpeg-dev libpng-dev libbluetooth-dev libcodec2-dev
+          sudo apt-get install -y --no-install-recommends build-essential cmake ninja-build pkg-config dpkg-dev gnuradio gnuradio-dev python3-numpy pybind11-dev libgsl-dev libsdl2-dev libavformat-dev libavcodec-dev libavutil-dev libswresample-dev libswscale-dev libaribb24-dev ffmpeg libcurl4-openssl-dev libarchive-dev libsqlite3-dev libssl-dev libjpeg-dev libpng-dev libfreetype6-dev libbluetooth-dev libcodec2-dev
       - name: Build pinned native GNU Radio backend
         run: |
           /usr/bin/python3 apps/linux_lvgl/tools/build_oneseg_backend.py --work-dir .codex-build/oneseg/gr-isdbt --jobs 2

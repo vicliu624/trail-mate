@@ -101,6 +101,11 @@ package identity/version, architecture, root ownership, permissions, path scope,
 licenses, source hashes and language dependencies. It does not install the package
 or execute application code.
 
+For a native Cardputer Zero build with tests enabled, set
+`TRAIL_MATE_FONT_TOOLS_PYTHON` to that environment's absolute Python path before
+running CMake. CMake uses it to prepare independent font fixtures; it does not
+install Python packages into the operating system.
+
 Cardputer Zero CI builds a separate font fixture and exercises the production
 registry and LVGL renderer. It checks actual CJK glyphs, color pixels, primary
 ASCII selection, user override precedence, repeated locale changes, descriptor

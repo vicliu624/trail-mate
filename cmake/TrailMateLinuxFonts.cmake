@@ -8,7 +8,7 @@ function(trailmate_enable_linux_fonts shell_target)
     find_package(Freetype REQUIRED)
     target_link_libraries(lvgl PUBLIC Freetype::Freetype)
     target_compile_definitions(lvgl PUBLIC TRAIL_MATE_LINUX_FREETYPE=1)
-    target_compile_definitions(${shell_target} PRIVATE
+    target_compile_definitions(${shell_target} PUBLIC
         TRAIL_MATE_BUNDLED_FONT_ROOT="${CMAKE_INSTALL_FULL_DATADIR}/trailmate/packs")
 endfunction()
 
