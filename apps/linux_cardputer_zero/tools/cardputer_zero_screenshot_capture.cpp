@@ -14,6 +14,8 @@
 #include "app/input_event.h"
 #include "core/canvas.h"
 #include "lvgl.h"
+#include "platform/ui/settings_store.h"
+#include "ui/localization.h"
 
 #define LODEPNG_NO_COMPILE_CPP
 #include "src/libs/lodepng/lodepng.h"
@@ -295,6 +297,7 @@ int main(int argc, char** argv)
     const std::string requested_id = argc >= 3 ? argv[2] : "";
     const auto actions = argc >= 4 ? split_actions(argv[3])
                                    : std::vector<std::string>{};
+    const std::string requested_locale = argc >= 5 ? argv[4] : "";
 
     try
     {
@@ -308,6 +311,16 @@ int main(int argc, char** argv)
             ShellSession shell;
             CanvasLvglHost host{shell};
 
+            if (!requested_locale.empty())
+            {
+                const char* private_settings = std::getenv("TRAIL_MATE_SETTINGS_ROOT");
+                if (!private_settings || private_settings[0] == '\0')
+                    throw std::runtime_error("Locale captures require a private TRAIL_MATE_SETTINGS_ROOT");
+                if (!::platform::ui::settings_store::put_string("settings", "display_locale", requested_locale.c_str()))
+                    throw std::runtime_error("Failed to configure capture locale");
+                ::platform::ui::settings_store::put_bool("settings", "radio_enabled", false);
+            }
+
             if (!shell.begin())
             {
                 std::cerr << "failed to start Cardputer Zero shell session\n";
@@ -315,6 +328,8 @@ int main(int argc, char** argv)
             }
 
             wait_until_capture_ready(shell, host);
+            if (!requested_locale.empty() && requested_locale != ::ui::i18n::current_locale_id())
+                throw std::runtime_error("Requested capture locale is unavailable");
             if (target.menu_steps >= 0)
             {
                 for (int step = 0; step < target.menu_steps; ++step)

@@ -318,7 +318,7 @@ if(TRAIL_MATE_CARDPUTER_ZERO_BUILD_DEVICE AND CMAKE_SYSTEM_NAME STREQUAL "Linux"
         set(CPACK_DEBIAN_PACKAGE_SECTION "utils")
         set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
         set(CPACK_DEBIAN_PACKAGE_DEPENDS
-            "libc6, libstdc++6, libgcc-s1, libsqlite3-0, libcurl4, libssl3, libarchive13, libjpeg62-turbo, libpng16-16, libsdl2-2.0-0, libwayland-client0, libxkbcommon0, libnotify-bin, gdal-bin, unzip, ca-certificates, network-manager, osmium-tool")
+            "libc6, libstdc++6, libgcc-s1, libsqlite3-0, libcurl4, libssl3, libarchive13, libfreetype6, libjpeg62-turbo, libpng16-16, libsdl2-2.0-0, libwayland-client0, libxkbcommon0, libnotify-bin, gdal-bin, unzip, ca-certificates, network-manager, osmium-tool")
         set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS OFF)
         if(TRAIL_MATE_TMAP_PRODUCER_DIR)
             string(APPEND CPACK_DEBIAN_PACKAGE_DEPENDS ", libicu72 | libicu74 | libicu76")
@@ -663,4 +663,8 @@ if(BUILD_TESTING)
     add_test(NAME trailmate_linux_cardputer_zero_packaging_smoke
              COMMAND trailmate_linux_cardputer_zero_packaging_smoke
                      "${TRAIL_MATE_REPO_ROOT}")
+    if(TARGET trailmate_cardputer_zero_ui_shell AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        trailmate_add_linux_font_validation(trailmate_cardputer_zero_rich_font_test
+            trailmate_cardputer_zero_ui_shell)
+    endif()
 endif()

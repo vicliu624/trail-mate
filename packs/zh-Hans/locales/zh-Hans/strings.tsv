@@ -884,3 +884,63 @@ Current	当前
 Contours	等高线
 Load	加载
 Unload	卸载
+
+# Shared UI localization coverage additions.
+A/D select  Enter run  W/S wheel widgets  V menu	A/D选择 Enter打开 W/S切换挂件 V菜单
+APPLY PROTOCOL PROFILE?	应用协议配置？
+Add a .lrc file beside the song	歌曲旁添加同名 .lrc 文件
+Agenda is unavailable on this device.	此设备暂不支持日程。
+Arrived at destination	已到达目的地
+Arrived | Navigation finished	已到达 | 导航结束
+Automatic replan	自动重算路线
+Change could not be applied	无法应用更改
+Choose a song	选择歌曲
+Continue | %s left	继续前行 | 剩余 %s
+Ctrl+Enter Send / Tab controls	Ctrl+Enter 发送 / Tab 切换控件
+ENTER  APPLY	Enter 应用
+ESC  CANCEL	Esc 取消
+Enter a POI name	输入地点名称
+Find a place	查找地点
+Hold to talk	按住讲话
+In %d days	%d 天后
+Invalid TCP entry; fill earlier slots first	TCP 条目无效，请先填前面的槽位
+Keep a short, clear name	名称请简短清晰
+Loading saved route...	正在加载已保存的路线…
+Make TMAP	制作 TMAP
+Music	音乐
+No lyrics found	未找到歌词
+No network	网络未连接
+PROTOCOL PROBE	协议探测
+Paused	已暂停
+Paused for voice / radio	语音/电台占用，已暂停
+Quick controls	快捷控制
+Reload route	重新加载路线
+Replan failed; original route kept | Menu to retry	重算失败，已保留原路线 | 菜单重试
+Replanning route... | Menu to cancel	正在重算路线… | 菜单取消
+Reticulum TCP defaults restored	已恢复 Reticulum TCP 默认配置
+Route file unavailable or damaged; reload route	路线文件不可用或已损坏，请重新加载
+Route preview | %.1f km	路线预览 | %.1f 公里
+SPI & SD Diagnostics	SPI 与 SD 诊断
+Search unavailable or invalid query	搜索不可用或关键词无效
+Storage unavailable	存储不可用
+T: Talk / listen	T：讲话/监听
+Team pairing is unavailable on this device	此设备暂不支持队伍配对
+Time zone saved locally; SD sync pending	时区已保存，等待同步到 SD 卡
+Unable to reset Reticulum configuration	无法重置 Reticulum 配置
+Unable to reset configuration	无法重置配置
+Unable to restore TCP defaults	无法恢复 TCP 默认配置
+Unable to save time zone	无法保存时区
+Upcoming	即将到来
+Waiting for time	等待校时
+Wi-Fi connecting	正在连接 Wi-Fi
+Zoom in to show route detail	放大后显示路线详情
+
+# Menu and shortcut labels covered by visual regression.
+Calculator	计算器
+Dashboard	挂件
+Geocaching	地理寻宝
+SSTV	慢扫描电视
+Walkie	对讲机
+Nodes	节点
+Set	设置
+Track	轨迹

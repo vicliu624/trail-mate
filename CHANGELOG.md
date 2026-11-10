@@ -10,8 +10,30 @@ stable firmware release. Hardware support and validation remain target-specific.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-10
+
+### Added
+
+- Optional `trailmate-linux-fonts` package for native Linux LVGL applications on
+  Cardputer Zero and T-Display-CM0. It provides complete Noto CJK/Latin sources,
+  a compact OFL color-emoji derivative and the released Simplified Chinese
+  display language. English remains available without the package.
+- Linux FreeType font loading with bounded glyph caches, system resource
+  discovery and user-pack precedence. CJK source fonts expose 44,810 Unicode
+  mappings each; individual color emoji render at compact text sizes.
+- Source localization checks cover direct translation calls and declarative
+  menu labels, with parser regressions for comments, raw strings, nested calls
+  and formatted text. See [the Linux font guide](docs/engineering/linux-font-pack.md).
+
 ### Fixed
 
+- Filled 56 missing Simplified Chinese interface entries across shared menus,
+  navigation, Chat shortcuts, TMAP creation, Walkie Talkie and widgets. Other
+  language tables retain their review status. Chinese binfont coverage is
+  synchronized for ESP users as well as Linux.
+- Linux UI teardown releases resource fonts, bindings and deferred work before
+  LVGL ends, allowing clean reinitialization. Color emoji precede monochrome
+  fallbacks; compact menu shortcuts use localized text and font fallback.
 - Website dependencies use the canonical npm registry with their existing pinned
   versions and integrity hashes, avoiding a third-party mirror timeout during
   release-page deployment.

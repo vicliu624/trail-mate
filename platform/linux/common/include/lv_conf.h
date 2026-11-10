@@ -9,6 +9,12 @@
 
 #define LV_USE_OS LV_OS_NONE
 
+#if defined(TRAIL_MATE_LINUX_FREETYPE) && TRAIL_MATE_LINUX_FREETYPE
+#define LV_USE_FREETYPE 1
+// Bound both glyph metrics and rendered images per face; full fonts stay on disk.
+#define LV_FREETYPE_CACHE_FT_GLYPH_CNT 128
+#endif
+
 #define LV_FONT_MONTSERRAT_10 1
 #define LV_FONT_MONTSERRAT_12 1
 #define LV_FONT_MONTSERRAT_14 1

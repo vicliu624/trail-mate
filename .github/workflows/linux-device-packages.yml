@@ -36,6 +36,20 @@ jobs:
           name: linux-tmap-producers
           path: build/producer-archives/*.tar.gz
           if-no-files-found: error
+      - name: Build and verify the optional Linux font package
+        run: |
+          python3 -m venv "$RUNNER_TEMP/linux-font-package-tools"
+          "$RUNNER_TEMP/linux-font-package-tools/bin/python" -m pip install -r tools/fonts/linux/requirements.txt
+          version=$(python3 scripts/project_version.py --debian)
+          package="build/linux-fonts/trailmate-linux-fonts_${version}_all.deb"
+          "$RUNNER_TEMP/linux-font-package-tools/bin/python" tools/build_linux_font_pack.py \
+            --stage "$RUNNER_TEMP/linux-font-package-stage" --version "$version" --deb "$package"
+          python3 scripts/verify_linux_font_pack.py --deb "$package" --version "$version"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-device-fonts
+          path: build/linux-fonts/*.deb
+          if-no-files-found: error
 
   packages:
     name: ${{ matrix.device }} Debian package

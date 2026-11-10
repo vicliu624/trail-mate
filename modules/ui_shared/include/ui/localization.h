@@ -36,6 +36,9 @@ using LocaleChangeCompletion = void (*)(bool changed, void* user_data);
 // Set by the composition before the first registry access, on the LVGL owner.
 // Empty selects the platform's historical removable-storage path.
 bool configure_external_pack_root(const std::string& root);
+// On the LVGL owner, after widgets are detached and before lv_deinit. Releases
+// owned fonts/timers and bindings so a new LVGL lifetime can initialize safely.
+void shutdown_resource_packs();
 void reload_language();
 std::size_t locale_count();
 const LocaleInfo* locale_at(std::size_t index);

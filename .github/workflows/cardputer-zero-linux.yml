@@ -45,12 +45,24 @@ jobs:
       - name: Verify Store release publication gates
         run: python3 apps/linux_cardputer_zero/tests/store_release_gate_test.py
 
+      - name: Verify UI translation coverage and source parser
+        run: |
+          python3 tools/validate_locale_packs.py
+          python3 -m unittest discover -s tests/ui_localization
+
       - name: Install Cardputer Zero build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build dpkg-dev libsqlite3-dev libcurl4-openssl-dev libssl-dev libmbedtls-dev libjpeg-dev libpng-dev libarchive-dev libsdl2-dev libwayland-bin libwayland-dev libxkbcommon-dev wayland-protocols
+          sudo apt-get install -y ninja-build dpkg-dev libsqlite3-dev libcurl4-openssl-dev libssl-dev libmbedtls-dev libjpeg-dev libpng-dev libarchive-dev libfreetype6-dev libsdl2-dev libwayland-bin libwayland-dev libxkbcommon-dev wayland-protocols
+
+      - name: Prepare isolated Linux font tools
+        run: |
+          python3 -m venv "$RUNNER_TEMP/trailmate-font-tools"
+          "$RUNNER_TEMP/trailmate-font-tools/bin/python" -m pip install -r tools/fonts/linux/requirements.txt
 
       - name: Configure Cardputer Zero Linux shell
+        env:
+          TRAIL_MATE_FONT_TOOLS_PYTHON: ${{ runner.temp }}/trailmate-font-tools/bin/python
         working-directory: builds/linux_cmake
         run: cmake --preset linux-cardputer-zero-debug
 

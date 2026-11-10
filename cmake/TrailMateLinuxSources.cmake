@@ -943,6 +943,10 @@ function(trailmate_add_linux_ui_shell target_name common_target)
             GAT562_NO_PINYIN_IME=1
             TRAIL_MATE_PLATFORM_LINUX=1
     )
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        include("${TRAIL_MATE_REPO_ROOT}/cmake/TrailMateLinuxFonts.cmake")
+        trailmate_enable_linux_fonts(${target_name})
+    endif()
     if(UI_UX_PACK STREQUAL "cardputer_compact")
         target_compile_definitions(${target_name} PRIVATE TRAIL_MATE_CARDPUTER_ZERO_LINUX=1)
         target_sources(${target_name} PRIVATE

@@ -124,7 +124,11 @@ struct LvglLifetime
         lv_init();
         lv_tick_set_cb(tick);
     }
-    ~LvglLifetime() { lv_deinit(); }
+    ~LvglLifetime()
+    {
+        ::ui::i18n::shutdown_resource_packs();
+        lv_deinit();
+    }
 };
 struct AppTextRouter
 {

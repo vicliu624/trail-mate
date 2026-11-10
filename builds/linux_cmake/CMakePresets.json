@@ -71,6 +71,7 @@
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/cardputer-zero-release",
       "cacheVariables": {
+        "CMAKE_INSTALL_PREFIX": "/usr",
         "CMAKE_BUILD_TYPE": "Release",
         "BUILD_TESTING": "OFF",
         "TRAIL_MATE_BUILD_LINUX_CARDPUTER_ZERO": "ON",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from collections import Counter
@@ -357,6 +358,86 @@ def validate_manifests(pack_root: Path) -> list[str]:
     return errors
 
 
+CPP_TOKEN_RE = re.compile(
+    r'(?P<raw>(?:u8|u|U|L)?R"(?P<delimiter>[^\s()\\]{0,16})\(.*?\)(?P=delimiter)")'
+    r'|(?P<string>(?:u8|u|U|L)?"(?:\\.|[^"\\])*")'
+    r"|(?P<char>'(?:\\.|[^'\\])*')"
+    r'|(?P<comment>//[^\n]*|/\*.*?\*/)', re.S)
+CPP_TRANSLATION_CALL_RE = re.compile(
+    r'\b(?P<name>tr|i18n::format|set_label_text|set_content_label_text|set_label_text_fmt)\s*\(')
+CPP_SCREEN_LABEL_RE = re.compile(
+    r'\b(?:out|registry)\.add\s*\(\s*\{\s*(?:\w+::)*ScreenId::\w+\s*,')
+
+
+def translated_cpp_literals(text: str) -> list[tuple[str, int]]:
+    """Collect direct UTF-8 translation literals, preserving source line offsets."""
+    blank = lambda value: re.sub(r'[^\n]', ' ', value)
+    masked = CPP_TOKEN_RE.sub(lambda match: blank(match[0]), text)
+    comments_removed = CPP_TOKEN_RE.sub(
+        lambda match: blank(match[0]) if match.lastgroup == 'comment' else match[0], text)
+    result = []
+    calls = [(call.start(), call.end(), 0 if call['name'] in ('tr', 'i18n::format') else 1)
+             for call in CPP_TRANSLATION_CALL_RE.finditer(masked)]
+    calls.extend((entry.start(), entry.end(), 0) for entry in CPP_SCREEN_LABEL_RE.finditer(masked))
+    for offset, start, argument in sorted(calls):
+        depth, current = 0, 0
+        for position in range(start, len(masked)):
+            character = masked[position]
+            if character in ',)}' and depth == 0:
+                if current == argument:
+                    expression = comments_removed[start:position]
+                    parts, previous = [], 0
+                    for token in CPP_TOKEN_RE.finditer(expression):
+                        if expression[previous:token.start()].strip() or token.lastgroup not in ('raw', 'string'):
+                            break
+                        value = token[0]
+                        try:
+                            if token.lastgroup == 'raw':
+                                parts.append(value[value.index('(') + 1:value.rindex(')')])
+                            else:
+                                parts.append(json.loads(value[2:] if value.startswith('u8') else value))
+                        except ValueError:
+                            break
+                        previous = token.end()
+                    else:
+                        if parts and not expression[previous:].strip():
+                            result.append((''.join(parts), offset))
+                    break
+                if character != ',':
+                    break
+                current += 1
+                start = position + 1
+            elif character in '([{':
+                depth += 1
+            elif character in ')]}':
+                depth -= 1
+    return result
+
+
+def validate_ui_translation_coverage(pack_root: Path) -> list[str]:
+    root = Path(__file__).resolve().parents[1]
+    # Custom pack fixtures are validated independently of this checkout's UI.
+    if pack_root.resolve() != (root / 'packs').resolve():
+        return []
+    table = pack_root / 'zh-Hans/locales/zh-Hans/strings.tsv'
+    rows, _, _ = parse_tsv(table)
+    escapes = {'n': '\n', 'r': '\r', 't': '\t', '\\': '\\'}
+    keys = {re.sub(r'\\([nrt\\])', lambda match: escapes[match[1]], key) for key in rows}
+    errors = []
+    for directory in ('modules/ui_shared/src', 'modules/ui_shared/include',
+                      'modules/ui_lvgl_ux_packs/src', 'modules/ui_lvgl_ux_packs/include',
+                      'platform/linux/common/src/ui', 'apps/linux_cardputer_zero/src'):
+        for path in sorted((root / directory).rglob('*')):
+            if path.suffix not in ('.cpp', '.h', '.hpp'):
+                continue
+            source = path.read_text(encoding='utf-8')
+            for key, offset in translated_cpp_literals(source):
+                if re.search(r'[A-Za-z]', key) and key not in keys:
+                    line = source.count('\n', 0, offset) + 1
+                    errors.append(f'{path.relative_to(root)}:{line}: missing zh-Hans UI key: {key!r}')
+    return errors
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate Trail Mate locale pack structure.")
     parser.add_argument("--pack-root", default="packs")
@@ -367,6 +448,7 @@ def main() -> int:
         validate_strings(pack_root)
         + validate_manifests(pack_root)
         + validate_cjk_required_punctuation(pack_root)
+        + validate_ui_translation_coverage(pack_root)
     )
     if errors:
         for error in errors:

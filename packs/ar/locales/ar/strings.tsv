@@ -884,3 +884,63 @@ Current	الحالي
 Contours	خطوط الكنتور
 Load	تحميل
 Unload	إلغاء التحميل
+
+# Shared UI localization coverage additions.
+A/D select  Enter run  W/S wheel widgets  V menu	A/D select  Enter run  W/S wheel widgets  V menu
+APPLY PROTOCOL PROFILE?	APPLY PROTOCOL PROFILE?
+Add a .lrc file beside the song	Add a .lrc file beside the song
+Agenda is unavailable on this device.	Agenda is unavailable on this device.
+Arrived at destination	Arrived at destination
+Arrived | Navigation finished	Arrived | Navigation finished
+Automatic replan	Automatic replan
+Change could not be applied	Change could not be applied
+Choose a song	Choose a song
+Continue | %s left	Continue | %s left
+Ctrl+Enter Send / Tab controls	Ctrl+Enter Send / Tab controls
+ENTER  APPLY	ENTER  APPLY
+ESC  CANCEL	ESC  CANCEL
+Enter a POI name	Enter a POI name
+Find a place	Find a place
+Hold to talk	Hold to talk
+In %d days	In %d days
+Invalid TCP entry; fill earlier slots first	Invalid TCP entry; fill earlier slots first
+Keep a short, clear name	Keep a short, clear name
+Loading saved route...	Loading saved route...
+Make TMAP	Make TMAP
+Music	Music
+No lyrics found	No lyrics found
+No network	No network
+PROTOCOL PROBE	PROTOCOL PROBE
+Paused	Paused
+Paused for voice / radio	Paused for voice / radio
+Quick controls	Quick controls
+Reload route	Reload route
+Replan failed; original route kept | Menu to retry	Replan failed; original route kept | Menu to retry
+Replanning route... | Menu to cancel	Replanning route... | Menu to cancel
+Reticulum TCP defaults restored	Reticulum TCP defaults restored
+Route file unavailable or damaged; reload route	Route file unavailable or damaged; reload route
+Route preview | %.1f km	Route preview | %.1f km
+SPI & SD Diagnostics	SPI & SD Diagnostics
+Search unavailable or invalid query	Search unavailable or invalid query
+Storage unavailable	Storage unavailable
+T: Talk / listen	T: Talk / listen
+Team pairing is unavailable on this device	Team pairing is unavailable on this device
+Time zone saved locally; SD sync pending	Time zone saved locally; SD sync pending
+Unable to reset Reticulum configuration	Unable to reset Reticulum configuration
+Unable to reset configuration	Unable to reset configuration
+Unable to restore TCP defaults	Unable to restore TCP defaults
+Unable to save time zone	Unable to save time zone
+Upcoming	Upcoming
+Waiting for time	Waiting for time
+Wi-Fi connecting	Wi-Fi connecting
+Zoom in to show route detail	Zoom in to show route detail
+
+# Menu and shortcut labels covered by visual regression.
+Calculator	Calculator
+Dashboard	Dashboard
+Geocaching	Geocaching
+SSTV	SSTV
+Walkie	Walkie
+Nodes	Nodes
+Set	Set
+Track	Track

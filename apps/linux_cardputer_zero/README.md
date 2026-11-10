@@ -16,6 +16,12 @@ Wayland and framebuffer/evdev sessions. The actual framebuffer, keyboard,
 sleep and mesh acceptance is recorded in the
 [device qualification](../../docs/engineering/linux-paired-mesh-validation-20261108.md).
 
+Starting with 1.2.0, the optional `trailmate-linux-fonts` package adds full CJK
+fonts, compact color emoji and the released Simplified Chinese display language.
+It installs system resources separately from identity and message data. See the
+[Linux font package guide](../../docs/engineering/linux-font-pack.md) for coverage,
+installation and validation.
+
 The shared LVGL main-menu profile for this target is Cardputer Zero specific:
 `make_cardputer_zero_profile()` uses the Pager's adaptive icon grid and focus
 styling, with four columns and two visible rows on the 320 x 170 display.

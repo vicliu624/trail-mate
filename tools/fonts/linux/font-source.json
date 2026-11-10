@@ -1,0 +1,14 @@
+{
+  "upstream_url": "https://raw.githubusercontent.com/googlefonts/noto-emoji/99701e07d3d1fe1bdbcdb14964547f0fd592966f/2D/fonts/NotoColorEmoji.ttf",
+  "upstream_revision": "99701e07d3d1fe1bdbcdb14964547f0fd592966f",
+  "upstream_sha256": "15671215ab769fdc7162a045d56fd7d7e477c51b04e6b3c761d914d8fdd6cc44",
+  "license": "OFL-1.1",
+  "bitmap_ppem": 14,
+  "bitmap_glyphs": 4004,
+  "unicode_codepoints": 1510,
+  "derivation": "RGBA PNGs resized with Lanczos; bitmap metrics scaled; derivative font renamed",
+  "fonttools": "4.68.0",
+  "pillow": "13.0.0",
+  "output_sha256": "00905749b92be34abcd9d3248549125c8302028b7bb72f41585ee6bf012c1977",
+  "output_size": 3455816
+}

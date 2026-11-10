@@ -1038,7 +1038,7 @@ BottomBarChipUi createBottomBarChip(lv_obj_t* parent,
     lv_obj_set_style_text_color(chip.label, ui::theme::text(), 0);
     lv_obj_set_style_bg_opa(chip.label, LV_OPA_TRANSP, 0);
     lv_obj_set_style_pad_all(chip.label, 0, 0);
-    lv_obj_set_style_text_font(chip.label, profile.node_id_font, 0);
+    lv_obj_set_style_text_font(chip.label, ::ui::fonts::localized_font(text, profile.node_id_font), 0);
     lv_label_set_long_mode(chip.label, LV_LABEL_LONG_CLIP);
     lv_label_set_recolor(chip.label, recolor);
     lv_label_set_text(chip.label, text ? text : "");
@@ -1093,7 +1093,13 @@ std::string renderBottomHelpText(const char* text)
 {
 #if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
     (void)text;
-    return ui::menu::dashboard::isFeedOpen() ? "#D6403A V# Menu" : "#D6403A 4#Chat #D6403A 5#Map #D6403A 6#Track #D6403A 7#Nodes #D6403A 8#Set";
+    if (ui::menu::dashboard::isFeedOpen())
+        return std::string("#D6403A V# ") + ::ui::i18n::tr("Menu");
+    return std::string("#D6403A 4#") + ::ui::i18n::tr("Chat") +
+           " #D6403A 5#" + ::ui::i18n::tr("Map") +
+           " #D6403A 6#" + ::ui::i18n::tr("Track") +
+           " #D6403A 7#" + ::ui::i18n::tr("Nodes") +
+           " #D6403A 8#" + ::ui::i18n::tr("Set");
 #else
     const char* safe_text = text ? text : "";
     const size_t prefix_len = std::strlen(kBottomHelpPlainPrefix);

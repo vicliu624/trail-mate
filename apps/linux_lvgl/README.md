@@ -23,7 +23,7 @@ runtime, not generic Debian armhf defaults. See the
 building a deployable CM0 deb. Use a fresh build directory when changing the ABI.
 
 On Linux install Python 3, CMake, Ninja, a C++20 compiler, `libsdl2-dev` (SDL >= 2.0.18),
-`libcurl4-openssl-dev`, `libsqlite3-dev`, `libssl-dev`, `libjpeg-dev`, `libpng-dev`, `libarchive-dev`,
+`libcurl4-openssl-dev`, `libsqlite3-dev`, `libssl-dev`, `libjpeg-dev`, `libpng-dev`, `libarchive-dev`, `libfreetype6-dev`,
 `pkg-config` and `dpkg-dev`. Phone Bluetooth is intentionally disabled and deferred;
 BlueZ and GIO are not required by the application.
 
@@ -441,6 +441,12 @@ source as firmware builds; package versions default to its Debian form. Explicit
 package-version overrides remain available. Remote catalog/archive delivery
 remains incomplete. See
 [resource storage](../../docs/engineering/linux-resource-pack-storage.md).
+
+Native Linux LVGL builds also scan `/usr/share/trailmate/packs` when installed
+with the `/usr` prefix. The optional `trailmate-linux-fonts` package supplies
+full CJK fonts, compact color emoji and released display-language tables. User
+resources take precedence. See the [Linux font package](../../docs/engineering/linux-font-pack.md)
+for installation, coverage, input-method ownership and validation.
 
 ## Phone Bluetooth scope
 

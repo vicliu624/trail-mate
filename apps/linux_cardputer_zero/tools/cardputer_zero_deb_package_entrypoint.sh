@@ -20,6 +20,7 @@ cmake -S "${source_dir}/builds/linux_cmake" \
     -B "${build_dir}" \
     -G Ninja \
     -DCMAKE_BUILD_TYPE="${package_build_type}" \
+    -DCMAKE_INSTALL_PREFIX=/usr \
     -DCMAKE_C_FLAGS_RELEASE="-O2 -DNDEBUG" \
     -DCMAKE_CXX_FLAGS_RELEASE="-O2 -DNDEBUG" \
     -DBUILD_TESTING=OFF \

@@ -1,6 +1,7 @@
 #include "ui/shell_ui_runner.h"
 #include "platform/linux/tmap_creation.h"
 #include "ui/app_runtime.h"
+#include "ui/assets/fonts/bundled_font_root.h"
 #include "ui/input/keyboard_shortcuts.h"
 #include "ui/input/pager_navigation.h"
 
@@ -202,6 +203,10 @@ bool ShellSession::begin()
     if (initialized_) return true;
     if (!::ui::i18n::configure_external_pack_root(::platform::linux_runtime::resource_pack_root().string()))
         return false;
+#ifdef TRAIL_MATE_BUNDLED_FONT_ROOT
+    if (!::ui::i18n::configure_bundled_font_root(TRAIL_MATE_BUNDLED_FONT_ROOT))
+        return false;
+#endif
     if (!::platform::linux_runtime::configure_resource_pack_policy({::platform::ui::device::firmware_version(), ::ui::runtime::current_memory_profile().name}))
         return false;
     if (!::platform::linux_runtime::set_packet_radio_enabled(
@@ -335,6 +340,7 @@ CanvasLvglHost::~CanvasLvglHost()
         lv_display_delete(display_);
         display_ = nullptr;
     }
+    ::ui::i18n::shutdown_resource_packs();
     lv_deinit();
 }
 

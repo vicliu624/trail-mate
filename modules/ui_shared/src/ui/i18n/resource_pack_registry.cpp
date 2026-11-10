@@ -50,6 +50,14 @@
 #define UI_I18N_HAVE_BINFONT 0
 #endif
 
+#if defined(TRAIL_MATE_PLATFORM_LINUX) && defined(TRAIL_MATE_LINUX_FREETYPE) && \
+    TRAIL_MATE_LINUX_FREETYPE && LV_USE_FREETYPE && !defined(ESP_PLATFORM) && !defined(ARDUINO_ARCH_ESP32)
+#include "src/libs/freetype/lv_freetype.h"
+#define UI_I18N_HAVE_FREETYPE 1
+#else
+#define UI_I18N_HAVE_FREETYPE 0
+#endif
+
 namespace ui::i18n
 {
 void request_missing_content_glyph(uint32_t codepoint);
@@ -140,6 +148,11 @@ struct FontPackRecord
     lv_font_t* owned_font = nullptr;
     std::string source_path;
     std::size_t estimated_ram_bytes = 0;
+#if UI_I18N_HAVE_FREETYPE
+    bool freetype = false;
+    bool color_emoji = false;
+    uint16_t pixel_size = 16;
+#endif
     std::vector<CodepointRange> coverage;
     uint32_t load_retry_not_before_ms = 0;
     uint8_t load_failure_count = 0;
@@ -563,6 +576,11 @@ bool pack_targets_current_board(const char* value)
         const std::string normalized = lowercase_ascii(target);
 #if defined(ARDUINO_T_DECK_PRO)
         if (normalized == "tdeck-pro")
+        {
+            return true;
+        }
+#elif UI_I18N_HAVE_FREETYPE
+        if (normalized == "linux")
         {
             return true;
         }
@@ -1493,7 +1511,12 @@ void unload_external_font_pack(FontPackRecord& pack)
     if (pack.owned_font != nullptr)
     {
         std::printf("%s font unload id=%s\n", kLogTag, pack.id.c_str());
-        lv_binfont_destroy(pack.owned_font);
+#if UI_I18N_HAVE_FREETYPE
+        if (pack.freetype)
+            lv_freetype_font_delete(pack.owned_font);
+        else
+#endif
+            lv_binfont_destroy(pack.owned_font);
         pack.owned_font = nullptr;
     }
 #else
@@ -1660,7 +1683,24 @@ bool load_font_pack(FontPackRecord& pack)
 #endif
             return false;
         }
-        pack.owned_font = lv_binfont_create(pack.source_path.c_str());
+#if UI_I18N_HAVE_FREETYPE
+        if (pack.freetype)
+        {
+            // FreeType opens a native path rather than an LVGL drive prefix.
+            const char* path = pack.source_path.c_str();
+            if (path[0] == LV_FS_POSIX_LETTER && path[1] == ':') path += 2;
+            pack.owned_font = lv_freetype_font_create(path, LV_FREETYPE_FONT_RENDER_MODE_BITMAP,
+                                                      pack.pixel_size, LV_FREETYPE_FONT_STYLE_NORMAL);
+            if (pack.owned_font)
+            {
+                // Match compact binfont metrics instead of CJK's taller em.
+                pack.owned_font->line_height = pack.pixel_size + (pack.color_emoji ? 4 : 2);
+                pack.owned_font->base_line = (pack.pixel_size + 3) / 4;
+            }
+        }
+        else
+#endif
+            pack.owned_font = lv_binfont_create(pack.source_path.c_str());
 #if UI_I18N_HAVE_EXTERNAL_FONT_LOAD_FS_SCOPE
         font_fs_busy = lv_external_font_load_fs_was_busy();
 #endif
@@ -1807,6 +1847,11 @@ bool can_preload_small_content_supplement(const FontPackRecord& pack)
     {
         return false;
     }
+#if UI_I18N_HAVE_FREETYPE
+    // Color must be ready before the built-in monochrome font can satisfy a
+    // label. Glyph images remain lazy and use FreeType's bounded cache.
+    if (pack.freetype && pack.color_emoji) return true;
+#endif
     return pack.estimated_ram_bytes > 0 &&
            pack.estimated_ram_bytes <= kSmallContentSupplementMaxBytes;
 }
@@ -1815,6 +1860,13 @@ std::vector<FontPackRecord*> current_content_pack_sequence()
 {
     std::vector<FontPackRecord*> packs;
     packs.reserve(4U + s_content_supplement_packs.size());
+#if UI_I18N_HAVE_FREETYPE
+    for (FontPackRecord* pack : s_content_supplement_packs)
+    {
+        if (pack && pack->freetype && pack->color_emoji)
+            append_unique_pack(packs, pack);
+    }
+#endif
     append_unique_pack(packs, s_active_content_font_pack);
     append_unique_pack(packs, s_active_ui_font_pack);
     for (FontPackRecord& pack : s_font_packs)
@@ -1841,6 +1893,13 @@ std::vector<FontPackRecord*> current_content_pack_sequence()
 void rebuild_runtime_font_chains()
 {
     std::vector<FontPackRecord*> ui_packs;
+#if UI_I18N_HAVE_FREETYPE
+    for (FontPackRecord* pack : s_content_supplement_packs)
+    {
+        if (pack && pack->freetype && pack->color_emoji && font_pack_supports_ui(*pack))
+            append_unique_pack(ui_packs, pack);
+    }
+#endif
     append_unique_pack(ui_packs, s_active_ui_font_pack);
     rebuild_font_chain(s_ui_font_chain, ui_packs);
     rebuild_font_chain(s_content_font_chain, current_content_pack_sequence());
@@ -2497,6 +2556,25 @@ bool catalog_external_font_pack(const std::string& pack_dir)
 
     const char* source = manifest_value(manifest, "source");
     const std::string source_kind = lowercase_ascii(source ? source : "binfont");
+    if (source_kind != "builtin" && source_kind != "binfont" && source_kind != "freetype")
+    {
+        std::printf("%s skip font pack id=%s reason=unsupported_source\n", kLogTag, pack.id.c_str());
+        return false;
+    }
+    if (source_kind == "freetype")
+    {
+#if UI_I18N_HAVE_FREETYPE
+        const auto size = parse_size_value(manifest_value(manifest, "pixel_size"));
+        if (size < 8U || size > 64U) return false;
+        pack.freetype = true;
+        pack.pixel_size = static_cast<uint16_t>(size);
+        const char* color = manifest_value(manifest, "color_emoji");
+        pack.color_emoji = color && std::strcmp(color, "true") == 0;
+#else
+        std::printf("%s skip font pack id=%s reason=freetype_unavailable\n", kLogTag, pack.id.c_str());
+        return false;
+#endif
+    }
     if (source_kind == "builtin")
     {
         const char* builtin_id = manifest_value(manifest, "builtin_id");
@@ -3021,10 +3099,13 @@ void catalog_external_packs()
     }
     if (!s_bundled_font_root.empty())
     {
-        // Existing IDs win: a user-installed font may override a bundled one.
-        // The system directory is read only and contains fonts, not user IMEs.
+        // Existing IDs win: user packs override read-only system resources.
         const auto fonts = join_path(s_bundled_font_root, "fonts");
         scan_pack_group(fonts.c_str(), "bundled_fonts", catalog_external_font_pack);
+#if UI_I18N_HAVE_FREETYPE
+        const auto locales = join_path(s_bundled_font_root, "locales");
+        scan_pack_group(locales.c_str(), "bundled_locales", catalog_external_locale_pack);
+#endif
     }
     std::printf("%s external pack scan end fonts=%lu ime=%lu locales=%lu\n",
                 kLogTag,
@@ -3418,6 +3499,9 @@ bool activate_locale_internal(LocalePackRecord* locale, FontPackRecord* preserve
     }
 
     (void)preload_active_locale_preferred_content_supplements();
+#if UI_I18N_HAVE_FREETYPE
+    (void)preload_small_content_supplements();
+#endif
     rebuild_runtime_font_chains();
     ImePackRecord* effective_ime_pack = resolve_enabled_ime_pack();
 
@@ -3511,6 +3595,15 @@ const char* lookup_translation(const LocalePackRecord& locale, const char* engli
 }
 
 } // namespace
+
+void shutdown_resource_packs()
+{
+    cancel_pending_locale_change();
+    auto* bindings = ::ui::fonts::localized_font_binding_storage();
+    for (std::size_t index = 0; index < ::ui::fonts::localized_font_binding_storage_size(); ++index)
+        bindings[index] = ::ui::fonts::LocalizedFontBinding{};
+    clear_registry();
+}
 
 bool configure_external_pack_root(const std::string& root)
 {
