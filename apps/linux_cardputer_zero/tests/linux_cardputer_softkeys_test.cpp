@@ -108,7 +108,8 @@ int main()
         assert(roster);
         assert(lv_obj_get_height(roster) <= lv_obj_get_content_height(lv_obj_get_parent(roster)));
         key('4');
-        assert(visible_label(lv_screen_active(), "Team / Member"));
+        assert(visible_label(lv_screen_active(), membership.team_name.c_str()));
+        assert(!visible_label(lv_screen_active(), "Roster"));
         shell.enqueueInputs({{Key::Power}});
         tick(200ms);
         assert(visible_label(lv_screen_active(), "Roster"));
@@ -124,6 +125,31 @@ int main()
         assert(!visible_label(lv_screen_active(), "Search"));
         shell.enqueueInputs({{Key::Power}});
         tick(500ms);
+        key('7');
+        assert(ui_get_active_app() && !std::strcmp(ui_get_active_app()->stable_id(), "contacts"));
+        const char* footer_labels[] = {"Prev", "Next", "Info", "Back", "Menu"};
+        lv_obj_t* footer = nullptr;
+        for (unsigned slot = 0; slot < 5; ++slot)
+        {
+            auto* label = visible_label(lv_screen_active(), footer_labels[slot]);
+            assert(label);
+            auto* button = lv_obj_get_parent(label);
+            if (!footer) footer = lv_obj_get_parent(button);
+            assert(lv_obj_get_parent(button) == footer);
+            lv_area_t button_area{}, footer_area{};
+            lv_obj_get_coords(button, &button_area);
+            lv_obj_get_coords(footer, &footer_area);
+            assert(std::abs((button_area.x1 + button_area.x2 + 1) / 2 - footer_area.x1 -
+                            static_cast<int>(48 + slot * 60)) <= 1);
+        }
+        key('4'); // Disabled paging keeps the current page and consumes the key.
+        assert(ui_get_active_app() && !std::strcmp(ui_get_active_app()->stable_id(), "contacts"));
+        key('8');
+        assert(visible_label(lv_screen_active(), "Team"));
+        key('m');
+        assert(!visible_label(lv_screen_active(), "Team"));
+        key('7');
+        assert(!ui_get_active_app());
         team::ui::team_ui_snapshot_store().clear();
         assert(!ui_get_active_app());
 
