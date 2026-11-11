@@ -10,6 +10,45 @@ stable firmware release. Hardware support and validation remain target-specific.
 
 ## [Unreleased]
 
+## [1.2.3] - 2026-11-11
+
+### Added
+
+- Native ESP-NOW Team enrollment on T-Display-CM0 and M5Stack Cardputer Zero,
+  compatible with existing ESP32 TrailMate teams. The privileged Linux helper
+  has an independent, durable Wi-Fi recovery lease and systemd watchdog. See
+  [installation and recovery requirements](docs/engineering/linux-espnow-team.md).
+- Cardputer Zero footer actions align with physical keys 4 through 8 while
+  retaining the existing letter shortcuts. Node ID is available in Settings /
+  Device, and text editors retain normal numeric input.
+
+### Fixed
+
+- Linux Team credentials survive application restarts and elapsed time without
+  forcing members to leave or pair again. Team encryption uses the shared
+  ESP-compatible key derivation and authenticated message format.
+- Shared Linux application-data scheduling waits for receive and relay activity
+  before transmitting, with bounded contention backoff and queue expiry. The
+  receiver and UI remain active while a send waits for the channel.
+- SX1262 enters standby before updating the TX FIFO, restores receive IRQs
+  after transmission, and rejects CRC/header errors even when RX_DONE is also
+  asserted. Damaged frames no longer enter delivery or relay processing.
+- Contacts retains the Team filter and opens the authenticated Team
+  conversation. Team group activation no longer opens ordinary broadcast chat.
+- Bounded Meshtastic relay and application deduplication suppress repeated
+  delivery, while Team map projection retains each member's newest position.
+- MeshCore AppData respects explicit V1/V2 identity hashes, including a valid
+  zero hash byte, and rejects oversized envelopes instead of truncating them.
+- Zero footer shortcuts remain usable when focus is on the page's Back button.
+
+### Changed
+
+- Linux Meshtastic uses the same wire codec and nonce implementation as ESP32,
+  with an in-place OpenSSL backend on Linux. Linux MeshCore group and private
+  AppData use the shared protocol strategy. ESP allocation and buffer capacities
+  remain unchanged; protocol ownership and compiler footprint checks are
+  documented in the [integration guide](docs/engineering/linux-espnow-team.md#shared-protocol-ownership).
+
 ## [1.2.2] - 2026-11-11
 
 ### Fixed
