@@ -1,4 +1,5 @@
 #include "platform/linux/packet_radio.h"
+#include "platform/linux/sx126x_radio.h"
 #include <array>
 #include <cassert>
 #include <chrono>
@@ -10,6 +11,7 @@
 
 namespace
 {
+using platform::linux_runtime::Sx126xPacket;
 constexpr uint16_t kIrqTxDone = 0x0001, kIrqRxDone = 0x0002, kIrqHeaderErr = 0x0020,
                    kIrqCrcErr = 0x0040, kIrqTimeout = 0x0200, kIrqAll = 0xffff;
 constexpr uint32_t kRxTimeoutInf = 0xffffff;
@@ -26,10 +28,30 @@ struct Transmitter
     platform::linux_runtime::RadioSettings lora_config_;
     platform::linux_runtime::FskSettings fsk_config_;
     unsigned tx_packets_ = 0, receive_starts = 0;
+    unsigned rx_packets_ = 0, rx_crc_errors_ = 0, rx_header_errors_ = 0,
+             rx_timeouts_ = 0, rx_invalid_lengths_ = 0, rx_read_errors_ = 0, reads = 0;
     uint16_t irq_mask = kIrqRxDone, dio_mask = kIrqRxDone, outcome = kIrqTxDone;
     bool fail_start = false, fail_write = false, fail_receive = false;
     bool standby = false, fail_standby = false;
     std::string error;
+    void updateLastIrqLocked(uint32_t) {}
+    int getPacketLengthLocked(uint8_t* offset)
+    {
+        *offset = 0;
+        return 2;
+    }
+    int readPacketLocked(uint8_t, uint8_t* data, size_t size)
+    {
+        ++reads;
+        std::memset(data, 0x42, size);
+        return 0;
+    }
+    bool readPacketStatusLocked(float* rssi, float* snr)
+    {
+        *rssi = -70;
+        *snr = 8;
+        return true;
+    }
     // Start in continuous RX, as the resident radio does between sends. A host
     // mutex does not stop that hardware state or protect its shared RX/TX FIFO.
     bool setBufferBaseLocked(uint8_t, uint8_t) { return standby; }
@@ -71,6 +93,32 @@ struct Transmitter
 
 int main()
 {
+    for (const uint8_t modem : {uint8_t{0}, uint8_t{1}})
+    {
+        for (const uint16_t error : {kIrqCrcErr, kIrqHeaderErr, kIrqTimeout,
+                                     uint16_t(kIrqCrcErr | kIrqHeaderErr)})
+        {
+            for (const uint16_t done : {uint16_t{0}, kIrqRxDone})
+            {
+                Transmitter radio;
+                radio.packet_type_ = modem;
+                radio.irq_mask = kIrqAll;
+                radio.outcome = error | done;
+                Sx126xPacket received;
+                assert(!radio.pollReceive(&received));
+                assert(radio.reads == 0 && radio.rx_packets_ == 0);
+                assert(radio.receive_starts == 1);
+                assert(radio.rx_crc_errors_ == unsigned((error & kIrqCrcErr) != 0));
+                assert(radio.rx_header_errors_ == unsigned((error & kIrqHeaderErr) != 0));
+                assert(radio.rx_timeouts_ == unsigned((error & kIrqTimeout) != 0));
+                // A rejected frame must not prevent the following good frame.
+                radio.outcome = kIrqRxDone;
+                assert(radio.pollReceive(&received));
+                assert(radio.reads == 1 && radio.rx_packets_ == 1);
+                assert(received.size == 2 && received.data[0] == 0x42);
+            }
+        }
+    }
     const uint8_t payload[] = {0x42, 0x23};
     for (const uint8_t modem : {uint8_t{0}, uint8_t{1}})
     {

@@ -596,28 +596,31 @@ bool Sx126xRadio::pollReceive(Sx126xPacket* out)
 
     const std::uint32_t irq = getIrqFlagsLocked();
     updateLastIrqLocked(irq);
+    // RX_DONE can be asserted together with CRC/header errors. Reject damage
+    // before reading the FIFO so corrupt frames never reach delivery or relay.
+    if ((irq & (kIrqTimeout | kIrqCrcErr | kIrqHeaderErr)) != 0)
+    {
+        if ((irq & kIrqCrcErr) != 0)
+        {
+            ++rx_crc_errors_;
+            setErrorLocked("LoRa RX CRC error");
+        }
+        if ((irq & kIrqHeaderErr) != 0)
+        {
+            ++rx_header_errors_;
+            setErrorLocked("LoRa RX header error");
+        }
+        if ((irq & kIrqTimeout) != 0)
+        {
+            ++rx_timeouts_;
+            setErrorLocked("LoRa RX timeout");
+        }
+        (void)clearIrqLocked(kIrqAll);
+        (void)setRxLocked(kRxTimeoutInf);
+        return false;
+    }
     if ((irq & kIrqRxDone) == 0)
     {
-        if ((irq & (kIrqTimeout | kIrqCrcErr | kIrqHeaderErr)) != 0)
-        {
-            if ((irq & kIrqCrcErr) != 0)
-            {
-                ++rx_crc_errors_;
-                setErrorLocked("LoRa RX CRC error");
-            }
-            if ((irq & kIrqHeaderErr) != 0)
-            {
-                ++rx_header_errors_;
-                setErrorLocked("LoRa RX header error");
-            }
-            if ((irq & kIrqTimeout) != 0)
-            {
-                ++rx_timeouts_;
-                setErrorLocked("LoRa RX timeout");
-            }
-            (void)clearIrqLocked(kIrqAll);
-            (void)setRxLocked(kRxTimeoutInf);
-        }
         return false;
     }
 
