@@ -188,6 +188,11 @@ bool activate(uint32_t key, lv_group_t* group)
         bool owns_focus = false;
         for (auto* object = focused; object; object = lv_obj_get_parent(object))
             if (object == root) owns_focus = true;
+        // A page's Back button can be a sibling of its content viewport. Its
+        // visible footer still belongs to the same active input group.
+        if (!owns_focus)
+            for (auto* candidate : row->buttons)
+                if (candidate && lv_obj_get_group(candidate) == group) owns_focus = true;
         auto* button = row->buttons[key - '4'];
         if (owns_focus && button && lv_obj_is_visible(button))
         {

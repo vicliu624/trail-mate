@@ -114,6 +114,16 @@ int main()
         assert(visible_label(lv_screen_active(), "Roster"));
         shell.enqueueInputs({{Key::Power}});
         tick(500ms);
+        assert(!ui_get_active_app());
+        key('5');
+        tick(300ms);
+        assert(ui_get_active_app() && !std::strcmp(ui_get_active_app()->stable_id(), "map"));
+        key('8');
+        assert(visible_label(lv_screen_active(), "Search"));
+        key('m');
+        assert(!visible_label(lv_screen_active(), "Search"));
+        shell.enqueueInputs({{Key::Power}});
+        tick(500ms);
         team::ui::team_ui_snapshot_store().clear();
         assert(!ui_get_active_app());
 
@@ -150,6 +160,15 @@ int main()
             assert(ui::input::cardputer::handle_key(physical, true, group, state));
             assert(clicks[slot] == 1);
         }
+        // Map's initial Back focus is a sibling of the viewport/footer. The
+        // footer still belongs to the active group and must accept softkeys.
+        auto* sibling_back = lv_btn_create(lv_screen_active());
+        lv_group_add_obj(group, sibling_back);
+        lv_group_focus_obj(sibling_back);
+        uint32_t sibling_key = '7';
+        ui::input::cardputer::State sibling_state;
+        assert(ui::input::cardputer::handle_key(sibling_key, true, group, sibling_state));
+        assert(clicks[3] == 2);
         auto* editor = lv_textarea_create(page);
         lv_group_add_obj(group, editor);
         lv_group_focus_obj(editor);
@@ -161,6 +180,7 @@ int main()
             assert(input == digit);
         }
         lv_group_delete(group);
+        lv_obj_delete(sibling_back);
         lv_obj_delete(page); // Registrations must leave with their widgets.
     }
     std::filesystem::remove_all(directory);
