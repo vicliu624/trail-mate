@@ -10,6 +10,10 @@
 #include "platform/linux/mesh/linux_radio_identity_store.h"
 #include "platform/linux/mesh/linux_reticulum_identity.h"
 #include "platform/linux/runtime_paths.h"
+#include "platform/linux/team_espnow_pairing.h"
+#include "platform/linux/team_presence.h"
+#include "platform/linux/team_protocol_crypto.h"
+#include "platform/linux/team_snapshot_store.h"
 #include "platform/linux/tms_import_bridge.h"
 #include "platform/linux/tms_snapshot_bridge.h"
 #include "platform/ui/hostlink_runtime.h"
@@ -36,6 +40,7 @@
 
 #if defined(__linux__)
 #include <spawn.h>
+#include <sys/random.h>
 #include <sys/wait.h>
 extern char** environ;
 #endif
@@ -679,104 +684,24 @@ class LinuxTeamRuntime final : public ::team::ITeamRuntime
             return;
         }
 
-        static std::random_device rd;
-        static std::mt19937 gen(rd());
-        static std::uniform_int_distribution<int> dist(0, 255);
-        for (size_t i = 0; i < len; ++i)
+#if defined(__linux__)
+        while (len)
         {
-            out[i] = static_cast<uint8_t>(dist(gen));
+            const auto size = ::getrandom(out, len, 0);
+            if (size < 0 && errno == EINTR) continue;
+            if (size <= 0) throw std::runtime_error("Operating system entropy unavailable");
+            out += size;
+            len -= static_cast<size_t>(size);
         }
+#else
+        std::random_device entropy;
+        for (size_t i = 0; i < len; ++i) out[i] = static_cast<uint8_t>(entropy());
+#endif
     }
 };
 
-class LinuxTeamCrypto final : public ::team::ITeamCrypto
+class LinuxTeamCrypto final : public ::platform::linux_runtime::TeamProtocolCrypto
 {
-  public:
-    bool deriveKey(const uint8_t* key, size_t key_len,
-                   const char* info,
-                   uint8_t* out, size_t out_len) override
-    {
-        if (key == nullptr || key_len == 0 || out == nullptr || out_len == 0)
-        {
-            return false;
-        }
-
-        uint32_t state = 2166136261u;
-        for (size_t i = 0; i < key_len; ++i)
-        {
-            state ^= key[i];
-            state *= 16777619u;
-        }
-        if (info)
-        {
-            for (const char* p = info; *p != '\0'; ++p)
-            {
-                state ^= static_cast<uint8_t>(*p);
-                state *= 16777619u;
-            }
-        }
-
-        for (size_t i = 0; i < out_len; ++i)
-        {
-            state ^= static_cast<uint32_t>(i + 1U);
-            state *= 16777619u;
-            out[i] = static_cast<uint8_t>((state >> ((i % 4U) * 8U)) & 0xFFU);
-        }
-        return true;
-    }
-
-    bool aeadEncrypt(const uint8_t* key, size_t key_len,
-                     const uint8_t* nonce, size_t nonce_len,
-                     const uint8_t* aad, size_t aad_len,
-                     const uint8_t* plain, size_t plain_len,
-                     std::vector<uint8_t>& out_cipher) override
-    {
-        return xorCipher(key, key_len, nonce, nonce_len, aad, aad_len, plain, plain_len, out_cipher);
-    }
-
-    bool aeadDecrypt(const uint8_t* key, size_t key_len,
-                     const uint8_t* nonce, size_t nonce_len,
-                     const uint8_t* aad, size_t aad_len,
-                     const uint8_t* cipher, size_t cipher_len,
-                     std::vector<uint8_t>& out_plain) override
-    {
-        return xorCipher(key, key_len, nonce, nonce_len, aad, aad_len, cipher, cipher_len, out_plain);
-    }
-
-  private:
-    static bool xorCipher(const uint8_t* key, size_t key_len,
-                          const uint8_t* nonce, size_t nonce_len,
-                          const uint8_t* aad, size_t aad_len,
-                          const uint8_t* input, size_t input_len,
-                          std::vector<uint8_t>& output)
-    {
-        if (key == nullptr || key_len == 0 || input == nullptr)
-        {
-            return false;
-        }
-
-        uint32_t state = 0x9E3779B9u;
-        for (size_t i = 0; i < key_len; ++i)
-        {
-            state = (state * 33u) ^ key[i];
-        }
-        for (size_t i = 0; i < nonce_len; ++i)
-        {
-            state = (state * 33u) ^ nonce[i];
-        }
-        for (size_t i = 0; i < aad_len; ++i)
-        {
-            state = (state * 33u) ^ aad[i];
-        }
-
-        output.resize(input_len);
-        for (size_t i = 0; i < input_len; ++i)
-        {
-            state = state * 1664525u + 1013904223u;
-            output[i] = static_cast<uint8_t>(input[i] ^ ((state >> 24U) & 0xFFU));
-        }
-        return true;
-    }
 };
 
 class LinuxChatEventBusBridge final : public ::chat::ChatService::IncomingMessageObserver
@@ -1586,11 +1511,28 @@ struct LinuxAppServices::Implementation
           pairing_event_sink(),
           pairing_transport(),
           pairing_service(team_runtime, pairing_event_sink, pairing_transport),
+          native_pairing_service(team_runtime, pairing_event_sink),
+          team_snapshot_store(::platform::linux_runtime::resolve_paths().settings_root / "team.snapshot"),
           track_source(),
           team_service(team_crypto, mesh_adapter, team_event_sink, team_runtime),
           team_controller(team_service),
+          team_presence(team_service, team_runtime),
           team_track_sampler(team_runtime, track_source)
     {
+        if (!demo_world_enabled)
+        {
+            ::team::ui::team_ui_set_snapshot_store(&team_snapshot_store);
+            ::team::ui::TeamUiSnapshot snapshot;
+            if (team_snapshot_store.load(snapshot) && snapshot.in_team && snapshot.has_team_id && snapshot.has_team_psk)
+                team_controller.setKeysFromPsk(snapshot.team_id, snapshot.security_round,
+                                               snapshot.team_psk.data(), snapshot.team_psk.size());
+        }
+    }
+
+    ~Implementation()
+    {
+        if (&::team::ui::team_ui_snapshot_store() == &team_snapshot_store)
+            ::team::ui::team_ui_set_snapshot_store(nullptr);
     }
 
     void ensureStarted(::chat::NodeId self_node_id)
@@ -1745,9 +1687,12 @@ struct LinuxAppServices::Implementation
     LinuxTeamPairingEventQueue pairing_event_sink;
     LinuxLoopbackTeamPairingTransport pairing_transport;
     LinuxLoopbackTeamPairingService pairing_service;
+    ::platform::linux_runtime::LinuxEspNowPairing native_pairing_service;
+    ::platform::linux_runtime::TeamSnapshotStore team_snapshot_store;
     LinuxGpsTrackSource track_source;
     ::team::TeamService team_service;
     ::team::TeamController team_controller;
+    ::platform::linux_runtime::LinuxTeamPresence team_presence;
     ::team::TeamTrackSampler team_track_sampler;
     bool started = false;
     bool demo_seeded = false;
@@ -2490,8 +2435,10 @@ const ::chat::IMeshAdapter* LinuxAppServices::getMeshAdapter() const
 
 ::team::TeamPairingService* LinuxAppServices::getTeamPairing()
 {
-    // This transport synthesizes peers; production Linux has no pairing bearer yet.
-    return impl().demo_world_enabled ? &impl().pairing_service : nullptr;
+    if (impl().demo_world_enabled) return &impl().pairing_service;
+    return ::platform::linux_runtime::LinuxEspNowPairing::available()
+               ? &impl().native_pairing_service
+               : nullptr;
 }
 
 ::team::TeamService* LinuxAppServices::teamService()
@@ -2628,6 +2575,13 @@ void LinuxAppServices::updateCoreServices()
 #endif
     ::team::ui::TeamUiSnapshot snap;
     const bool has_team = ::team::ui::team_ui_snapshot_store().load(snap) && snap.in_team;
+    if (!impl_->demo_world_enabled)
+    {
+        const auto capabilities = impl_->mesh_adapter.getCapabilities();
+        const bool ready = impl_->mesh_adapter.isReady() &&
+                           capabilities.supports_broadcast_appdata && capabilities.provides_appdata_sender;
+        impl_->team_presence.update(snap, getSelfNodeId(), ready);
+    }
     ::platform::ui::gps::tick_service();
     impl_->team_track_sampler.update(&impl_->team_controller, has_team);
     ::platform::ui::tracker::poll();
@@ -2657,6 +2611,10 @@ void LinuxAppServices::tickEventRuntime()
     if (impl_->demo_world_enabled)
     {
         impl_->pairing_service.update();
+    }
+    else
+    {
+        impl_->native_pairing_service.update();
     }
     ::sys::EventBus::publish(new ::sys::Event(::sys::EventType::SystemTick), 0);
 }

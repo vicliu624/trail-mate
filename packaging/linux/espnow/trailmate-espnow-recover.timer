@@ -1,0 +1,9 @@
+[Unit]
+Description=Independent and reboot-safe TrailMate Wi-Fi recovery deadline
+[Timer]
+OnBootSec=15s
+OnUnitActiveSec=15s
+AccuracySec=1s
+Unit=trailmate-espnow-recover.service
+[Install]
+WantedBy=timers.target

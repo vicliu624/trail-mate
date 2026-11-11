@@ -1,0 +1,8 @@
+[Unit]
+Description=Restore Wi-Fi after a bounded TrailMate ESP-NOW session
+After=NetworkManager.service
+Wants=NetworkManager.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/trailmate-espnow-guard recover
+TimeoutStartSec=100

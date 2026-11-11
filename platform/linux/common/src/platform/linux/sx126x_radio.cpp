@@ -515,7 +515,12 @@ bool Sx126xRadio::transmit(const std::uint8_t* data, std::size_t size)
                                      kIrqRxDone) &&
                clearIrqLocked(kIrqAll) && setRxLocked(kRxTimeoutInf);
     };
-    bool ok = setBufferBaseLocked(0x00, 0x00);
+    // The host mutex does not stop continuous RX. Leave RX before changing
+    // packet parameters or writing the shared FIFO, as RadioLib does before
+    // starting a transmit operation on this chip.
+    const std::uint8_t standby_mode = kStandbyRc;
+    bool ok = writeCommandLocked(kCmdSetStandby, &standby_mode, 1, true) &&
+              setBufferBaseLocked(0x00, 0x00);
     const std::uint8_t packet[6] = {
         static_cast<std::uint8_t>((lora_config_.preamble_len >> 8) & 0xFF),
         static_cast<std::uint8_t>(lora_config_.preamble_len & 0xFF),

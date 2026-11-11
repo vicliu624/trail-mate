@@ -1,0 +1,11 @@
+[Unit]
+Description=TrailMate ESP-NOW pairing control socket
+[Socket]
+ListenStream=/run/trailmate-espnow/control
+SocketUser=root
+SocketGroup=pi
+SocketMode=0660
+DirectoryMode=0755
+RemoveOnStop=yes
+[Install]
+WantedBy=sockets.target

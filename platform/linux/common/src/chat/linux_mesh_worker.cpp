@@ -5,6 +5,7 @@
 #include "chat/infra/reticulum/interface_policy.h"
 #include "chat/infra/reticulum/reticulum_wire.h"
 #include "chat/infra/voice/vmp_mqtt_transport.h"
+#include "chat/linux_appdata_channel_access.h"
 #include "chat/linux_mesh_mqtt_bridge.h"
 #include "chat/linux_raw_lora_mesh_adapter.h"
 #include "chat/linux_reticulum_ingress.h"
@@ -181,6 +182,7 @@ struct LinuxMeshWorker::Impl
         chat::NodeId peer = 0;
         chat::MessageId message = 0;
         uint32_t port = 0, number = 0;
+        uint32_t enqueued_ms = 0;
         bool ack = false, response = false;
         chat::MeshDiscoveryAction action = chat::MeshDiscoveryAction::ScanLocal;
         std::string text;
@@ -567,6 +569,8 @@ struct LinuxMeshWorker::Impl
                 if (identity.begin()) meshcore_id = identity.nodeId();
             }
             const auto seed = messageSeed();
+            uint32_t channel_random = seed;
+            AppDataChannelAccess appdata_access;
             power->activate(control && radio.hardwareCandidatePresent(), control && control->enabled(), radio.isOnline());
             {
                 std::lock_guard<std::mutex> lock(mutex);
@@ -1012,6 +1016,33 @@ struct LinuxMeshWorker::Impl
                     power->complete(power_work, control && control->enabled(), radio.isOnline(), applied, error);
                     continue;
                 }
+                const bool schedule_appdata = applied_protocol == chat::MeshProtocol::Meshtastic && !mqtt.active() && radio.isOnline();
+                if (schedule_appdata)
+                {
+                    bool pending_data;
+                    {
+                        std::lock_guard<std::mutex> lock(mutex);
+                        pending_data = std::any_of(commands.begin(), commands.end(), [](const Command& candidate)
+                                                   { return candidate.kind == Kind::Data; });
+                    }
+                    // Drain a completed receive and its due relay before making
+                    // the application-data contention decision.
+                    if (pending_data) engine->tick();
+                    channel_random ^= channel_random << 13;
+                    channel_random ^= channel_random >> 17;
+                    channel_random ^= channel_random << 5;
+                    const auto stats = radio.stats();
+                    appdata_access.observe(::sys::millis_now(), stats.rx_packets, stats.tx_packets,
+                                           stats.rx_crc_errors + stats.rx_header_errors + stats.rx_invalid_lengths,
+                                           radio.readRssi(), channel_random);
+                    if (pending_data) appdata_access.beginAttempt(::sys::millis_now(), channel_random);
+                }
+                const auto command_ready = [&](const Command& candidate)
+                {
+                    return candidate.kind != Kind::Data || candidate.protocol != chat::MeshProtocol::Meshtastic ||
+                           !schedule_appdata || appdata_access.mayTransmit(::sys::millis_now()) ||
+                           ::sys::millis_now() - candidate.enqueued_ms >= 30000;
+                };
                 Desired settings;
                 Command command;
                 IncomingCommit incoming_commit;
@@ -1020,7 +1051,7 @@ struct LinuxMeshWorker::Impl
                 {
                     std::unique_lock<std::mutex> lock(mutex);
                     wake.wait_for(lock, std::chrono::milliseconds(20), [&]
-                                  { return stopping || (configured && (dirty || !commands.empty() ||
+                                  { return stopping || (configured && (dirty || std::any_of(commands.begin(), commands.end(), command_ready) ||
                                                                        std::any_of(incoming_commits.begin(), incoming_commits.end(), [](const auto& item)
                                                                                    { return item.used; }))); });
                     if (stopping) break;
@@ -1058,10 +1089,10 @@ struct LinuxMeshWorker::Impl
                         *commit = {};
                         have_commit = incoming_commit.epoch == applied_receive_epoch;
                     }
-                    else if (!commands.empty())
+                    else if (const auto next = std::find_if(commands.begin(), commands.end(), command_ready); next != commands.end())
                     {
-                        command = std::move(commands.front());
-                        commands.pop_front();
+                        command = std::move(*next);
+                        commands.erase(next);
                         active_message = command.kind == Kind::Text || command.kind == Kind::ReticulumText ? command.message : 0;
                         call_inflight = command.kind == Kind::ReticulumCall;
                         active_protocol = command.protocol;
@@ -1070,6 +1101,9 @@ struct LinuxMeshWorker::Impl
                 }
                 if (apply)
                 {
+                    const auto modulation = chat::meshtastic::deriveRadioConfig(settings.config);
+                    if (apply_radio) appdata_access.reset(AppDataChannelAccess::guardForLoRa(modulation.bw_khz, modulation.sf,
+                                                                                             modulation.cr_denom, modulation.preamble_len));
                     logReticulumStage("configuration", "protocol=" + std::to_string(static_cast<int>(settings.protocol)) +
                                                            " radio=" + std::to_string(apply_radio) + " policy=" + std::to_string(static_cast<int>(settings.config.reticulum_interface_policy)) +
                                                            " gateway=" + std::to_string(settings.config.reticulum_wifi_gateway_enabled) + " generation=" + std::to_string(applied_epoch));
@@ -1174,7 +1208,23 @@ struct LinuxMeshWorker::Impl
                         if (pending_texts.size() >= 8) result({command.message, chat::MeshProtocol::Reticulum, chat::MessageStatus::Failed, Failure::Unknown});
                         else pending_texts.push_back({std::move(command), ::sys::millis_now()});
                     }
+                    else if (command.kind == Kind::Data && schedule_appdata &&
+                             ::sys::millis_now() - command.enqueued_ms >= 30000 &&
+                             !appdata_access.mayTransmit(::sys::millis_now()))
+                    {
+                        {
+                            std::lock_guard<std::mutex> lock(mutex);
+                            if (generation == command.generation) action_error = "Application data expired while the radio channel was busy";
+                        }
+                        platform::linux_runtime::PacketLogEntry entry;
+                        entry.source = platform::linux_runtime::PacketLogSource::Lora;
+                        entry.direction = platform::linux_runtime::PacketLogDirection::System;
+                        entry.title = "Meshtastic queued TX expired";
+                        entry.summary = "Application data was not transmitted: channel stayed busy for 30 seconds.";
+                        platform::linux_runtime::append_packet_log(std::move(entry));
+                    }
                     else execute(*engine, command);
+                    if (command.kind == Kind::Data) appdata_access.completeAttempt();
                 }
                 if (have_commit)
                 {
@@ -1854,6 +1904,7 @@ bool LinuxMeshWorker::sendAppData(chat::ChannelId channel, uint32_t port, const 
     if (!impl_->desired.config.tx_enabled) return false;
     Impl::Command command;
     command.kind = Impl::Kind::Data;
+    command.enqueued_ms = ::sys::millis_now();
     command.channel = channel;
     command.port = port;
     command.peer = peer;

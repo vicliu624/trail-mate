@@ -1266,6 +1266,13 @@ void LinuxRawLoraMeshAdapter::tick()
                       "Linux LoRa packet received."));
         if (raw_packets_.size() >= 64) raw_packets_.pop_front();
         raw_packets_.push_back(packet);
+        if (meshtastic && config_.enable_relay)
+        {
+            const auto plan = build_meshtastic_air_plan(config_);
+            meshtastic_repeater_.receive(self_node_id_, packet, plan.primary_channel_hash,
+                                         plan.secondary_psk_len ? plan.secondary_channel_hash : plan.primary_channel_hash,
+                                         retry_clock_(), random_packet_id_seed());
+        }
         if (active_protocol_ == ::chat::MeshProtocol::MeshCore)
         {
             if (meshcore_identity_.ready() &&
@@ -1303,6 +1310,20 @@ void LinuxRawLoraMeshAdapter::tick()
              (!meshcore_discovery_.listening(now) && meshcore_repeater_.take(now, response))) &&
             !transmitMeshCoreFrame(response.bytes.data(), response.size))
             append_lora_system_log("MeshCore scheduled response failed", radio_.lastError());
+    }
+    if (active_protocol_ == ::chat::MeshProtocol::Meshtastic && config_.enable_relay && tx_enabled_ && radio_.isOnline())
+    {
+        meshtastic_wire::Repeater::Frame frame;
+        if (meshtastic_repeater_.take(retry_clock_(), frame))
+        {
+            const bool sent = transmitMeshtasticFrame(frame.bytes.data(), frame.size);
+            meshtastic_repeater_.complete(frame, retry_clock_(), sent);
+            if (sent)
+                ::platform::linux_runtime::append_packet_log(make_meshtastic_wire_log(
+                    ::platform::linux_runtime::PacketLogDirection::Tx, frame.bytes.data(), frame.size,
+                    "Meshtastic relay TX", "Forwarded RF packet; origin and encrypted payload preserved."));
+            else append_lora_system_log("Meshtastic relay TX deferred", radio_.lastError());
+        }
     }
     logRadioStatsChanges();
     logRxMonitorHeartbeat();
@@ -2448,6 +2469,14 @@ void LinuxRawLoraMeshAdapter::applyProtocolConfig(
                                old_radio.sf != new_radio.sf || old_radio.cr != new_radio.cr ||
                                old_radio.sync_word != new_radio.sync_word || old_radio.preamble_len != new_radio.preamble_len ||
                                old_radio.crc_len != new_radio.crc_len || old_radio.tx_power_dbm != new_radio.tx_power_dbm;
+    if (radio_changed || config.enable_relay != config_.enable_relay ||
+        config.primary_channel_id != config_.primary_channel_id || config.secondary_channel_id != config_.secondary_channel_id ||
+        config.primary_key_len != config_.primary_key_len || config.secondary_key_len != config_.secondary_key_len ||
+        std::memcmp(config.primary_channel_name, config_.primary_channel_name, sizeof(config.primary_channel_name)) ||
+        std::memcmp(config.secondary_channel_name, config_.secondary_channel_name, sizeof(config.secondary_channel_name)) ||
+        std::memcmp(config.primary_key, config_.primary_key, sizeof(config.primary_key)) ||
+        std::memcmp(config.secondary_key, config_.secondary_key, sizeof(config.secondary_key)))
+        meshtastic_repeater_.reset();
     const bool relay_changed = config.meshcore_client_repeat != config_.meshcore_client_repeat ||
                                config.meshcore_forward_profile != config_.meshcore_forward_profile ||
                                config.meshcore_flood_max != config_.meshcore_flood_max ||
@@ -2457,6 +2486,8 @@ void LinuxRawLoraMeshAdapter::applyProtocolConfig(
     if (radio_changed || relay_changed) meshcore_repeater_.reset();
     if (protocol != active_protocol_)
     {
+        meshtastic_delivered_ = {};
+        meshtastic_delivered_cursor_ = 0;
         // Resolve old-protocol radio results before the caller changes its active protocol.
         for (const auto& result : pending_results_)
             publishSendResult(result.msg_id, active_protocol_,
@@ -4247,11 +4278,23 @@ bool LinuxRawLoraMeshAdapter::parseMeshtasticPacket(
     return consumeMeshtasticData(header, decoded, packet, channel, rx_meta, encrypted, psk, psk_len);
 }
 
+bool LinuxRawLoraMeshAdapter::rememberMeshtasticDelivery(const ::chat::meshtastic::PacketHeaderWire& header)
+{
+    const uint32_t now = retry_clock_();
+    for (const auto& seen : meshtastic_delivered_)
+        if (seen.valid && now - seen.received < 300000 && seen.from == header.from &&
+            seen.id == header.id && seen.channel == header.channel) return false;
+    meshtastic_delivered_[meshtastic_delivered_cursor_] = {header.from, header.id, now, header.channel, true};
+    meshtastic_delivered_cursor_ = (meshtastic_delivered_cursor_ + 1) % meshtastic_delivered_.size();
+    return true;
+}
+
 bool LinuxRawLoraMeshAdapter::consumeMeshtasticData(
     const ::chat::meshtastic::PacketHeaderWire& header, const meshtastic_Data& decoded,
     const ::platform::linux_runtime::RadioPacket& packet, ::chat::ChannelId channel,
     const ::chat::RxMeta& rx_meta, bool encrypted, const uint8_t* psk, size_t psk_len)
 {
+    if (header.from == self_node_id_ || (header.to != kBroadcastNodeId && header.to != self_node_id_)) return true;
     const auto channel_index = static_cast<std::uint8_t>(channel);
     const bool via_mqtt_packet =
         (header.flags & ::chat::meshtastic::PACKET_FLAGS_VIA_MQTT_MASK) != 0;
@@ -4270,6 +4313,10 @@ bool LinuxRawLoraMeshAdapter::consumeMeshtasticData(
                              psk,
                              psk_len);
     }
+
+    // ACKs must still be sent for reliable retransmissions, while a direct RF
+    // copy, a neighbor's relay, and MQTT must deliver only one application event.
+    if (!rememberMeshtasticDelivery(header)) return true;
 
     if (decoded.portnum == meshtastic_PortNum_TEXT_MESSAGE_APP ||
         decoded.portnum == meshtastic_PortNum_TEXT_MESSAGE_COMPRESSED_APP)

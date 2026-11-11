@@ -4019,71 +4019,9 @@ static void refresh_node_card_ui()
     if (created) contacts_input_on_ui_refreshed();
 }
 
-void refresh_ui()
+static void refresh_filter_availability()
 {
-    if (g_contacts_state.list_panel == nullptr)
-    {
-        return;
-    }
-    if (s_refreshing_ui)
-    {
-        return;
-    }
-    s_refreshing_ui = true;
-    if (uses_node_card())
-    {
-        refresh_node_card_ui();
-        s_refreshing_ui = false;
-        return;
-    }
-    if (g_contacts_state.node_card)
-    {
-        lv_obj_clean(g_contacts_state.list_panel);
-        g_contacts_state.node_card = nullptr;
-        g_contacts_state.sub_container = g_contacts_state.bottom_container = nullptr;
-        g_contacts_state.prev_btn = g_contacts_state.next_btn = g_contacts_state.back_btn = nullptr;
-        g_contacts_state.list_items.clear();
-        g_contacts_state.card_context_valid = false;
-        refresh_contacts_data();
-    }
-
-    lv_obj_t* active = lv_screen_active();
-    if (!active)
-    {
-        CONTACTS_LOG("[Contacts] WARNING: lv_screen_active() is null\n");
-    }
-    else
-    {
-        CONTACTS_LOG("[Contacts] refresh_ui: active=%p root=%p list_panel=%p\n",
-                     active, g_contacts_state.root, g_contacts_state.list_panel);
-    }
-    if (g_contacts_state.root && !lv_obj_is_valid(g_contacts_state.root))
-    {
-        CONTACTS_LOG("[Contacts] WARNING: root is invalid\n");
-    }
-    if (g_contacts_state.list_panel && !lv_obj_is_valid(g_contacts_state.list_panel))
-    {
-        CONTACTS_LOG("[Contacts] WARNING: list_panel is invalid\n");
-    }
-
-    const bool same_render_context =
-        g_contacts_state.rendered_mode_valid &&
-        g_contacts_state.rendered_mode == g_contacts_state.current_mode &&
-        std::strcmp(g_contacts_state.rendered_search_query,
-                    g_contacts_state.search_query) == 0;
-    const int saved_scroll_y =
-        same_render_context && g_contacts_state.sub_container &&
-                lv_obj_is_valid(g_contacts_state.sub_container)
-            ? lv_obj_get_scroll_y(g_contacts_state.sub_container)
-            : 0;
-
-    lv_obj_clear_flag(g_contacts_state.list_panel, LV_OBJ_FLAG_SCROLLABLE);
-    if (g_contacts_state.sub_container)
-    {
-        lv_obj_clear_flag(g_contacts_state.sub_container, LV_OBJ_FLAG_SCROLLABLE);
-    }
-
-    bool team_available = is_team_available() && chat_support::supports_team_chat();
+    const bool team_available = is_team_available() && chat_support::supports_team_chat();
     const bool reticulum_profile = uses_reticulum_filter_profile();
     const bool meshcore_mode = uses_meshcore_filter_profile();
     if (g_contacts_state.team_btn)
@@ -4137,6 +4075,73 @@ void refresh_ui()
         g_contacts_state.current_mode = ContactsMode::Contacts;
         g_contacts_state.current_page = 0;
         g_contacts_state.selected_index = -1;
+    }
+}
+
+void refresh_ui()
+{
+    if (g_contacts_state.list_panel == nullptr)
+    {
+        return;
+    }
+    if (s_refreshing_ui)
+    {
+        return;
+    }
+    s_refreshing_ui = true;
+    // Filters belong to the page, including when its content is a node card.
+    refresh_filter_availability();
+    if (uses_node_card())
+    {
+        refresh_node_card_ui();
+        s_refreshing_ui = false;
+        return;
+    }
+    if (g_contacts_state.node_card)
+    {
+        lv_obj_clean(g_contacts_state.list_panel);
+        g_contacts_state.node_card = nullptr;
+        g_contacts_state.sub_container = g_contacts_state.bottom_container = nullptr;
+        g_contacts_state.prev_btn = g_contacts_state.next_btn = g_contacts_state.back_btn = nullptr;
+        g_contacts_state.list_items.clear();
+        g_contacts_state.card_context_valid = false;
+        refresh_contacts_data();
+    }
+
+    lv_obj_t* active = lv_screen_active();
+    if (!active)
+    {
+        CONTACTS_LOG("[Contacts] WARNING: lv_screen_active() is null\n");
+    }
+    else
+    {
+        CONTACTS_LOG("[Contacts] refresh_ui: active=%p root=%p list_panel=%p\n",
+                     active, g_contacts_state.root, g_contacts_state.list_panel);
+    }
+    if (g_contacts_state.root && !lv_obj_is_valid(g_contacts_state.root))
+    {
+        CONTACTS_LOG("[Contacts] WARNING: root is invalid\n");
+    }
+    if (g_contacts_state.list_panel && !lv_obj_is_valid(g_contacts_state.list_panel))
+    {
+        CONTACTS_LOG("[Contacts] WARNING: list_panel is invalid\n");
+    }
+
+    const bool same_render_context =
+        g_contacts_state.rendered_mode_valid &&
+        g_contacts_state.rendered_mode == g_contacts_state.current_mode &&
+        std::strcmp(g_contacts_state.rendered_search_query,
+                    g_contacts_state.search_query) == 0;
+    const int saved_scroll_y =
+        same_render_context && g_contacts_state.sub_container &&
+                lv_obj_is_valid(g_contacts_state.sub_container)
+            ? lv_obj_get_scroll_y(g_contacts_state.sub_container)
+            : 0;
+
+    lv_obj_clear_flag(g_contacts_state.list_panel, LV_OBJ_FLAG_SCROLLABLE);
+    if (g_contacts_state.sub_container)
+    {
+        lv_obj_clear_flag(g_contacts_state.sub_container, LV_OBJ_FLAG_SCROLLABLE);
     }
 
     // Ensure list containers exist (structure handled in layout)

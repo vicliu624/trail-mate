@@ -1,0 +1,11 @@
+[Unit]
+Description=TrailMate bounded ESP-NOW radio session
+Requires=trailmate-espnow-recover.timer
+After=NetworkManager.service trailmate-espnow-recover.timer
+[Service]
+Type=exec
+ExecStart=/usr/bin/python3 /usr/local/libexec/trailmate-espnow/linux_espnow_helper.py
+RuntimeMaxSec=165
+TimeoutStopSec=2
+KillMode=control-group
+UMask=0077

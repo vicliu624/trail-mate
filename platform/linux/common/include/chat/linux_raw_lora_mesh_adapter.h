@@ -21,6 +21,7 @@
 #include "chat/linux_meshcore_discovery.h"
 #include "chat/linux_meshcore_repeater.h"
 #include "chat/linux_meshcore_verification.h"
+#include "chat/linux_meshtastic_repeater.h"
 #include "chat/ports/i_mesh_adapter.h"
 #include "meshtastic/mesh.pb.h"
 #include "platform/linux/identity_owner_lease.h"
@@ -324,6 +325,16 @@ class LinuxRawLoraMeshAdapter final : public ::chat::IMeshAdapter
     std::array<std::uint8_t, 32> kv_hash1_{};
     std::array<std::uint8_t, 32> kv_hash2_{};
     bool started_ = false;
+    meshtastic_wire::Repeater meshtastic_repeater_;
+    struct SeenMeshtasticPacket
+    {
+        uint32_t from = 0, id = 0, received = 0;
+        uint8_t channel = 0;
+        bool valid = false;
+    };
+    std::array<SeenMeshtasticPacket, 100> meshtastic_delivered_{};
+    size_t meshtastic_delivered_cursor_ = 0;
+    bool rememberMeshtasticDelivery(const ::chat::meshtastic::PacketHeaderWire&);
     bool pki_initialized_ = false;
     bool tx_enabled_ = true;
     std::string long_name_{};

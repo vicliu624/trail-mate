@@ -343,7 +343,16 @@ bool team_ui_posring_load_latest(const TeamId& team_id, std::vector<TeamPosSampl
         return false;
     }
 
-    out.assign(it->second.begin(), it->second.end());
+    // Match the ESP position-ring contract: one newest sample per member.
+    // The bounded ring is history; its oldest entry must not become the map's
+    // selected current location after a newer RF update arrives.
+    for (const auto& sample : it->second)
+    {
+        auto member = std::find_if(out.begin(), out.end(), [&](const TeamPosSample& value)
+                                   { return value.member_id == sample.member_id; });
+        if (member == out.end()) out.push_back(sample);
+        else if (sample.ts > member->ts) *member = sample;
+    }
     return !out.empty();
 }
 

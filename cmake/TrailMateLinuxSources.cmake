@@ -132,6 +132,12 @@ _trailmate_set_linux_paths()
 # ---------------------------------------------------------------------------
 
 set(TRAIL_MATE_LINUX_COMMON_SOURCES
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_meshtastic_repeater.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/team_espnow_pairing.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/team_presence.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/team_protocol_crypto.cpp"
+    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/team_snapshot_store.cpp"
+    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/team_persistence/team_ui_snapshot_codec.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/ui/wifi_profile_store.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/core_sys/src/platform/audio/audio_focus.cpp"
     "${TRAIL_MATE_REPO_ROOT}/modules/core_agenda/src/event_codec.cpp"
@@ -548,7 +554,6 @@ set(TRAIL_MATE_LINUX_UI_SHELL_SOURCES
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/presentation_sources/team_chat_action_sink.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/team_actions/team_action_runtime_sink.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/team_actions/team_runtime_adapters.cpp"
-    "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/team_persistence/team_ui_snapshot_codec.cpp"
     "${TRAIL_MATE_UI_MAP_RUNTIME_SRC_ROOT}/map_overlay_projection_adapter.cpp"
     "${TRAIL_MATE_UI_MAP_RUNTIME_SRC_ROOT}/map_overlay_snapshot_source.cpp"
     "${TRAIL_MATE_UI_MAP_RUNTIME_SRC_ROOT}/map_overlay/map_overlay_projector.cpp"

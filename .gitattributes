@@ -39,6 +39,9 @@ platformio.ini text eol=lf
 
 # Scripts
 *.sh text eol=lf
+packaging/linux/espnow/*.service text eol=lf
+packaging/linux/espnow/*.socket text eol=lf
+packaging/linux/espnow/*.timer text eol=lf
 apps/linux_cardputer_zero/packaging/trailmate-cardputer-zero-applaunch text eol=lf
 apps/linux_cardputer_zero/packaging/postinst text eol=lf
 apps/linux_cardputer_zero/packaging/*.rules text eol=lf
