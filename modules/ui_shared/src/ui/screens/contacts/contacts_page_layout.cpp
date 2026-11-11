@@ -218,29 +218,13 @@ void ensure_list_subcontainers()
 
         style::apply_container_white(g_contacts_state.sub_container);
 
-        // Let sub_container consume remaining height so bottom_container can sit below it.
+        // Page actions live in the root footer; rows use the whole viewport.
         lv_obj_set_width(g_contacts_state.sub_container, LV_PCT(100));
         lv_obj_set_height(g_contacts_state.sub_container, 0);
         lv_obj_set_flex_grow(g_contacts_state.sub_container, 1);
 
         lv_obj_set_flex_flow(g_contacts_state.sub_container, LV_FLEX_FLOW_COLUMN);
         lv_obj_set_style_pad_row(g_contacts_state.sub_container, is_dense_profile() ? 1 : 2, LV_PART_MAIN);
-    }
-
-    if (g_contacts_state.bottom_container == nullptr)
-    {
-        g_contacts_state.bottom_container = lv_obj_create(g_contacts_state.list_panel);
-        ::ui::components::two_pane_layout::make_non_scrollable(g_contacts_state.bottom_container);
-
-        style::apply_container_white(g_contacts_state.bottom_container);
-
-        lv_obj_set_size(g_contacts_state.bottom_container, LV_PCT(100), LV_SIZE_CONTENT);
-        lv_obj_set_flex_flow(g_contacts_state.bottom_container, LV_FLEX_FLOW_ROW);
-        lv_obj_set_style_pad_column(g_contacts_state.bottom_container, 2, LV_PART_MAIN);
-        lv_obj_set_flex_align(g_contacts_state.bottom_container,
-                              LV_FLEX_ALIGN_SPACE_EVENLY,
-                              LV_FLEX_ALIGN_CENTER,
-                              LV_FLEX_ALIGN_CENTER);
     }
 }
 

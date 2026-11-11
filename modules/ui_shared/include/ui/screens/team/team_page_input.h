@@ -18,6 +18,7 @@ namespace ui
 struct TeamPageInputContext
 {
     lv_obj_t* root = nullptr;
+    lv_obj_t* body = nullptr;
     ::ui::widgets::TopBar* top_bar = nullptr;
     std::vector<lv_obj_t*>* focusables = nullptr;
     lv_obj_t** default_focus = nullptr;

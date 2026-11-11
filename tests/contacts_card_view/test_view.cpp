@@ -42,7 +42,7 @@ int main()
     lv_init();
     for (const int width : {320, 480})
     {
-        const int height = width == 320 ? 240 : 222;
+        const int height = width == 320 ? 170 : 222;
         auto* display = lv_display_create(width, height);
         lv_display_set_color_format(display, LV_COLOR_FORMAT_RGB565);
         std::vector<uint16_t> pixels(width * height);
@@ -51,12 +51,18 @@ int main()
                                 { lv_display_flush_ready(d); });
         auto* parent = lv_obj_create(lv_screen_active());
         lv_obj_remove_style_all(parent);
-        lv_obj_set_pos(parent, 100, 26);
-        lv_obj_set_size(parent, width - 104, height - 52);
+        lv_obj_set_pos(parent, 0, 24);
+        lv_obj_set_size(parent, width, height - 48);
         lv_obj_set_flex_flow(parent, LV_FLEX_FLOW_COLUMN);
+        auto* footer = lv_obj_create(lv_screen_active());
+        lv_obj_remove_style_all(footer);
+        lv_obj_set_pos(footer, 0, height - 24);
+        lv_obj_set_size(footer, width, 24);
+        lv_obj_set_flex_flow(footer, LV_FLEX_FLOW_ROW);
         const auto view = contacts::ui::card_view::create(parent, &lv_font_montserrat_14,
-                                                          &lv_font_montserrat_12, &lv_font_montserrat_16);
+                                                          &lv_font_montserrat_12, &lv_font_montserrat_16, footer);
         const size_t count = objects(parent);
+        const size_t footer_count = objects(footer);
         int clicks = 0;
         lv_obj_add_event_cb(
             view.next, [](lv_event_t* event)
@@ -72,7 +78,15 @@ int main()
             lv_label_set_text(view.counter, "1 / 1000");
             lv_obj_update_layout(parent);
             assert(objects(parent) == count);
+            assert(objects(footer) == footer_count);
             check_geometry(view.root, parent);
+            lv_area_t name{}, identity{};
+            lv_obj_get_coords(view.name, &name);
+            lv_obj_get_coords(view.identity, &identity);
+            assert(name.y1 == identity.y1 || name.y2 == identity.y2 ||
+                   (name.y1 < identity.y2 && identity.y1 < name.y2));
+            assert(name.x2 < identity.x1);
+            assert(lv_obj_get_parent(view.previous) == footer && lv_obj_get_parent(view.details) == footer);
         }
         lv_obj_send_event(view.next, LV_EVENT_CLICKED, nullptr);
         assert(clicks == 1);
@@ -100,6 +114,7 @@ int main()
                     static_cast<unsigned>(count - 1), static_cast<unsigned>(monitor.total_size - monitor.free_size),
                     static_cast<unsigned>(monitor.free_biggest_size));
         lv_obj_delete(parent);
+        lv_obj_delete(footer);
         for (const int nodes : {10, 100, 1000})
         {
             auto* baseline = lv_obj_create(lv_screen_active());

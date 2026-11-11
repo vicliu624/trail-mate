@@ -64,12 +64,13 @@ struct ContactsPageState
     // Main list column
     lv_obj_t* list_panel = nullptr;
     lv_obj_t* sub_container = nullptr;    // Scrollable list content container
-    lv_obj_t* bottom_container = nullptr; // Auxiliary bottom row for non-scroll modes
+    lv_obj_t* bottom_container = nullptr; // Shared page footer, including Menu
     std::vector<lv_obj_t*> list_items;    // Currently visible list rows
     lv_obj_t* empty_label = nullptr;      // Non-focusable empty/search result hint
     lv_obj_t* prev_btn = nullptr;         // Optional pager button
     lv_obj_t* next_btn = nullptr;         // Optional pager button
     lv_obj_t* back_btn = nullptr;         // Bottom-row back button for non-scroll modes
+    lv_obj_t* card_details_btn = nullptr; // Node-card action in the shared footer
 
     // Current state
     ContactsMode current_mode = ContactsMode::Contacts;

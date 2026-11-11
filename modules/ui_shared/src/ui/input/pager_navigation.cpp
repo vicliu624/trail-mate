@@ -138,7 +138,13 @@ void show_help(PageHelp& page, lv_group_t* group)
     }
 #endif
     if (id && !std::strcmp(id, "walkie_talkie")) platform::ui::walkie::set_ptt(false);
-    if (simple_navigation(id)) rows[count++] = {"Up/Down", "W/S", "Previous / next control"};
+    if (simple_navigation(id) && std::strcmp(id, "team")) rows[count++] = {"Up/Down", "W/S", "Previous / next control"};
+    if (id && !std::strcmp(id, "team"))
+    {
+        rows[count++] = {"Up/Down", "W/S", "Scroll overflowing Team content; Tab selects actions"};
+        rows[count++] = {"Role badge", LV_SYMBOL_LIST, "Member role / member count"};
+        rows[count++] = {LV_SYMBOL_EYE_OPEN, LV_SYMBOL_REFRESH, "Last received / last Team update"};
+    }
     const char* title = page.title ? lv_label_get_text(page.title) : "";
     const bool creator = std::strncmp(title, ui::i18n::tr("Make TMAP"), std::strlen(ui::i18n::tr("Make TMAP"))) == 0;
     if (id && !std::strcmp(id, "oneseg_tv"))

@@ -1,4 +1,5 @@
 #include "platform/esp/arduino_common/team/runtime/team_runtime_arduino.h"
+#include "sys/clock.h"
 
 #include <Arduino.h>
 
@@ -12,7 +13,8 @@ uint32_t TeamRuntimeArduino::nowMillis()
 
 uint32_t TeamRuntimeArduino::nowUnixSeconds()
 {
-    return millis() / 1000;
+    const uint32_t epoch_s = sys::epoch_seconds_now();
+    return epoch_s >= 1577836800U ? epoch_s : sys::uptime_seconds_now();
 }
 
 void TeamRuntimeArduino::fillRandomBytes(uint8_t* out, size_t len)

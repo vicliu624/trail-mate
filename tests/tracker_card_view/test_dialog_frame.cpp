@@ -8,6 +8,15 @@
 #include <vector>
 
 lv_group_t* app_g = nullptr;
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+// This fixture covers dialog geometry and focus. The Linux keyboard/modal
+// contracts link the real softkey implementation and exercise physical slots.
+namespace ui::input::cardputer::softkeys
+{
+void install_row(lv_obj_t*) {}
+void bind_button(lv_obj_t*, lv_obj_t*, int) {}
+} // namespace ui::input::cardputer::softkeys
+#endif
 namespace ui::input::pager
 {
 bool open_help(lv_obj_t*, lv_group_t*) { return false; }

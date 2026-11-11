@@ -20,9 +20,11 @@
 #include "team/protocol/team_position.h"
 #include "team/usecase/team_controller.h"
 #include "ui/app_runtime.h"
+#include "ui/components/bottom_bar.h"
 #include "ui/components/floating_search_box.h"
 #include "ui/components/info_card.h"
 #include "ui/components/shortcut_help_modal.h"
+#include "ui/input/cardputer_softkeys.h"
 #include "ui/localization.h"
 #include "ui/menu/menu_layout.h"
 #include "ui/page/page_profile.h"
@@ -70,9 +72,6 @@ namespace chat_support = chat::ui::support;
 namespace rtdir = ::platform::ui::reticulum_directory;
 
 static constexpr int kItemsPerPage = 4;
-static constexpr int kButtonHeight = 28;
-static constexpr int kBottomBtnMinWidth = 50;
-static constexpr int kBottomBtnPadH = 8;
 static constexpr intptr_t kBackListItemUserData = -2;
 static constexpr intptr_t kAddReticulumGroupUserData = -3;
 
@@ -88,11 +87,6 @@ static bool s_refreshing_ui = false;
 static lv_coord_t page_button_height()
 {
     return ::ui::page_profile::resolve_control_button_height();
-}
-
-static lv_coord_t page_button_min_width()
-{
-    return ::ui::page_profile::resolve_compact_button_min_width();
 }
 
 static lv_group_t* s_conv_group = nullptr;
@@ -353,29 +347,40 @@ static lv_obj_t* create_bottom_bar_button(lv_obj_t* parent,
                                           uint32_t bg_color,
                                           lv_event_cb_t cb)
 {
-    lv_obj_t* btn = lv_btn_create(parent);
-    lv_obj_set_height(btn, page_button_height());
-    lv_obj_set_style_pad_hor(btn, kBottomBtnPadH, LV_PART_MAIN);
-    contacts::ui::style::apply_btn_basic(btn);
-    lv_obj_set_style_bg_color(btn, lv_color_hex(bg_color), LV_PART_MAIN);
-
-    lv_obj_t* label = lv_label_create(btn);
+    (void)bg_color;
+    auto* button = lv_btn_create(parent);
+    auto* label = lv_label_create(button);
     ::ui::i18n::set_label_text(label, text);
-    apply_primary_text(label);
-    lv_obj_update_layout(label);
-    lv_coord_t width = lv_obj_get_width(label) + (kBottomBtnPadH * 2);
-    if (width < page_button_min_width())
-    {
-        width = page_button_min_width();
-    }
-    lv_obj_set_width(btn, width);
+    ::ui::components::bottom_bar::style_button(button);
+    lv_obj_set_style_pad_hor(button, 6, LV_PART_MAIN);
+    lv_obj_set_size(button, LV_SIZE_CONTENT, ::ui::components::bottom_bar::kButtonHeight);
     lv_obj_center(label);
+    if (cb) lv_obj_add_event_cb(button, cb, LV_EVENT_CLICKED, nullptr);
+    return button;
+}
 
-    if (cb)
+static void clear_footer_actions()
+{
+    auto& state = g_contacts_state;
+    for (auto** handle : {&state.prev_btn, &state.next_btn, &state.back_btn, &state.card_details_btn})
     {
-        lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, nullptr);
+        if (*handle && lv_obj_is_valid(*handle)) lv_obj_del(*handle);
+        *handle = nullptr;
     }
-    return btn;
+}
+
+static void arrange_footer_actions()
+{
+    auto& state = g_contacts_state;
+    int index = 0;
+    const int slots[] = {0, 1, 2, 3};
+    lv_obj_t* buttons[] = {state.prev_btn, state.next_btn, state.card_details_btn, state.back_btn};
+    for (unsigned i = 0; i < 4; ++i)
+    {
+        if (!buttons[i]) continue;
+        lv_obj_move_to_index(buttons[i], index++);
+        ::ui::input::cardputer::softkeys::bind_button(state.bottom_container, buttons[i], slots[i]);
+    }
 }
 
 void refresh_contacts_data()
@@ -3878,6 +3883,12 @@ static void on_card_actions(lv_event_t* event)
         on_list_item_clicked(event);
 }
 
+static void on_footer_back(lv_event_t*)
+{
+    if (g_contacts_state.top_bar.back_btn)
+        lv_obj_send_event(g_contacts_state.top_bar.back_btn, LV_EVENT_CLICKED, nullptr);
+}
+
 static void refresh_node_card_ui()
 {
     auto& state = g_contacts_state;
@@ -3886,14 +3897,15 @@ static void refresh_node_card_ui()
     const bool created = !state.node_card;
     if (created)
     {
+        clear_footer_actions();
         lv_obj_clean(state.list_panel);
         state.sub_container = nullptr;
-        state.bottom_container = nullptr;
         state.empty_label = nullptr;
         state.list_items.clear();
         state.prev_btn = state.next_btn = state.back_btn = nullptr;
         const auto view = card_view::create(state.list_panel, ::ui::page_profile::resolve_body_font(),
-                                            ::ui::page_profile::resolve_caption_font(), ::ui::page_profile::resolve_title_font());
+                                            ::ui::page_profile::resolve_caption_font(), ::ui::page_profile::resolve_title_font(),
+                                            state.bottom_container);
         auto* card = view.root;
         state.node_card = view.root;
         state.card_name = view.name;
@@ -3905,6 +3917,16 @@ static void refresh_node_card_ui()
         state.prev_btn = view.previous;
         state.next_btn = view.next;
         auto* details = view.details;
+        state.card_details_btn = details;
+        for (auto* button : {state.prev_btn, state.next_btn, details})
+        {
+            lv_obj_set_parent(button, state.bottom_container);
+            ::ui::components::bottom_bar::style_button(button);
+            lv_obj_set_size(button, 48, ::ui::components::bottom_bar::kButtonHeight);
+        }
+        lv_obj_set_height(lv_obj_get_parent(view.counter), LV_SIZE_CONTENT);
+        ::ui::i18n::set_label_text(lv_obj_get_child(state.prev_btn, 0), "Prev");
+        ::ui::i18n::set_label_text(lv_obj_get_child(state.next_btn, 0), "Next");
         ::ui::i18n::set_label_text(lv_obj_get_child(details, 0), "Info");
         lv_obj_set_user_data(card, nullptr);
         lv_obj_add_event_cb(card, on_card_actions, LV_EVENT_CLICKED, nullptr);
@@ -3914,7 +3936,10 @@ static void refresh_node_card_ui()
         lv_obj_add_event_cb(state.prev_btn, on_card_step, LV_EVENT_CLICKED, reinterpret_cast<void*>(-1));
         lv_obj_add_event_cb(state.next_btn, on_card_step, LV_EVENT_CLICKED, reinterpret_cast<void*>(1));
         lv_obj_add_event_cb(details, on_card_details, LV_EVENT_CLICKED, nullptr);
+        state.back_btn = create_bottom_bar_button(state.bottom_container, "Back", kColorPanelBg, on_footer_back);
+        bind_page_shortcuts(state.back_btn);
         state.list_items = {card, state.prev_btn, state.next_btn, details};
+        arrange_footer_actions();
     }
     char text[96]{};
     const auto& peer = state.card_peer;
@@ -4101,9 +4126,10 @@ void refresh_ui()
     }
     if (g_contacts_state.node_card)
     {
+        clear_footer_actions();
         lv_obj_clean(g_contacts_state.list_panel);
         g_contacts_state.node_card = nullptr;
-        g_contacts_state.sub_container = g_contacts_state.bottom_container = nullptr;
+        g_contacts_state.sub_container = nullptr;
         g_contacts_state.prev_btn = g_contacts_state.next_btn = g_contacts_state.back_btn = nullptr;
         g_contacts_state.list_items.clear();
         g_contacts_state.card_context_valid = false;
@@ -4252,11 +4278,6 @@ void refresh_ui()
         (g_contacts_state.current_mode == ContactsMode::Ignored) ||
         (g_contacts_state.current_mode == ContactsMode::Broadcast) ||
         (g_contacts_state.current_mode == ContactsMode::Discover);
-    const bool append_back_item = use_scroll_list && show_second_column_back();
-    if (append_back_item)
-    {
-        g_contacts_state.total_items += 1;
-    }
     int target_scroll_y = same_render_context ? saved_scroll_y : 0;
     if (target_scroll_y < 0)
     {
@@ -4380,21 +4401,6 @@ void refresh_ui()
         bind_page_shortcuts(item);
     }
 
-    if (append_back_item)
-    {
-        chat::contacts::PeerDirectoryItem back_node{};
-        back_node.display_name = ::ui::i18n::tr("Back");
-        lv_obj_t* back_item = contacts::ui::layout::create_list_item(
-            g_contacts_state.sub_container,
-            back_node,
-            g_contacts_state.current_mode,
-            "Return");
-        lv_obj_set_user_data(back_item, reinterpret_cast<void*>(kBackListItemUserData));
-        lv_obj_add_event_cb(back_item, on_list_item_clicked, LV_EVENT_CLICKED, nullptr);
-        lv_obj_add_event_cb(back_item, on_list_item_focused, LV_EVENT_FOCUSED, nullptr);
-        bind_page_shortcuts(back_item);
-    }
-
     // Create bottom buttons (create once; width follows label text)
     if (g_contacts_state.next_btn == nullptr)
     {
@@ -4438,17 +4444,12 @@ void refresh_ui()
         }
     }
 
-    if (g_contacts_state.bottom_container)
+    for (auto* button : {g_contacts_state.prev_btn, g_contacts_state.next_btn})
     {
-        if (use_scroll_list)
-        {
-            lv_obj_add_flag(g_contacts_state.bottom_container, LV_OBJ_FLAG_HIDDEN);
-        }
-        else
-        {
-            lv_obj_clear_flag(g_contacts_state.bottom_container, LV_OBJ_FLAG_HIDDEN);
-        }
+        if (use_scroll_list) lv_obj_add_flag(button, LV_OBJ_FLAG_HIDDEN);
+        else lv_obj_clear_flag(button, LV_OBJ_FLAG_HIDDEN);
     }
+    arrange_footer_actions();
 
     // Enable/disable buttons based on pagination (unchanged from original)
     if (!use_scroll_list && total_pages > 1)

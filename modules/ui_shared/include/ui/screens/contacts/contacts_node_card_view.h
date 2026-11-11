@@ -19,7 +19,7 @@ struct View
 };
 
 inline View create(lv_obj_t* parent, const lv_font_t* body, const lv_font_t* caption,
-                   const lv_font_t* heading)
+                   const lv_font_t* heading, lv_obj_t* action_bar = nullptr)
 {
     View view{};
     view.root = lv_obj_create(parent);
@@ -32,8 +32,8 @@ inline View create(lv_obj_t* parent, const lv_font_t* body, const lv_font_t* cap
     lv_obj_set_style_border_color(view.root, lv_color_hex(0xE7C98F), 0);
     lv_obj_set_style_border_width(view.root, 1, 0);
     lv_obj_set_style_radius(view.root, 10, 0);
-    lv_obj_set_style_pad_all(view.root, 5, 0);
-    lv_obj_set_style_pad_row(view.root, 4, 0);
+    lv_obj_set_style_pad_all(view.root, 3, 0);
+    lv_obj_set_style_pad_row(view.root, 2, 0);
     lv_obj_set_flex_flow(view.root, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(view.root, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
     auto label = [&](lv_obj_t* target, bool muted)
@@ -57,15 +57,22 @@ inline View create(lv_obj_t* parent, const lv_font_t* body, const lv_font_t* cap
         lv_obj_set_style_bg_color(result, lv_color_hex(background), 0);
         lv_obj_set_style_border_width(result, 0, 0);
         lv_obj_set_style_radius(result, 6, 0);
-        lv_obj_set_style_pad_all(result, 5, 0);
+        lv_obj_set_style_pad_all(result, 3, 0);
         lv_obj_set_style_pad_row(result, 2, 0);
         lv_obj_set_flex_flow(result, LV_FLEX_FLOW_COLUMN);
         return result;
     };
     auto* identity_section = section(0xF6E6C8);
-    lv_obj_set_height(identity_section, lv_font_get_line_height(body) + lv_font_get_line_height(caption) + 12);
+    lv_obj_set_height(identity_section, lv_font_get_line_height(body) + 6);
+    lv_obj_set_flex_flow(identity_section, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_column(identity_section, 4, 0);
+    lv_obj_set_flex_align(identity_section, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     view.name = label(identity_section, false);
+    lv_obj_set_width(view.name, 0);
+    lv_obj_set_flex_grow(view.name, 1);
     view.identity = label(identity_section, true);
+    lv_obj_set_width(view.identity, LV_PCT(38));
+    lv_obj_set_style_text_align(view.identity, LV_TEXT_ALIGN_RIGHT, 0);
     auto* location_section = section(0xE4EFEB);
     lv_obj_set_height(location_section, 0);
     lv_obj_set_flex_grow(location_section, 1);
@@ -81,12 +88,12 @@ inline View create(lv_obj_t* parent, const lv_font_t* body, const lv_font_t* cap
     lv_obj_set_style_bg_color(view.status, lv_color_hex(0xEEEDE7), 0);
     lv_obj_set_style_bg_opa(view.status, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(view.status, 4, 0);
-    lv_obj_set_style_pad_all(view.status, 4, 0);
+    lv_obj_set_style_pad_all(view.status, 2, 0);
     lv_obj_set_style_text_color(view.status, lv_color_hex(0x66675F), 0);
-    lv_obj_set_height(view.status, lv_font_get_line_height(caption) + 8);
+    lv_obj_set_height(view.status, lv_font_get_line_height(caption) + 4);
     auto* controls = lv_obj_create(view.root);
     lv_obj_set_width(controls, LV_PCT(100));
-    lv_obj_set_height(controls, 26);
+    lv_obj_set_height(controls, action_bar ? LV_SIZE_CONTENT : 26);
     lv_obj_clear_flag(controls, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_border_width(controls, 0, 0);
     lv_obj_set_style_bg_opa(controls, LV_OPA_TRANSP, 0);
@@ -95,7 +102,7 @@ inline View create(lv_obj_t* parent, const lv_font_t* body, const lv_font_t* cap
     lv_obj_set_flex_flow(controls, LV_FLEX_FLOW_ROW);
     auto button = [&](int width, const char* text)
     {
-        auto* result = lv_btn_create(controls);
+        auto* result = lv_btn_create(action_bar ? action_bar : controls);
         lv_obj_set_size(result, width, 24);
         lv_obj_set_style_bg_color(result, lv_color_hex(0xFAF0D8), 0);
         lv_obj_set_style_border_color(result, lv_color_hex(0xE7C98F), 0);

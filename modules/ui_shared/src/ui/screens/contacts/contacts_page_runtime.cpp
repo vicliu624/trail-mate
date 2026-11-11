@@ -1,4 +1,5 @@
 #include "ui/screens/contacts/contacts_page_runtime.h"
+#include "ui/components/bottom_bar.h"
 
 #include "app/app_config.h"
 #include "app/app_facade_access.h"
@@ -441,6 +442,7 @@ void enter(const shell::Host* host, lv_obj_t* parent)
 
     create_filter_panel(content);
     contacts::ui::layout::create_list_panel(content);
+    g_contacts_state.bottom_container = ::ui::components::bottom_bar::create(g_contacts_state.root);
 
     set_default_group(prev_group);
 

@@ -223,6 +223,7 @@ static Adapter make_adapter()
 {
     Adapter adapter{};
     adapter.filter_panel = contacts::ui::g_contacts_state.filter_panel;
+    adapter.bottom_bar = contacts::ui::g_contacts_state.bottom_container;
     adapter.build_info = ::ui::components::air_status_footer::populate_info;
     adapter.get_key_target = get_key_target;
     adapter.get_top_back_button = get_top_back_button;

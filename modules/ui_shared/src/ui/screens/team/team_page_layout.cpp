@@ -79,7 +79,7 @@ lv_obj_t* create_content(lv_obj_t* root)
 {
     const auto& profile = ::ui::page_profile::current();
     lv_obj_t* content = lv_obj_create(root);
-    lv_obj_set_size(content, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_size(content, LV_PCT(100), 0);
     lv_obj_set_flex_grow(content, 1);
     lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_left(content, profile.content_pad_left, 0);
@@ -95,8 +95,12 @@ lv_obj_t* create_body(lv_obj_t* content)
 {
     lv_obj_t* body = lv_obj_create(content);
     lv_obj_set_width(body, LV_PCT(100));
+    lv_obj_set_height(body, 0);
     lv_obj_set_flex_grow(body, 1);
     lv_obj_set_flex_flow(body, LV_FLEX_FLOW_COLUMN);
+    lv_obj_add_flag(body, LV_OBJ_FLAG_SCROLL_WITH_ARROW);
+    lv_obj_set_scroll_dir(body, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(body, LV_SCROLLBAR_MODE_AUTO);
     return body;
 }
 

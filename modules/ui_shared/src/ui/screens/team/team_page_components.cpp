@@ -151,6 +151,7 @@ TeamPageInputContext input_context_from_lvgl()
 {
     TeamPageInputContext context;
     context.root = team_page_lvgl_context().root;
+    context.body = team_page_lvgl_context().body;
     context.top_bar = &team_page_lvgl_context().top_bar_widget;
     context.focusables = &team_page_lvgl_context().focusables;
     context.default_focus = &team_page_lvgl_context().default_focus;

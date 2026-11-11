@@ -12,6 +12,17 @@ stable firmware release. Hardware support and validation remain target-specific.
 
 ### Fixed
 
+- Arduino Team receive timestamps use the shared Unix clock when available,
+  retaining uptime only while the clock is unset. Recently received members
+  no longer appear to have an unknown last-seen time on Pager.
+- Team screens keep their actions visible while overflowing content scrolls
+  with the keyboard or encoder. Compact summaries and two-column member cards
+  reduce vertical space; existing role, count and activity icons replace
+  repetitive labels.
+- Contacts places paging, information, back and menu actions in one footer.
+  Cardputer Zero keeps their physical 4–8 alignment and existing shortcuts.
+  Node names and identities share a single header row, leaving usable space
+  for location and reception information at 320×170.
 - Arduino, ESP-IDF and Linux UI lifecycles produce periodic system ticks
   through the same rate-limited publisher. ESP Team background dispatch now
   receives its missing clock input; Linux no longer queues a tick every loop.

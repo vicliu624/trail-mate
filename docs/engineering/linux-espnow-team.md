@@ -197,6 +197,29 @@ ready” result when no fix exists is distinct from a radio delivery failure.
 Independent application-resume timers must protect any exclusive-radio diagnostic
 that temporarily stops the normal app.
 
+## Team presentation and receive time
+
+`ITeamRuntime::nowUnixSeconds()` supplies the receiving observer's timestamp,
+not the sender's clock. Arduino uses the same `sys` epoch provider as Team
+presentation when it is valid, falling back to uptime while unset. Millisecond
+scheduling remains monotonic. A roster-only entry retains an unknown last-seen
+value until authenticated traffic from that member is received; a leader's
+full membership list does not prove every member is currently online.
+
+Team content has a bounded scrolling viewport above a fixed action row. When
+content overflows, keyboard focus starts in that viewport: arrows or W/S scroll
+it, while Tab moves to action controls. Focus changes restore ordinary control
+selection. Compact summaries and two-column member cards use the existing Team
+badge and list, eye and refresh glyphs; H explains their meaning. They require
+no additional emoji font or protocol state.
+
+Contacts shares one footer between node cards, lists and the filter menu. Zero
+uses Prev, Next, Info, Back and Menu in physical slots 4 through 8; unavailable
+actions do not change the remaining slots. Existing letter shortcuts remain.
+Switching display modes replaces only the content-specific action objects and
+preserves the menu owner. Node names and identities share a header row, and
+full text remains available in node information instead of expanding the card.
+
 ## Shared protocol ownership
 
 Linux is a useful test host for the protocol code that also runs on ESP32. The

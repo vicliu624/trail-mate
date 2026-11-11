@@ -42,3 +42,34 @@ endif()
 target_link_libraries(${dialog_target} PRIVATE ${LVGL_LIBRARY})
 add_test(NAME ${dialog_target} COMMAND ${dialog_target})
 endforeach()
+
+add_executable(team_viewport_contract test_team_viewport.cpp
+    ${REPO}/modules/ui_shared/src/ui/screens/team/team_page_layout.cpp
+    ${REPO}/modules/ui_shared/src/ui/screens/team/team_page_input.cpp)
+target_include_directories(team_viewport_contract PRIVATE
+    ${REPO}/modules/ui_shared/include ${REPO}/platform/linux/common/include
+    ${LVGL_DIR} ${REPO}/tests/contacts_card_view)
+target_compile_definitions(team_viewport_contract PRIVATE LV_CONF_INCLUDE_SIMPLE)
+target_link_libraries(team_viewport_contract PRIVATE ${LVGL_LIBRARY})
+add_test(NAME team_viewport_contract COMMAND team_viewport_contract)
+
+add_executable(team_runtime_clock_contract test_team_runtime_clock.cpp
+    ${REPO}/platform/esp/arduino_common/src/team/runtime/team_runtime_arduino.cpp
+    ${REPO}/modules/core_sys/src/sys/clock.cpp
+    ${REPO}/modules/ui_shared/src/ui/screens/team/team_page_read_model.cpp
+    ${REPO}/modules/ui_shared/src/ui/team_presence/team_presence_model.cpp)
+target_include_directories(team_runtime_clock_contract PRIVATE
+    stubs ${REPO}/modules/ui_shared/include ${REPO}/modules/core_sys/include
+    ${REPO}/modules/core_team/include ${REPO}/platform/esp/arduino_common/include)
+add_test(NAME team_runtime_clock_contract COMMAND team_runtime_clock_contract)
+foreach(team_contract team_viewport_contract team_runtime_clock_contract)
+    target_compile_options(${team_contract} PRIVATE -UNDEBUG)
+endforeach()
+
+add_executable(contacts_compact_card_contract ${REPO}/tests/contacts_card_view/test_view.cpp)
+target_include_directories(contacts_compact_card_contract PRIVATE
+    ${REPO}/modules/ui_shared/include ${LVGL_DIR} ${REPO}/tests/contacts_card_view)
+target_compile_definitions(contacts_compact_card_contract PRIVATE LV_CONF_INCLUDE_SIMPLE)
+target_compile_options(contacts_compact_card_contract PRIVATE -UNDEBUG)
+target_link_libraries(contacts_compact_card_contract PRIVATE ${LVGL_LIBRARY})
+add_test(NAME contacts_compact_card_contract COMMAND contacts_compact_card_contract)

@@ -33,7 +33,7 @@ void create_list_panel(lv_obj_t* parent);
 
 /**
  * Ensure the list subcontainers exist.
- * sub_container holds the list rows; bottom_container is used only when a mode still needs pager buttons.
+ * sub_container holds the list rows; page actions use the root footer.
  */
 void ensure_list_subcontainers();
 
