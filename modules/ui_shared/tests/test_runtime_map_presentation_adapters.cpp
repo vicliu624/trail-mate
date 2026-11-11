@@ -161,6 +161,16 @@ int main()
     assert(snapshot.team.visible_members == 2);
     assert(snapshot.team.stale_members == 1);
 
+    // The local alias is alive because this application is rendering it; its
+    // old persisted uptime must not count as a stale radio peer.
+    team::ui::TeamMemberUi self;
+    self.node_id = 0;
+    self.last_seen_s = 1;
+    team_store.snapshot.members.push_back(self);
+    assert(source.buildMapWorkspaceSnapshot(request, snapshot));
+    assert(snapshot.team.visible_members == 3);
+    assert(snapshot.team.stale_members == 1);
+
     state.has_viewport = false;
     state.last_viewport = {};
     gps.snapshot.fix_valid = false;

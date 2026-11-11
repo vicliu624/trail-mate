@@ -152,6 +152,33 @@ void testSnapshotInputProjection()
     assert(!input.waiting_new_keys);
 }
 
+void testRelativeTimesDoNotMixEpochWithProcessUptime()
+{
+    const team::ui::TeamPageReadModel uptime_model(1000);
+    assert(uptime_model.buildLastSeen(1794369005).kind ==
+           team::ui::TeamRelativeTimeKind::Unknown);
+    assert(uptime_model.buildLastUpdate(1794369005).kind ==
+           team::ui::TeamRelativeTimeKind::Unknown);
+
+    const team::ui::TeamPageReadModel epoch_model(1794382005);
+    const auto leader = epoch_model.buildLastSeen(1794369005);
+    assert(leader.kind == team::ui::TeamRelativeTimeKind::HoursAgo);
+    assert(leader.value == 3);
+    assert(epoch_model.buildLastSeen(30739).kind ==
+           team::ui::TeamRelativeTimeKind::Unknown);
+
+    auto input = makeInput();
+    input.members[0].node_id = 0;
+    input.members[0].name = "You";
+    input.members[0].last_seen_s = 30739;
+    input.selected_member_index = 0;
+    const auto self = epoch_model.buildSelectedMember(input);
+    assert(self.member.self);
+    assert(self.last_seen.kind == team::ui::TeamRelativeTimeKind::MinutesAgo);
+    assert(self.last_seen.value == 0);
+    assert(input.members[0].last_seen_s == 30739);
+}
+
 } // namespace
 
 int main()
@@ -161,5 +188,6 @@ int main()
     testMemberDetailProjection();
     testJoinPendingProjection();
     testSnapshotInputProjection();
+    testRelativeTimesDoNotMixEpochWithProcessUptime();
     return 0;
 }

@@ -45,6 +45,7 @@ void TeamPageDeferredDispatchQueue::clearKeyDist()
 void TeamPageDeferredDispatchQueue::clearStatusBroadcasts()
 {
     status_pending_.clear();
+    next_presence_s_ = 0;
 }
 
 void TeamPageDeferredDispatchQueue::enqueueKeyDist(uint32_t node_id,
@@ -93,6 +94,33 @@ void TeamPageDeferredDispatchQueue::scheduleStatusBroadcast(uint8_t repeats,
     item.next_send_s = now_s + delay_s;
     item.remaining = repeats;
     status_pending_.push_back(item);
+}
+
+bool TeamPageDeferredDispatchQueue::statusDue(
+    const TeamPageDeferredDispatchState& state,
+    uint32_t now_s) const
+{
+    if (!state.in_team || !state.has_team_id)
+    {
+        return next_presence_s_ != 0 || !status_pending_.empty();
+    }
+    if (!state.self_is_leader && !status_pending_.empty())
+    {
+        return true;
+    }
+    for (const auto& item : status_pending_)
+    {
+        if (static_cast<int32_t>(now_s - item.next_send_s) >= 0)
+        {
+            return true;
+        }
+    }
+    if (!state.has_team_psk || state.security_round == 0)
+    {
+        return next_presence_s_ != 0;
+    }
+    return next_presence_s_ == 0 ||
+           static_cast<int32_t>(now_s - next_presence_s_) >= 0;
 }
 
 TeamPageDeferredDispatchEffects
@@ -163,15 +191,14 @@ TeamPageDeferredDispatchQueue::processStatusBroadcasts(
     uint32_t now_s)
 {
     TeamPageDeferredDispatchEffects effects;
-    if (status_pending_.empty())
-    {
-        return effects;
-    }
-
-    if (!state.in_team || !state.has_team_id || !state.self_is_leader)
+    if (!state.in_team || !state.has_team_id)
     {
         clearStatusBroadcasts();
         return effects;
+    }
+    if (!state.self_is_leader)
+    {
+        status_pending_.clear();
     }
 
     if (!port.hasController())
@@ -181,7 +208,7 @@ TeamPageDeferredDispatchQueue::processStatusBroadcasts(
 
     for (auto it = status_pending_.begin(); it != status_pending_.end();)
     {
-        if (now_s < it->next_send_s)
+        if (static_cast<int32_t>(now_s - it->next_send_s) < 0)
         {
             ++it;
             continue;
@@ -195,6 +222,7 @@ TeamPageDeferredDispatchQueue::processStatusBroadcasts(
                 true));
         }
         effects.sent_status = true;
+        next_presence_s_ = now_s + 30U;
 
         if (!port.sendStatusPlain(status, chat::ChannelId::PRIMARY, 0))
         {
@@ -219,6 +247,39 @@ TeamPageDeferredDispatchQueue::processStatusBroadcasts(
             ++it;
         }
     }
+
+    // This schedule survives the finite enrollment retry queue. Only leaders
+    // advertise a full roster; members send an authenticated, roster-free
+    // presence. It needs one deadline and never allocates a periodic queue item.
+    if (!state.has_team_psk || state.security_round == 0)
+    {
+        next_presence_s_ = 0;
+        return effects;
+    }
+    if (next_presence_s_ == 0)
+    {
+        next_presence_s_ = now_s + 5U;
+        return effects;
+    }
+    if (static_cast<int32_t>(now_s - next_presence_s_) < 0)
+    {
+        return effects;
+    }
+    next_presence_s_ = now_s + 5U;
+    if (status.key_id != state.security_round ||
+        (!state.self_is_leader && status.has_members))
+    {
+        return effects;
+    }
+    const bool sent = port.sendStatus(status, chat::ChannelId::PRIMARY, 0);
+    effects.sent_status = sent;
+    if (sent)
+    {
+        next_presence_s_ = now_s + 30U;
+    }
+    // Background presence retries silently when the carrier is unavailable.
+    // It is not an explicit user send and must not open a failure notice on
+    // every retry or mutate membership/keys.
 
     return effects;
 }

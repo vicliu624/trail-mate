@@ -63,7 +63,8 @@ void projectTeamSummary(team::ui::ITeamUiSnapshotStore* store,
     for (const auto& member : snapshot.members)
     {
         ++out.visible_members;
-        if (!::ui::team_presence::isTeamMemberOnline(presenceNowForMember(member.last_seen_s),
+        if (member.node_id != 0 &&
+            !::ui::team_presence::isTeamMemberOnline(presenceNowForMember(member.last_seen_s),
                                                      member.last_seen_s))
         {
             ++out.stale_members;

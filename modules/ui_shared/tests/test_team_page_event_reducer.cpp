@@ -421,10 +421,29 @@ void testPairingCompletedAndFailedDrivePageEffects()
     assert(!failed_state.pending_join);
 }
 
+void testOwnRadioIdentityTouchesTheLocalAlias()
+{
+    auto reducer = makeReducer();
+    team::ui::TeamPageEventState state;
+    state.in_team = state.has_team_id = true;
+    state.team_id = testTeamId();
+    team::ui::TeamMemberUi self;
+    self.node_id = 0;
+    self.name = "You";
+    state.members.push_back(self);
+    auto context = makeEventContext();
+    context.from = 0x11111111;
+    assert(reducer.reduceActivity(state, context, context.from).accepted);
+    assert(state.members.size() == 1);
+    assert(state.members[0].node_id == 0 && state.members[0].name == "You");
+    assert(state.members[0].last_seen_s == context.timestamp);
+}
+
 } // namespace
 
 int main()
 {
+    testOwnRadioIdentityTouchesTheLocalAlias();
     testStatusRostersPreservePresenceAndLeader();
     testStatusFromOtherTeamIsIgnored();
     testActivityTouchesSenderAndConfirmsKeys();

@@ -109,9 +109,17 @@ drivers differ: CM0 uses LR2021; Zero uses the SX1262 CAP. SX1262 transmission
 enters checked standby before changing packet parameters or writing the shared
 RX/TX FIFO, then restores reception and reports errors.
 
-Presence sends authenticated status about every 30 seconds, with a per-node
-offset. Member presence touches the sender without replacing the authoritative
-leader roster. Protocol, region, actual frequency, modulation and channel keys
+The shared Team background dispatcher sends authenticated status every 30
+seconds after a successful enqueue, with a five-second startup/retry delay.
+This schedule continues after the finite enrollment broadcasts have drained and
+does not depend on keeping the Team page open. Leaders send their complete
+roster; members send presence without a roster, retaining the leader's list.
+Linux uses the same dispatcher rather than a second platform scheduler. A
+single 32-bit deadline is added to the dispatcher; periodic sends do not allocate
+queue entries. Existing finite enrollment retries retain their compatibility
+messages, while periodic presence is authenticated only.
+
+Protocol, region, actual frequency, modulation and channel keys
 must agree across participants. The live CN / LongFast exercises used
 478.875 MHz, BW 250 kHz, SF11, CR 4/5, sync 0x2B and a 16-symbol preamble.
 
@@ -135,6 +143,13 @@ events; reliable direct duplicates still receive routing ACKs.
 
 The position-ring reader projects the newest timestamp per member. An older
 relayed sample cannot replace a newer displayed location.
+
+Team relative-time presentation uses wall-clock seconds when available and
+does not subtract a process uptime from a Unix timestamp. A persisted timestamp
+from a different clock domain is shown as unknown. The local zero-ID alias is
+the running observer, not a stale RF peer; returned local radio identities map
+back to that same alias instead of adding another member. Snapshot reload also
+restores the encoded last-update timestamp.
 
 ## Verification
 

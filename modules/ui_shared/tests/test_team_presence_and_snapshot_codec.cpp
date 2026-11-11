@@ -167,6 +167,7 @@ void testSnapshotV2RoundTrip()
     assert(decoded.self_is_leader);
     assert(decoded.security_round == 9);
     assert(decoded.last_event_seq == 33);
+    assert(decoded.last_update_s == 1234);
     assert(decoded.team_chat_unread == 4);
     assert(decoded.members.size() == 2);
     assert(decoded.members[0].node_id == 0);

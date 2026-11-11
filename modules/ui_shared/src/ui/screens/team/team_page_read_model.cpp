@@ -9,6 +9,14 @@ namespace team
 {
 namespace ui
 {
+namespace
+{
+bool sameTimeDomain(uint32_t now_s, uint32_t observed_s)
+{
+    constexpr uint32_t kMinValidEpoch = 1577836800U;
+    return (now_s >= kMinValidEpoch) == (observed_s >= kMinValidEpoch);
+}
+} // namespace
 
 TeamPageReadModel::TeamPageReadModel(uint32_t now_s)
     : now_s_(now_s)
@@ -137,7 +145,7 @@ TeamMemberDetailView TeamPageReadModel::buildSelectedMember(
     const auto index = static_cast<std::size_t>(input.selected_member_index);
     detail.valid = true;
     detail.member = buildMemberRow(input.members[index], index);
-    detail.last_seen = buildLastSeen(input.members[index].last_seen_s);
+    detail.last_seen = detail.member.last_seen;
     detail.management_actions_enabled =
         input.has_team_psk &&
         input.has_team_id &&
@@ -149,7 +157,7 @@ TeamMemberDetailView TeamPageReadModel::buildSelectedMember(
 TeamRelativeTimeView TeamPageReadModel::buildLastSeen(uint32_t last_seen_s) const
 {
     TeamRelativeTimeView view;
-    if (last_seen_s == 0)
+    if (last_seen_s == 0 || !sameTimeDomain(now_s_, last_seen_s))
     {
         return view;
     }
@@ -176,7 +184,7 @@ TeamRelativeTimeView TeamPageReadModel::buildLastSeen(uint32_t last_seen_s) cons
 TeamRelativeTimeView TeamPageReadModel::buildLastUpdate(uint32_t last_update_s) const
 {
     TeamRelativeTimeView view;
-    if (last_update_s == 0)
+    if (last_update_s == 0 || !sameTimeDomain(now_s_, last_update_s))
     {
         return view;
     }
@@ -199,7 +207,9 @@ TeamMemberRowView TeamPageReadModel::buildMemberRow(
     row.name = member.node_id == 0
                    ? member.name
                    : ::ui::team_presentation::shortTeamMemberLabel(member.node_id);
-    row.last_seen = buildLastSeen(member.last_seen_s);
+    // The running observer is its own presence proof. A persisted local alias
+    // may still carry uptime from an earlier process or boot.
+    row.last_seen = buildLastSeen(row.self ? now_s_ : member.last_seen_s);
     row.leader = member.leader;
     row.color_index = member.color_index;
     return row;

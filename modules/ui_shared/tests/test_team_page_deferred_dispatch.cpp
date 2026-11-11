@@ -230,6 +230,76 @@ void testStatusBroadcastFailureAndInvalidLeaderState()
     assert(queue.statusBroadcastPendingCount() == 0);
 }
 
+void testPeriodicRosterRepairsMissedEnrollmentBroadcast()
+{
+    auto queue = makeQueue();
+    FakeDispatchPort port;
+    auto state = readyState();
+    team::proto::TeamStatus status;
+    status.key_id = state.security_round;
+    status.has_members = true;
+    status.leader_id = 0x11111111;
+    status.members = {0x11111111, 0x22222222, 0x33333333};
+
+    // No pairing event or queued retry: a restored leader still advertises its
+    // complete roster. A late receiver can miss every enrollment broadcast.
+    queue.processStatusBroadcasts(state, status, port, 100);
+    queue.processStatusBroadcasts(state, status, port, 101);
+    assert(port.status_send_count == 0);
+    auto effects = queue.processStatusBroadcasts(state, status, port, 105);
+    assert(effects.sent_status && port.status_send_count == 1);
+    assert(port.last_status.has_members && port.last_status.members == status.members);
+    assert(port.status_plain_send_count == 0);
+    assert(queue.statusBroadcastPendingCount() == 0);
+    for (uint32_t now = 106; now < 135; ++now)
+        queue.processStatusBroadcasts(state, status, port, now);
+    assert(port.status_send_count == 1);
+    queue.processStatusBroadcasts(state, status, port, 135);
+    assert(port.status_send_count == 2);
+
+    // A failed carrier retries on a bounded delay, rather than every UI tick.
+    port.status_ok = false;
+    effects = queue.processStatusBroadcasts(state, status, port, 165);
+    assert(!effects.sent_status && effects.failures.empty());
+    assert(port.status_send_count == 3);
+    for (uint32_t now = 166; now < 170; ++now)
+        queue.processStatusBroadcasts(state, status, port, now);
+    assert(port.status_send_count == 3);
+    port.status_ok = true;
+    queue.processStatusBroadcasts(state, status, port, 170);
+    assert(port.status_send_count == 4);
+
+    state.in_team = false;
+    queue.processStatusBroadcasts(state, status, port, 180);
+    queue.processStatusBroadcasts(state, status, port, 1000);
+    assert(port.status_send_count == 4);
+}
+
+void testPeriodicMemberPresenceDoesNotReplaceLeaderRoster()
+{
+    auto queue = makeQueue();
+    FakeDispatchPort port;
+    auto state = readyState();
+    state.self_is_leader = false;
+    team::proto::TeamStatus status;
+    status.key_id = state.security_round;
+    queue.processStatusBroadcasts(state, status, port, 100);
+    queue.processStatusBroadcasts(state, status, port, 105);
+    assert(port.status_send_count == 1);
+    assert(!port.last_status.has_members && port.last_status.members.empty());
+    assert(port.status_plain_send_count == 0);
+
+    // Membership credentials never become periodic plaintext status.
+    state.has_team_psk = false;
+    queue.processStatusBroadcasts(state, status, port, 135);
+    assert(port.status_send_count == 1 && port.status_plain_send_count == 0);
+
+    state.has_team_psk = true;
+    queue.processStatusBroadcasts(state, status, port, UINT32_MAX - 1);
+    queue.processStatusBroadcasts(state, status, port, 4);
+    assert(port.status_send_count == 2);
+}
+
 } // namespace
 
 int main()
@@ -239,5 +309,7 @@ int main()
     testKeyDistMissingRuntimeDoesNothing();
     testStatusBroadcastSendsAndReschedules();
     testStatusBroadcastFailureAndInvalidLeaderState();
+    testPeriodicRosterRepairsMissedEnrollmentBroadcast();
+    testPeriodicMemberPresenceDoesNotReplaceLeaderRoster();
     return 0;
 }

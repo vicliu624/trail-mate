@@ -11,7 +11,6 @@
 #include "platform/linux/mesh/linux_reticulum_identity.h"
 #include "platform/linux/runtime_paths.h"
 #include "platform/linux/team_espnow_pairing.h"
-#include "platform/linux/team_presence.h"
 #include "platform/linux/team_protocol_crypto.h"
 #include "platform/linux/team_snapshot_store.h"
 #include "platform/linux/tms_import_bridge.h"
@@ -1516,7 +1515,6 @@ struct LinuxAppServices::Implementation
           track_source(),
           team_service(team_crypto, mesh_adapter, team_event_sink, team_runtime),
           team_controller(team_service),
-          team_presence(team_service, team_runtime),
           team_track_sampler(team_runtime, track_source)
     {
         if (!demo_world_enabled)
@@ -1692,7 +1690,6 @@ struct LinuxAppServices::Implementation
     LinuxGpsTrackSource track_source;
     ::team::TeamService team_service;
     ::team::TeamController team_controller;
-    ::platform::linux_runtime::LinuxTeamPresence team_presence;
     ::team::TeamTrackSampler team_track_sampler;
     bool started = false;
     bool demo_seeded = false;
@@ -2575,13 +2572,6 @@ void LinuxAppServices::updateCoreServices()
 #endif
     ::team::ui::TeamUiSnapshot snap;
     const bool has_team = ::team::ui::team_ui_snapshot_store().load(snap) && snap.in_team;
-    if (!impl_->demo_world_enabled)
-    {
-        const auto capabilities = impl_->mesh_adapter.getCapabilities();
-        const bool ready = impl_->mesh_adapter.isReady() &&
-                           capabilities.supports_broadcast_appdata && capabilities.provides_appdata_sender;
-        impl_->team_presence.update(snap, getSelfNodeId(), ready);
-    }
     ::platform::ui::gps::tick_service();
     impl_->team_track_sampler.update(&impl_->team_controller, has_team);
     ::platform::ui::tracker::poll();

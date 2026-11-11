@@ -860,16 +860,25 @@ void process_keydist_retries()
 
 void process_status_broadcasts()
 {
+    const auto state = deferred_dispatch_state_from_page();
+    const uint32_t now_s = now_secs();
+    if (!team_page_context().deferred_dispatch.statusDue(state, now_s))
+    {
+        return;
+    }
     const auto runtime = current_runtime_port();
     TeamPageDeferredDispatchRuntimeAdapter dispatch_port(runtime);
     team::proto::TeamStatus status{};
     status.key_id = team_page_state().security_round;
-    fill_status_members(status);
+    if (state.self_is_leader)
+    {
+        fill_status_members(status);
+    }
     const auto effects = team_page_context().deferred_dispatch.processStatusBroadcasts(
-        deferred_dispatch_state_from_page(),
+        state,
         status,
         dispatch_port,
-        now_secs());
+        now_s);
     if (effects.sent_status)
     {
         std::printf("[Team] status rebroadcast members=%u leader=%08lX\n",
@@ -1038,7 +1047,8 @@ TeamPageReadModelInput current_read_model_input()
 
 TeamPageReadModel current_read_model()
 {
-    return TeamPageReadModel(now_secs());
+    const uint32_t epoch_s = sys::epoch_seconds_now();
+    return TeamPageReadModel(epoch_s >= 1577836800U ? epoch_s : now_secs());
 }
 
 std::string resolve_node_label(uint32_t node_id)
@@ -1772,7 +1782,9 @@ void render_page()
     input.pairing_peer_id = team_page_state().pairing_peer_id;
     input.pairing_available = app::teamFacade().getTeamPairing() != nullptr;
 
-    TeamPageLvglRenderer(now_secs()).render(context, input, handlers, team_page_name_resolver());
+    const uint32_t epoch_s = sys::epoch_seconds_now();
+    TeamPageLvglRenderer(epoch_s >= 1577836800U ? epoch_s : now_secs())
+        .render(context, input, handlers, team_page_name_resolver());
 
     ui_update_top_bar_battery(team_page_lvgl_context().top_bar_widget);
     refresh_team_input(input_context_from_lvgl());

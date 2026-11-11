@@ -240,6 +240,7 @@ bool decodeTeamUiSnapshot(const uint8_t* data,
     decoded.team_id = teamIdFromU64(team_id);
     decoded.security_round = epoch;
     decoded.last_event_seq = last_event_seq;
+    decoded.last_update_s = updated_ts;
     decoded.self_is_leader = (self_role == kRoleLeader);
 
     for (uint16_t i = 0; i < member_count; ++i)
@@ -293,7 +294,6 @@ bool decodeTeamUiSnapshot(const uint8_t* data,
 
     (void)reserved;
     (void)reserved3;
-    (void)updated_ts;
     (void)self_node_id;
     (void)leader_node_id;
     out = decoded;

@@ -99,6 +99,8 @@ class TeamPageDeferredDispatchQueue
     void scheduleStatusBroadcast(uint8_t repeats,
                                  uint32_t now_s,
                                  uint32_t delay_s);
+    bool statusDue(const TeamPageDeferredDispatchState& state,
+                   uint32_t now_s) const;
 
     TeamPageDeferredDispatchEffects processKeyDistRetries(
         const TeamPageDeferredDispatchState& state,
@@ -131,6 +133,7 @@ class TeamPageDeferredDispatchQueue
     TeamPageDeferredDispatchConfig config_;
     std::vector<KeyDistPending> keydist_pending_;
     std::vector<StatusBroadcastPending> status_pending_;
+    uint32_t next_presence_s_ = 0;
 };
 
 class TeamPageDeferredDispatchRuntimeAdapter final

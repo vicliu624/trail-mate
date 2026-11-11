@@ -134,7 +134,6 @@ _trailmate_set_linux_paths()
 set(TRAIL_MATE_LINUX_COMMON_SOURCES
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/chat/linux_meshtastic_repeater.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/team_espnow_pairing.cpp"
-    "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/team_presence.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/team_protocol_crypto.cpp"
     "${TRAIL_MATE_LINUX_COMMON_SRC_ROOT}/platform/linux/team_snapshot_store.cpp"
     "${TRAIL_MATE_UI_SHARED_SRC_ROOT}/ui/team_persistence/team_ui_snapshot_codec.cpp"

@@ -10,6 +10,18 @@ stable firmware release. Hardware support and validation remain target-specific.
 
 ## [Unreleased]
 
+### Fixed
+
+- Shared Team background presence continues after enrollment retries finish.
+  Leaders periodically send a complete authenticated roster, while members
+  retain the leader's roster and announce their own presence. Linux uses the
+  same scheduler as ESP rather than a separate platform implementation.
+- Team member activity and map summaries handle persisted local aliases and
+  mixed uptime/Unix timestamps without showing stale activity as current.
+  Snapshot reload restores its encoded last-update time.
+- A returned local radio identity updates the existing Team "You" entry
+  instead of creating a duplicate member.
+
 ## [1.2.3] - 2026-11-11
 
 ### Added

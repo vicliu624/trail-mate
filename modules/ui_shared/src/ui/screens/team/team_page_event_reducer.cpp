@@ -33,6 +33,13 @@ void TeamPageEventReducer::touchMember(TeamPageEventState& state,
                                        uint32_t node_id,
                                        uint32_t last_seen_s) const
 {
+    // Radio and loopback events use the actual node ID; UI snapshots use zero
+    // for the local observer. A returned local packet must not create a fourth
+    // member beside the existing "You" alias.
+    if (node_id == context_.self_node_id)
+    {
+        node_id = 0;
+    }
     const uint32_t seen_s =
         ::ui::team_presence::normalizeSeenSeconds(last_seen_s,
                                                   context_.now_s);

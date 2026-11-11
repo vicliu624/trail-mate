@@ -1,5 +1,6 @@
-#include "platform/linux/team_presence.h"
 #include "platform/linux/team_protocol_crypto.h"
+#include "platform/ui/team_ui_snapshot_store.h"
+#include "ui/screens/team/team_page_deferred_dispatch.h"
 #include "ui/screens/team/team_page_event_reducer.h"
 #include <algorithm>
 #include <cassert>
@@ -87,6 +88,26 @@ class Sink final : public team::ITeamEventSink
     void onTeamError(const team::TeamErrorEvent&) override { ++errors; }
 };
 
+class Dispatch final : public team::ui::ITeamPageDeferredDispatchPort
+{
+  public:
+    explicit Dispatch(team::TeamService& service) : service_(service) {}
+    bool hasController() const override { return true; }
+    bool sendKeyDistPlain(const team::proto::TeamKeyDist&, chat::ChannelId, chat::NodeId) override { return false; }
+    bool sendStatus(const team::proto::TeamStatus& status, chat::ChannelId channel, chat::NodeId peer) override
+    {
+        return service_.sendStatus(status, channel, peer);
+    }
+    bool sendStatusPlain(const team::proto::TeamStatus& status, chat::ChannelId channel, chat::NodeId peer) override
+    {
+        return service_.sendStatusPlain(status, channel, peer);
+    }
+    team::TeamService::SendError lastSendError() const override { return service_.getLastSendError(); }
+
+  private:
+    team::TeamService& service_;
+};
+
 int main()
 {
     Runtime runtime;
@@ -102,11 +123,18 @@ int main()
     snapshot.team_psk.fill(42);
     assert(a.setKeysFromPsk(snapshot.team_id, 7, snapshot.team_psk.data(), 16));
     assert(b.setKeysFromPsk(snapshot.team_id, 7, snapshot.team_psk.data(), 16));
-    platform::linux_runtime::LinuxTeamPresence presence(a, runtime);
-    presence.update(snapshot, alice.self, true);
+    team::ui::TeamPageDeferredDispatchQueue presence;
+    team::ui::TeamPageDeferredDispatchState dispatch_state;
+    dispatch_state.in_team = dispatch_state.has_team_id = dispatch_state.has_team_psk = true;
+    dispatch_state.team_id = snapshot.team_id;
+    dispatch_state.security_round = 7;
+    Dispatch port(a);
+    team::proto::TeamStatus status;
+    status.key_id = 7;
+    presence.processStatusBroadcasts(dispatch_state, status, port, 1000);
     assert(alice.sent.empty());
-    runtime.now = 10000;
-    presence.update(snapshot, alice.self, true);
+    runtime.now = 5000;
+    presence.processStatusBroadcasts(dispatch_state, status, port, 1005);
     assert(alice.sent.size() == 1);
 
     // A late member understands the ordinary authenticated Status wire without
@@ -129,49 +157,46 @@ int main()
     assert(reducer.reduceStatus(state, bob_sink.last).accepted);
     assert(state.members.size() == 3 && state.members[1].leader);
 
-    for (unsigned i = 0; i < 10000; ++i) presence.update(snapshot, alice.self, true);
+    for (unsigned i = 0; i < 10000; ++i)
+        presence.processStatusBroadcasts(dispatch_state, status, port, 1006);
     assert(alice.sent.size() == 1);
-    presence.update(snapshot, alice.self, false);
-    runtime.now += 120000;
-    presence.update(snapshot, alice.self, false);
-    assert(alice.sent.size() == 1);
-    presence.update(snapshot, alice.self, true);
     alice.send_ok = false;
-    runtime.now += 10000;
-    presence.update(snapshot, alice.self, true);
+    presence.processStatusBroadcasts(dispatch_state, status, port, 1035);
     const auto failed_attempts = alice.attempts;
-    for (unsigned i = 0; i < 1000; ++i) presence.update(snapshot, alice.self, true);
+    for (unsigned i = 0; i < 1000; ++i)
+        presence.processStatusBroadcasts(dispatch_state, status, port, 1036);
     assert(alice.attempts == failed_attempts);
     alice.send_ok = true;
-    runtime.now += 10000;
-    presence.update(snapshot, alice.self, true);
+    presence.processStatusBroadcasts(dispatch_state, status, port, 1040);
     assert(alice.sent.size() == 2);
 
-    // Only a leader supplies a complete roster, with the local UI alias resolved.
-    snapshot.self_is_leader = true;
-    snapshot.members = {self, leader};
-    presence.update(snapshot, alice.self, true);
-    runtime.now += 10000;
-    presence.update(snapshot, alice.self, true);
+    // A receiver that missed all enrollment broadcasts learns the whole roster
+    // through the actual shared scheduler, TeamService and authenticated codec.
+    dispatch_state.self_is_leader = true;
+    status.has_members = true;
+    status.leader_id = alice.self;
+    status.members = {alice.self, bob.self, 0x9A94};
+    presence.processStatusBroadcasts(dispatch_state, status, port, 1070);
     bob.incoming.push_back(alice.sent.back());
     b.processIncoming();
     assert(bob_sink.last.msg.has_members && bob_sink.last.msg.leader_id == alice.self);
     assert(std::find(bob_sink.last.msg.members.begin(), bob_sink.last.msg.members.end(), 0) == bob_sink.last.msg.members.end());
+    assert(reducer.reduceStatus(state, bob_sink.last).accepted);
+    assert(state.members.size() == 3 && !state.self_is_leader);
+    assert(reducer.findMemberIndex(state, 0) >= 0);
+    assert(reducer.findMemberIndex(state, alice.self) >= 0);
+    assert(reducer.findMemberIndex(state, 0x9A94) >= 0);
 
     const auto sent = alice.sent.size();
-    snapshot.in_team = false;
-    presence.update(snapshot, alice.self, true);
-    runtime.now += 120000;
-    presence.update(snapshot, alice.self, true);
+    dispatch_state.in_team = false;
+    presence.processStatusBroadcasts(dispatch_state, status, port, 1080);
+    presence.processStatusBroadcasts(dispatch_state, status, port, 1200);
     assert(alice.sent.size() == sent);
-    runtime.now = UINT32_MAX - 1000;
-    snapshot.in_team = true;
-    presence.update(snapshot, alice.self, true);
-    runtime.now = 6000;
-    presence.update(snapshot, alice.self, true);
+    dispatch_state.in_team = true;
+    presence.processStatusBroadcasts(dispatch_state, status, port, UINT32_MAX - 1);
+    presence.processStatusBroadcasts(dispatch_state, status, port, 4);
     assert(alice.sent.size() == sent + 1);
     a.clearKeys();
-    runtime.now += 120000;
-    presence.update(snapshot, alice.self, true);
+    presence.processStatusBroadcasts(dispatch_state, status, port, 34);
     assert(alice.sent.size() == sent + 1);
 }
