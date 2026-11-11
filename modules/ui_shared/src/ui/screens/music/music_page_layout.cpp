@@ -1,6 +1,7 @@
 #include "music_state.h"
 #include "src/misc/cache/instance/lv_image_cache.h"
 #include "ui/assets/fonts/font_utils.h"
+#include "ui/input/cardputer_softkeys.h"
 #include "ui/localization.h"
 #include "ui/ui_common.h"
 #include "ui/ui_theme.h"
@@ -315,6 +316,7 @@ lv_obj_t* button(lv_obj_t* parent, const char* text, intptr_t action, lv_coord_t
     lv_obj_center(caption);
     lv_obj_add_event_cb(object, action_event, LV_EVENT_CLICKED, reinterpret_cast<void*>(action));
     lv_obj_add_event_cb(object, key_event, LV_EVENT_KEY, nullptr);
+    ::ui::input::cardputer::softkeys::bind_button(parent, object, action == OpenMenu ? 4 : -1);
     return object;
 }
 void draw()

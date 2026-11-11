@@ -35,6 +35,7 @@
  */
 
 #include "ui/screens/team/team_page_layout.h"
+#include "ui/input/cardputer_softkeys.h"
 #include "ui/page/page_profile.h"
 #include "ui/widgets/top_bar.h"
 
@@ -114,6 +115,7 @@ lv_obj_t* create_actions(lv_obj_t* content)
     lv_obj_set_flex_flow(actions, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(actions, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     make_non_scrollable(actions);
+    ::ui::input::cardputer::softkeys::install_row(actions);
     return actions;
 }
 

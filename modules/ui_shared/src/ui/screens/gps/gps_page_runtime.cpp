@@ -23,6 +23,7 @@ using Projection = gps::ui::shell::Projection;
 #include "ui/components/dialog_frame.h"
 #include "ui/components/map_poi_search.h"
 #include "ui/formatters.h"
+#include "ui/input/cardputer_softkeys.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
 #include "ui/presentation_sources/runtime_gps_status_source.h"
@@ -4533,6 +4534,32 @@ lv_obj_t* create_map_control_button(lv_obj_t* parent,
     lv_obj_set_style_text_font(label, &lv_font_montserrat_12, 0);
     lv_label_set_long_mode(label, LV_LABEL_LONG_CLIP);
     lv_obj_center(label);
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    int slot = -1;
+    switch (action)
+    {
+    case MapControlAction::ZoomOut:
+        slot = 0;
+        break;
+    case MapControlAction::ZoomIn:
+        slot = 1;
+        break;
+    case MapControlAction::Center:
+        slot = 2;
+        break;
+    case MapControlAction::Team:
+    case MapControlAction::PickLocation:
+        slot = 3;
+        break;
+    case MapControlAction::Menu:
+    case MapControlAction::CancelLocation:
+        slot = 4;
+        break;
+    default:
+        break;
+    }
+    if (slot >= 0) ::ui::input::cardputer::softkeys::bind_button(parent, btn, slot);
+#endif
     return btn;
 }
 
@@ -4741,6 +4768,10 @@ void create_map_control_bar(lv_obj_t* viewport)
     set_hidden(s_map_team_btn, !map_workspace_model().snapshot().team.available);
     s_map_menu_btn = create_map_control_button(
         s_map_control_bar, wide, ::ui::i18n::tr("Menu"), MapControlAction::Menu);
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    lv_obj_add_flag(s_map_help_btn, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_map_zoom_label, LV_OBJ_FLAG_HIDDEN);
+#endif
     lv_obj_move_foreground(s_map_control_bar);
 }
 

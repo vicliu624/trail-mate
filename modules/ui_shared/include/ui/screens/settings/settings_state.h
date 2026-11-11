@@ -165,6 +165,7 @@ enum class SettingId : std::uint16_t
     ChatResetNodes,
     ChatClearMessages,
     SystemFactoryReset,
+    DeviceNodeId,
 };
 
 struct SettingOption
@@ -190,6 +191,7 @@ struct SettingItem
 
 struct SettingsData
 {
+    char device_node_id[12] = "";
     // GPS
     bool gps_enabled = true;
     int gps_init_baud = 0;

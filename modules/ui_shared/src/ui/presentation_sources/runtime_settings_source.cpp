@@ -578,6 +578,13 @@ void buildNetworkSection(ui::settings::SettingsSnapshot& out, const app::AppConf
 void buildDeviceSection(ui::settings::SettingsSnapshot& out)
 {
     ui::settings::SettingsSection* const section = addSection(out, "Device");
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    char node_id[12]{};
+    std::snprintf(node_id, sizeof(node_id), "!%08lX",
+                  static_cast<unsigned long>(app::messagingFacade().getSelfNodeId()));
+    addOption(section, "device_node_id", "Node ID", node_id,
+              ui::settings::SettingControlKind::Text, false);
+#endif
     const uint8_t brightness_max = platform::ui::device::screen_brightness_max();
     const uint8_t brightness = platform::ui::screen_brightness_steps::clampLevel(
         platform::ui::settings_store::get_int(kSettingsNamespace,

@@ -17,6 +17,7 @@ struct SettingSpec
 };
 
 constexpr SettingSpec kSpecs[] = {
+    {SettingId::DeviceNodeId, "device_node_id", DynamicOptionKind::None},
     {SettingId::ChatUser, "chat_user", DynamicOptionKind::None},
     {SettingId::ChatShort, "chat_short", DynamicOptionKind::None},
     {SettingId::MeshProtocol, "mesh_protocol", DynamicOptionKind::None},

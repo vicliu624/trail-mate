@@ -1,8 +1,10 @@
 #include "ui/components/bottom_bar.h"
 
+#include "ui/input/cardputer_softkeys.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
 #include <algorithm>
+#include <cstring>
 
 namespace ui::components::bottom_bar
 {
@@ -36,6 +38,7 @@ lv_obj_t* create(lv_obj_t* parent)
     lv_obj_set_style_pad_column(bar, 4, LV_PART_MAIN);
     lv_obj_set_flex_flow(bar, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(bar, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    ::ui::input::cardputer::softkeys::install_row(bar);
     return bar;
 }
 
@@ -95,6 +98,7 @@ lv_obj_t* add_button(lv_obj_t* bar, const char* text, lv_event_cb_t callback, vo
     lv_obj_set_width(label, LV_SIZE_CONTENT);
     lv_obj_center(label);
     if (callback) lv_obj_add_event_cb(button, callback, LV_EVENT_CLICKED, context);
+    ::ui::input::cardputer::softkeys::bind_button(bar, button, text && !std::strcmp(text, "Menu") ? 4 : -1);
     return button;
 }
 

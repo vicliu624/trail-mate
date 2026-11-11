@@ -38,6 +38,8 @@
  */
 
 #include "ui/screens/chat/chat_conversation_layout.h"
+#include "ui/input/cardputer_softkeys.h"
+#include "ui/input/pager_navigation.h"
 #include "ui/page/page_profile.h"
 
 namespace chat::ui::layout
@@ -167,7 +169,7 @@ ConversationWidgets create_conversation_base(lv_obj_t* parent)
     lv_label_set_long_mode(w.help_label, LV_LABEL_LONG_CLIP);
     lv_label_set_recolor(w.help_label, true);
 #if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
-    lv_label_set_text(w.help_label, "#D00000 S# Send  #D00000 H# Help");
+    lv_label_set_text(w.help_label, "Help");
 #else
     lv_label_set_text(w.help_label, "#D00000 H#elp");
 #endif
@@ -190,6 +192,19 @@ ConversationWidgets create_conversation_base(lv_obj_t* parent)
 
     w.reply_label = lv_label_create(w.reply_btn);
     lv_obj_center(w.reply_label);
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    ::ui::input::cardputer::softkeys::install_row(w.action_bar);
+    ::ui::input::cardputer::softkeys::bind_button(w.action_bar, w.reply_btn, 0);
+    lv_obj_add_flag(w.help_chip, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(
+        w.help_chip, [](lv_event_t* event)
+        {
+        auto* chip = lv_event_get_target_obj(event);
+        auto* group = lv_group_get_default();
+        if (group) ::ui::input::pager::open_help(chip, group); },
+        LV_EVENT_CLICKED, nullptr);
+    ::ui::input::cardputer::softkeys::bind_button(w.action_bar, w.help_chip, 4);
+#endif
 
     return w;
 }

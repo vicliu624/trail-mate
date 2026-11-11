@@ -213,15 +213,30 @@ editors, **F/Z/X/C** move up/left/down/right without Fn. Text editors keep
 those letters and digits as ordinary input. **Tab / Shift+Tab** move between
 controls; **Enter** activates the selected control. **Fn+H** opens help.
 
-The **4–8** shortcuts depend on the current page:
+The bottom action row lines up with the physical **4–8** keys. Press the key
+directly below an action to activate the same control. Button captions contain
+the action name; they do not repeat the number. Existing letter shortcuts remain
+available: for example, both **8** and **M** toggle a page's Menu. The main-menu
+Node ID has moved to **Settings > Device > Node ID**.
+
+The **4–8** shortcuts depend on the current page and its visible action row:
 
 | Page | 4 | 5 | 6 | 7 | 8 |
 | --- | --- | --- | --- | --- | --- |
 | Main menu | Chat | Map | Tracker | Contacts | Settings |
-| Map | Zoom out | Zoom in | Position | Layer | Menu |
+| Map | Zoom out | Zoom in | Position | Team | Menu |
+| Chat conversation | Compose | — | — | — | Help |
+| Compose (outside editor) | Send | Position | — | — | Cancel |
+| Chat list / Contacts / Settings | — | — | — | — | Menu |
 | Tracker | Record / stop | Tracks | Routes | Actions | Menu |
 | Route preview | Zoom out | Zoom in | Fit | Load | Help |
-| Music | Previous | Play / pause | Next | Library | Menu |
+| Music | Visible action | Visible action | Visible action | Visible action | Menu / Browse |
+
+In Map's location picker, **7 / 8** select **Pick / Cancel**. Map's **L** layer
+shortcut and **H / Fn+H** help remain available. Music keeps **Space** for
+play/pause and its existing letter controls; the number keys follow the footer
+of the current music view. Digits inside a text editor are ordinary text, so
+Compose's numeric actions become available after **Tab** moves to controls.
 
 In a Chat conversation, **S** opens Compose. Type the message and press
 **Ctrl+Enter** to send, or **Tab → Enter** to select and activate Send.

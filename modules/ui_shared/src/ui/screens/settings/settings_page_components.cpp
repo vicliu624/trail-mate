@@ -1493,6 +1493,8 @@ static void settings_load()
     auto& options = dynamic_options();
     app::IAppFacade& app_ctx = app::appFacade();
     g_settings.chat_protocol = static_cast<int>(app_ctx.readConfig().mesh_protocol);
+    std::snprintf(g_settings.device_node_id, sizeof(g_settings.device_node_id), "!%08lX",
+                  static_cast<unsigned long>(app_ctx.getSelfNodeId()));
 
     if (kChatRegionOptionCount == 0)
     {
@@ -5370,6 +5372,10 @@ static const settings::ui::SettingItem kLocationItems[] = {
 };
 
 static const settings::ui::SettingItem kDeviceItems[] = {
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    {"Node ID", settings::ui::SettingType::Info, nullptr, 0, nullptr, nullptr,
+     g_settings.device_node_id, sizeof(g_settings.device_node_id), false, "device_node_id"},
+#endif
     {"Display Language", settings::ui::SettingType::Enum, nullptr,
      0, &g_settings.display_locale_index, nullptr, nullptr, 0, false,
      "display_locale"},

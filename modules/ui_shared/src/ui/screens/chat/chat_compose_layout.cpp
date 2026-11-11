@@ -35,6 +35,7 @@
 #include <algorithm>
 
 #include "ui/assets/fonts/font_utils.h"
+#include "ui/input/cardputer_softkeys.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
 
@@ -150,6 +151,15 @@ void create(lv_obj_t* parent, const Spec& spec, Widgets& w)
     w.len_label = lv_label_create(w.action_bar);
     ::ui::i18n::set_label_text_fmt(w.len_label, "Remain: %u", 233U);
     lv_obj_set_style_text_color(w.len_label, lv_color_hex(0x6A5646), 0);
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    ::ui::input::cardputer::softkeys::install_row(w.action_bar);
+    ::ui::input::cardputer::softkeys::bind_button(w.action_bar, w.send_btn, 0);
+    ::ui::input::cardputer::softkeys::bind_button(w.action_bar, w.position_btn, 1);
+    ::ui::input::cardputer::softkeys::bind_button(w.action_bar, w.cancel_btn, 4);
+    // Length is information, outside the physical action-key row.
+    lv_obj_set_parent(w.len_label, w.content);
+    lv_obj_set_style_text_font(w.len_label, ::ui::page_profile::resolve_tiny_font(), 0);
+#endif
 }
 
 } // namespace chat::ui::compose::layout

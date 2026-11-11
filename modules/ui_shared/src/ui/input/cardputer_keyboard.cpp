@@ -2,6 +2,7 @@
 #include "ui/input/cardputer_keyboard.h"
 #include "../screens/music/music_state.h"
 #include "ui/app_runtime.h"
+#include "ui/input/cardputer_softkeys.h"
 #include "ui/input/keyboard_shortcuts.h"
 #include "ui/input/pager_navigation.h"
 #include "ui/menu/menu_dashboard.h"
@@ -13,6 +14,7 @@
 #include "ui/ui_common.h"
 #include "ui/widgets/ime/ime_widget.h"
 #include <cstring>
+#include <new>
 
 namespace ui::input::cardputer
 {
@@ -79,6 +81,124 @@ bool music_action(uint32_t key)
     return false;
 }
 } // namespace
+namespace softkeys
+{
+namespace
+{
+struct Row
+{
+    lv_obj_t* bar = nullptr;
+    lv_obj_t* buttons[5]{};
+    Row* next = nullptr;
+};
+Row* rows = nullptr;
+
+Row* find_row(lv_obj_t* bar)
+{
+    for (auto* row = rows; row; row = row->next)
+        if (row->bar == bar) return row;
+    return nullptr;
+}
+
+void layout(Row& row)
+{
+    const auto width = lv_obj_get_content_width(row.bar);
+    const auto height = lv_obj_get_content_height(row.bar);
+    if (width <= 0 || height <= 0) return;
+    for (int slot = 0; slot < 5; ++slot)
+    {
+        auto* button = row.buttons[slot];
+        if (!button) continue;
+        lv_obj_set_size(button, width * 56 / 320, 20);
+        lv_obj_set_pos(button, width * (20 + 60 * slot) / 320, (height - 20) / 2);
+    }
+}
+
+void button_deleted(lv_event_t* event)
+{
+    auto* row = static_cast<Row*>(lv_event_get_user_data(event));
+    for (auto*& button : row->buttons)
+        if (button == lv_event_get_target_obj(event)) button = nullptr;
+}
+
+void row_event(lv_event_t* event)
+{
+    auto* row = static_cast<Row*>(lv_event_get_user_data(event));
+    if (lv_event_get_code(event) == LV_EVENT_SIZE_CHANGED)
+    {
+        layout(*row);
+        return;
+    }
+    if (lv_event_get_code(event) != LV_EVENT_DELETE) return;
+    for (auto* button : row->buttons)
+        if (button) lv_obj_remove_event_cb_with_user_data(button, button_deleted, row);
+    auto** link = &rows;
+    while (*link && *link != row) link = &(*link)->next;
+    if (*link) *link = row->next;
+    delete row;
+}
+} // namespace
+
+void install_row(lv_obj_t* bar)
+{
+    if (!bar || find_row(bar)) return;
+    auto* row = new (std::nothrow) Row;
+    if (!row) return;
+    row->bar = bar;
+    row->next = rows;
+    rows = row;
+    lv_obj_set_style_pad_all(bar, 0, LV_PART_MAIN);
+    lv_obj_add_event_cb(bar, row_event, LV_EVENT_ALL, row);
+}
+
+void bind_button(lv_obj_t* bar, lv_obj_t* button, int slot)
+{
+    auto* row = find_row(bar);
+    if (!row || !button) return;
+    if (slot < 0)
+    {
+        for (slot = 0; slot < 5 && row->buttons[slot]; ++slot)
+        {
+        }
+    }
+    if (slot < 0 || slot >= 5 || (row->buttons[slot] && row->buttons[slot] != button)) return;
+    if (row->buttons[slot] == button) return;
+    row->buttons[slot] = button;
+    lv_obj_add_flag(button, LV_OBJ_FLAG_IGNORE_LAYOUT);
+    lv_obj_set_flex_grow(button, 0);
+    lv_obj_set_style_pad_all(button, 1, LV_PART_MAIN);
+    if (auto* label = lv_obj_get_child(button, 0))
+    {
+        lv_obj_set_width(label, LV_PCT(100));
+        lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+        lv_obj_center(label);
+    }
+    lv_obj_add_event_cb(button, button_deleted, LV_EVENT_DELETE, row);
+    layout(*row);
+}
+
+bool activate(uint32_t key, lv_group_t* group)
+{
+    if (key < '4' || key > '8' || !group || ui_is_overlay_active()) return false;
+    auto* focused = lv_group_get_focused(group);
+    for (auto* row = rows; row; row = row->next)
+    {
+        if (!lv_obj_is_visible(row->bar)) continue;
+        auto* root = lv_obj_get_parent(row->bar);
+        bool owns_focus = false;
+        for (auto* object = focused; object; object = lv_obj_get_parent(object))
+            if (object == root) owns_focus = true;
+        auto* button = row->buttons[key - '4'];
+        if (owns_focus && button && lv_obj_is_visible(button))
+        {
+            (void)click(button);
+            return true;
+        }
+    }
+    return false;
+}
+} // namespace softkeys
+
 bool handle_key(uint32_t& key, bool pressed, lv_group_t* group, State& state)
 {
     if (!pressed)
@@ -110,6 +230,12 @@ bool handle_key(uint32_t& key, bool pressed, lv_group_t* group, State& state)
     }
     const bool typing = editor(focused) || (calculator && !state.calculator_controls);
     if (typing) return false;
+    if (::ui::input::pager::help_open()) return false;
+    if (softkeys::activate(key, group))
+    {
+        state.consumed = true;
+        return true;
+    }
     if (key == LV_KEY_HOME || key == LV_KEY_END)
     {
         const auto count = lv_group_get_obj_count(group);

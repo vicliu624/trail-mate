@@ -1,10 +1,13 @@
 #include "ui/screens/team/team_page_lvgl_renderer.h"
 
+#include "ui/input/cardputer_softkeys.h"
 #include "ui/localization.h"
 #include "ui/page/page_profile.h"
 #include "ui/screens/team/team_page_styles.h"
 
 #include <cstdio>
+#include <cstring>
+#include <utility>
 
 namespace team
 {
@@ -250,7 +253,26 @@ lv_obj_t* TeamPageLvglRenderer::createActionButton(
     const char* text,
     lv_event_cb_t cb) const
 {
-    return createFittedButton(context.actions, text, cb);
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    // Compact captions fit the physical key's cell; the action and its full
+    // description remain unchanged on the other platforms.
+    for (const auto& caption : {std::pair{"Create Team", "Create"},
+                                std::pair{"Join Team", "Join"},
+                                std::pair{"View Team", "Roster"},
+                                std::pair{"Pair Member", "Pair"},
+                                std::pair{"Request Keys", "Keys"},
+                                std::pair{"Transfer Leader", "Lead"},
+                                std::pair{"Confirm Kick", "Confirm"},
+                                std::pair{"Pair Again", "Pair"}})
+        if (std::strcmp(text, caption.first) == 0)
+        {
+            text = caption.second;
+            break;
+        }
+#endif
+    auto* button = createFittedButton(context.actions, text, cb);
+    ::ui::input::cardputer::softkeys::bind_button(context.actions, button);
+    return button;
 }
 
 lv_obj_t* TeamPageLvglRenderer::createListItem(

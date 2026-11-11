@@ -14,6 +14,8 @@
 #include "platform/ui/psram_ui_lease.h"
 #include "ui/app_runtime.h"
 #include "ui/assets/fonts/font_utils.h"
+#include "ui/components/bottom_bar.h"
+#include "ui/input/cardputer_softkeys.h"
 #include "ui/localization.h"
 #include "ui/menu/menu_dashboard.h"
 #include "ui/menu/menu_profile.h"
@@ -1095,11 +1097,7 @@ std::string renderBottomHelpText(const char* text)
     (void)text;
     if (ui::menu::dashboard::isFeedOpen())
         return std::string("#D6403A V# ") + ::ui::i18n::tr("Menu");
-    return std::string("#D6403A 4#") + ::ui::i18n::tr("Chat") +
-           " #D6403A 5#" + ::ui::i18n::tr("Map") +
-           " #D6403A 6#" + ::ui::i18n::tr("Track") +
-           " #D6403A 7#" + ::ui::i18n::tr("Nodes") +
-           " #D6403A 8#" + ::ui::i18n::tr("Set");
+    return {};
 #else
     const char* safe_text = text ? text : "";
     const size_t prefix_len = std::strlen(kBottomHelpPlainPrefix);
@@ -1117,13 +1115,49 @@ std::string renderBottomHelpText(const char* text)
 #endif
 }
 
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+lv_obj_t* s_zero_footer_buttons[5]{};
+
+void updateZeroFooter()
+{
+    const bool feed = ui::menu::dashboard::isFeedOpen();
+    const char* labels[] = {"Chat", "Map", "Track", "Nodes", feed ? "Menu" : "Set"};
+    for (unsigned index = 0; index < 5; ++index)
+    {
+        auto* button = s_zero_footer_buttons[index];
+        if (!button) continue;
+        if (feed && index < 4) lv_obj_add_flag(button, LV_OBJ_FLAG_HIDDEN);
+        else lv_obj_clear_flag(button, LV_OBJ_FLAG_HIDDEN);
+        ::ui::i18n::set_label_text(lv_obj_get_child(button, 0), labels[index]);
+    }
+}
+
+void zeroFooterClicked(lv_event_t* event)
+{
+    const auto slot = reinterpret_cast<uintptr_t>(lv_event_get_user_data(event));
+    if (ui::menu::dashboard::isFeedOpen())
+    {
+        if (slot == 4) ui::menu::dashboard::setActive(false);
+        updateZeroFooter();
+        return;
+    }
+    const char* applications[] = {"chat", "map", "tracker", "contacts", "settings"};
+    if (slot < 5) (void)ui::menu_layout::launchAppByStableId(applications[slot]);
+}
+#endif
+
 void setBottomBarHelpText(const char* text)
 {
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    (void)text;
+    updateZeroFooter();
+#else
 #if defined(ARDUINO_T_LORA_PAGER)
     platform::ui::PsramUiLease memory;
 #endif
     const std::string rendered = renderBottomHelpText(text);
     setBottomBarChipText(s_bottom_help_chip, rendered.c_str());
+#endif
 }
 
 void setBottomBarChipVisible(const BottomBarChipUi& chip, bool visible)
@@ -1311,6 +1345,19 @@ void createAppGrid()
     s_bottom_help_chip = {};
     s_bottom_ram_chip = {};
     s_bottom_psram_chip = {};
+#if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
+    ::ui::input::cardputer::softkeys::install_row(s_bottom_bar);
+    const char* labels[] = {"Chat", "Map", "Track", "Nodes", "Set"};
+    for (unsigned slot = 0; slot < 5; ++slot)
+    {
+        auto* button = ::ui::components::bottom_bar::add_button(
+            s_bottom_bar, labels[slot], zeroFooterClicked, reinterpret_cast<void*>(static_cast<uintptr_t>(slot)));
+        s_zero_footer_buttons[slot] = button;
+        lv_obj_set_style_text_font(button, profile.node_id_font, LV_PART_MAIN);
+        lv_obj_set_style_text_font(lv_obj_get_child(button, 0), profile.node_id_font, LV_PART_MAIN);
+    }
+    updateZeroFooter();
+#else
     s_bottom_node_chip = createBottomBarChip(s_bottom_bar_left, profile, lv_color_hex(0xF1B75A), "-");
     if (showBottomHelpShortcut())
     {
@@ -1337,6 +1384,7 @@ void createAppGrid()
         std::snprintf(node_id_buf, sizeof(node_id_buf), "-");
     }
     setBottomBarChipText(s_bottom_node_chip, node_id_buf);
+#endif
 #endif
 
     lv_label_set_long_mode(s_desc_label, LV_LABEL_LONG_SCROLL_CIRCULAR);
