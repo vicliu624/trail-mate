@@ -28,8 +28,10 @@ bool TeamPageStateStore::loadOnce(ITeamUiSnapshotStore& store,
         return false;
     }
 
-    loaded_ = true;
-    return refresh(store, state, color_context);
+    // Storage can become ready after the first UI tick during deferred boot.
+    // A failed read must preserve state and leave restoration retryable.
+    loaded_ = refresh(store, state, color_context);
+    return loaded_;
 }
 
 bool TeamPageStateStore::refresh(ITeamUiSnapshotStore& store,

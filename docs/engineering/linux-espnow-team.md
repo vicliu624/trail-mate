@@ -125,6 +125,9 @@ second, including after queue backpressure, and handles millisecond rollover.
 The publisher has eight bytes of clock state and uses the existing event bus;
 it adds no task, queue capacity or protocol buffer. A SystemTick consumer alone
 does not schedule work: the ESP lifecycles must also produce that event.
+The initial Team state load is completed only after a successful read, so an
+early tick cannot permanently skip restoration while ESP storage is starting.
+Failed reads preserve the existing in-memory Team identity and credentials.
 
 Protocol, region, actual frequency, modulation and channel keys
 must agree across participants. The live CN / LongFast exercises used

@@ -15,6 +15,8 @@ stable firmware release. Hardware support and validation remain target-specific.
 - Arduino, ESP-IDF and Linux UI lifecycles produce periodic system ticks
   through the same rate-limited publisher. ESP Team background dispatch now
   receives its missing clock input; Linux no longer queues a tick every loop.
+- Team restoration retries when storage is not ready on the first UI tick,
+  preserving existing credentials until the persisted state can be read.
 - Shared Team background presence continues after enrollment retries finish.
   Leaders periodically send a complete authenticated roster, while members
   retain the leader's roster and announce their own presence. Linux uses the

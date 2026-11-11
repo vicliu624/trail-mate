@@ -125,10 +125,15 @@ void testApplySnapshotAssignsMemberColors()
 void testLoadOnceAndRefresh()
 {
     FakeSnapshotStore fake;
-    fake.save(team::ui::TeamPageStateStore::snapshotFromState(makeState()));
-
-    team::ui::TeamPagePersistentState state;
+    auto state = makeState();
+    state.team_name = "Keep until storage is ready";
     team::ui::TeamPageStateStore store;
+
+    assert(!store.loadOnce(fake, state, team::ui::TeamPageColorContext(0x12345678)));
+    assert(state.team_name == "Keep until storage is ready");
+    assert(state.has_team_psk && state.team_psk[0] == 0xAA);
+    assert(state.in_team && state.security_round == 44);
+    fake.save(team::ui::TeamPageStateStore::snapshotFromState(makeState()));
 
     assert(store.loadOnce(fake,
                           state,
