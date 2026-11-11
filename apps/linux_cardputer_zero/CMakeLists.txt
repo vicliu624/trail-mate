@@ -438,6 +438,18 @@ if(BUILD_TESTING)
     target_compile_options(trailmate_cardputer_zero_meshtastic_ack_test PRIVATE -UNDEBUG)
     add_test(NAME trailmate_cardputer_zero_meshtastic_ack COMMAND trailmate_cardputer_zero_meshtastic_ack_test)
     set_tests_properties(trailmate_cardputer_zero_meshtastic_ack PROPERTIES TIMEOUT 30)
+    foreach(scenario group direct)
+        add_executable(trailmate_cardputer_zero_meshcore_${scenario}_test
+            "${TRAIL_MATE_REPO_ROOT}/apps/linux_lvgl/tests/linux_meshcore_${scenario}_test.cpp")
+        target_link_libraries(trailmate_cardputer_zero_meshcore_${scenario}_test PRIVATE trailmate_cardputer_zero_linux_common)
+        target_compile_options(trailmate_cardputer_zero_meshcore_${scenario}_test PRIVATE -UNDEBUG)
+        add_test(NAME trailmate_cardputer_zero_meshcore_${scenario} COMMAND trailmate_cardputer_zero_meshcore_${scenario}_test)
+    endforeach()
+    add_executable(trailmate_cardputer_zero_meshcore_shared_strategy_test
+        "${TRAIL_MATE_REPO_ROOT}/modules/core_mesh/tests/test_meshcore_protocol_strategy.cpp")
+    target_link_libraries(trailmate_cardputer_zero_meshcore_shared_strategy_test PRIVATE trailmate_cardputer_zero_linux_common)
+    target_compile_options(trailmate_cardputer_zero_meshcore_shared_strategy_test PRIVATE -UNDEBUG)
+    add_test(NAME trailmate_cardputer_zero_meshcore_shared_strategy COMMAND trailmate_cardputer_zero_meshcore_shared_strategy_test)
     add_executable(trailmate_cardputer_zero_wifi_profiles_test
         "${TRAIL_MATE_REPO_ROOT}/apps/linux_lvgl/tests/linux_wifi_profiles_test.cpp")
     target_link_libraries(trailmate_cardputer_zero_wifi_profiles_test PRIVATE trailmate_cardputer_zero_linux_common)

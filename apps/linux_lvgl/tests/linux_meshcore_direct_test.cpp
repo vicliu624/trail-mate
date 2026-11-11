@@ -2,6 +2,7 @@
 #include "chat/linux_meshcore_direct_routes.h"
 #include "chat/linux_meshcore_direct_state.h"
 #include "chat/linux_meshcore_direct_wire.h"
+#include "mesh/protocol/meshcore/meshcore_protocol_strategy.h"
 #include "platform/linux/runtime_paths.h"
 #include <cassert>
 #include <cstdlib>
@@ -109,6 +110,20 @@ int main()
         const uint8_t data[] = {1, 0, 2, 3};
         assert(wire::encodeDirectData(a, b.publicKey(), profile, 123, data, sizeof(data), true, frame, ack));
         assert(ack);
+        std::array<uint8_t, 32> secret{};
+        assert(a.sharedSecret(b.publicKey().data(), secret.data()));
+        mesh::meshcore::MeshCoreProtocolStrategy shared;
+        mesh::ProtocolBuildContext context{};
+        context.local_node = mesh::NodeId{a.nodeId()};
+        context.channel_key = mesh::ByteView{secret.data(), secret.size()};
+        context.meshcore_payload_ver = mc::payloadVersion(profile);
+        context.meshcore_local_hash = mesh::ByteView{a.publicKey().data(), mc::payloadHashBytes(profile)};
+        context.meshcore_peer_hash = mesh::ByteView{b.publicKey().data(), mc::payloadHashBytes(profile)};
+        mesh::DirectMessageCommand command{mesh::NodeId{b.nodeId()}, mesh::ByteView{data, sizeof(data)}, true};
+        command.application_port = 123;
+        mesh::EncodedPacket expected;
+        assert(shared.buildDirectMessage(context, command, expected).ok);
+        assert(frame.size == expected.size && !std::memcmp(frame.bytes.data(), expected.bytes, expected.size));
         assert(wire::decodeDirect(b, a.publicKey(), frame.bytes.data(), frame.size, incoming));
         assert(incoming.kind == wire::DirectKind::Data && incoming.port == 123 && incoming.ack == ack);
         assert(incoming.size == sizeof(data) && !std::memcmp(incoming.payload.data(), data, sizeof(data)));

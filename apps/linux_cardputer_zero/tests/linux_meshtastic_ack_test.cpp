@@ -24,6 +24,7 @@ struct Radio final : runtime::IPacketRadio
 {
     bool online = false, tx_ok = true;
     size_t transmissions = 0;
+    runtime::RadioPacket last_sent;
     runtime::RadioSettings settings{};
     std::deque<runtime::RadioPacket> incoming;
     const char* name() const override { return "ACK test radio"; }
@@ -40,8 +41,11 @@ struct Radio final : runtime::IPacketRadio
         return true;
     }
     bool startReceive() override { return online; }
-    bool transmit(const uint8_t*, size_t) override
+    bool transmit(const uint8_t* bytes, size_t size) override
     {
+        assert(size <= last_sent.data.size());
+        last_sent.size = size;
+        std::memcpy(last_sent.data.data(), bytes, size);
         ++transmissions;
         return tx_ok;
     }
@@ -204,6 +208,47 @@ int main()
     chat::MeshConfig config{};
     adapter.applyProtocolConfig(chat::MeshProtocol::Meshtastic, config);
     assert(adapter.begin() && adapter.isPkiReady() && adapter.hasPkiKey(peer));
+    // Independently decrypt the resident adapter's real channel packets with
+    // OpenSSL, then compare the entire frame with the ESP/shared wire codec.
+    // This prevents two matching mistakes in a codec round-trip from passing.
+    for (const uint8_t key_size : {uint8_t{16}, uint8_t{32}})
+    {
+        auto channel_config = config;
+        channel_config.primary_key_len = key_size;
+        for (unsigned i = 0; i < key_size; ++i) channel_config.primary_key[i] = uint8_t(i + 1);
+        adapter.applyProtocolConfig(chat::MeshProtocol::Meshtastic, channel_config);
+        const uint8_t payload[] = {0x31, 0, 0x42, 0x80, 0xff};
+        assert(adapter.sendAppData(chat::ChannelId::PRIMARY, 303, payload, sizeof(payload)));
+        mt::PacketHeaderWire header;
+        std::memcpy(&header, radio.last_sent.data.data(), sizeof(header));
+        assert(header.from == self && header.to == UINT32_MAX);
+        uint8_t nonce[16]{};
+        const uint64_t packet_id = header.id;
+        std::memcpy(nonce, &packet_id, sizeof(packet_id));
+        std::memcpy(nonce + 8, &header.from, sizeof(header.from));
+        std::array<uint8_t, 256> plain{};
+        auto* cipher = EVP_CIPHER_CTX_new();
+        int count = 0, tail = 0;
+        const size_t encrypted_size = radio.last_sent.size - sizeof(header);
+        assert(cipher && EVP_DecryptInit_ex(cipher, key_size == 16 ? EVP_aes_128_ctr() : EVP_aes_256_ctr(),
+                                            nullptr, channel_config.primary_key, nonce) == 1);
+        assert(EVP_DecryptUpdate(cipher, plain.data(), &count, radio.last_sent.data.data() + sizeof(header),
+                                 int(encrypted_size)) == 1 &&
+               EVP_DecryptFinal_ex(cipher, plain.data() + count, &tail) == 1 && size_t(count + tail) == encrypted_size);
+        EVP_CIPHER_CTX_free(cipher);
+        meshtastic_Data decoded = meshtastic_Data_init_default;
+        auto stream = pb_istream_from_buffer(plain.data(), encrypted_size);
+        assert(pb_decode(&stream, meshtastic_Data_fields, &decoded));
+        assert(decoded.portnum == 303 && decoded.payload.size == sizeof(payload) &&
+               !std::memcmp(decoded.payload.bytes, payload, sizeof(payload)));
+        std::array<uint8_t, 255> shared{};
+        size_t shared_size = shared.size();
+        assert(mt::buildWirePacket(plain.data(), encrypted_size, header.from, header.id, header.to,
+                                   header.channel, header.flags & 7, (header.flags & 8) != 0,
+                                   channel_config.primary_key, key_size, shared.data(), &shared_size));
+        assert(shared_size == radio.last_sent.size && !std::memcmp(shared.data(), radio.last_sent.data.data(), shared_size));
+    }
+    adapter.applyProtocolConfig(chat::MeshProtocol::Meshtastic, config);
     assert(adapter.getCapabilities().supports_protocol_ack_tracking);
     assert(!adapter.getCapabilities().supports_appdata_ack);
     std::vector<Result> results;

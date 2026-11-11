@@ -528,57 +528,6 @@ std::string describe_meshtastic_air_plan(const MeshtasticAirPlan& plan)
     return meta;
 }
 
-bool aes_ctr_crypt(const std::uint8_t* key,
-                   std::size_t key_len,
-                   const std::uint8_t* nonce,
-                   std::uint8_t* buffer,
-                   std::size_t len)
-{
-    if (key == nullptr || nonce == nullptr || buffer == nullptr || len == 0)
-    {
-        return false;
-    }
-#if defined(TRAIL_MATE_HAS_OPENSSL)
-    const EVP_CIPHER* cipher = nullptr;
-    if (key_len == 16)
-    {
-        cipher = EVP_aes_128_ctr();
-    }
-    else if (key_len == 32)
-    {
-        cipher = EVP_aes_256_ctr();
-    }
-    if (cipher == nullptr)
-    {
-        return false;
-    }
-
-    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-    if (ctx == nullptr)
-    {
-        return false;
-    }
-    const std::vector<std::uint8_t> input(buffer, buffer + len);
-    int out_len = 0;
-    int final_len = 0;
-    const bool ok =
-        EVP_EncryptInit_ex(ctx, cipher, nullptr, key, nonce) == 1 &&
-        EVP_CIPHER_CTX_set_padding(ctx, 0) == 1 &&
-        EVP_EncryptUpdate(ctx,
-                          buffer,
-                          &out_len,
-                          input.data(),
-                          static_cast<int>(len)) == 1 &&
-        EVP_EncryptFinal_ex(ctx, buffer + out_len, &final_len) == 1 &&
-        static_cast<std::size_t>(out_len + final_len) == len;
-    EVP_CIPHER_CTX_free(ctx);
-    return ok;
-#else
-    (void)key_len;
-    return false;
-#endif
-}
-
 bool meshtastic_crypto_available()
 {
 #if defined(TRAIL_MATE_HAS_OPENSSL)
@@ -586,146 +535,6 @@ bool meshtastic_crypto_available()
 #else
     return false;
 #endif
-}
-
-void make_meshtastic_nonce(const ::chat::meshtastic::PacketHeaderWire& header,
-                           std::uint8_t* out_nonce,
-                           std::size_t nonce_len)
-{
-    if (out_nonce == nullptr || nonce_len < 16)
-    {
-        return;
-    }
-    std::memset(out_nonce, 0, nonce_len);
-    const std::uint64_t packet_id = static_cast<std::uint64_t>(header.id);
-    std::memcpy(out_nonce, &packet_id, sizeof(packet_id));
-    std::memcpy(out_nonce + sizeof(packet_id), &header.from, sizeof(header.from));
-}
-
-bool parse_meshtastic_wire_packet(
-    const std::uint8_t* buffer,
-    std::size_t size,
-    ::chat::meshtastic::PacketHeaderWire* out_header,
-    std::uint8_t* out_payload,
-    std::size_t* out_payload_size)
-{
-    if (buffer == nullptr || out_header == nullptr || out_payload == nullptr ||
-        out_payload_size == nullptr ||
-        size < sizeof(::chat::meshtastic::PacketHeaderWire))
-    {
-        return false;
-    }
-    std::memcpy(out_header,
-                buffer,
-                sizeof(::chat::meshtastic::PacketHeaderWire));
-    const std::size_t payload_size =
-        size - sizeof(::chat::meshtastic::PacketHeaderWire);
-    if (*out_payload_size < payload_size)
-    {
-        *out_payload_size = payload_size;
-        return false;
-    }
-    std::memcpy(out_payload,
-                buffer + sizeof(::chat::meshtastic::PacketHeaderWire),
-                payload_size);
-    *out_payload_size = payload_size;
-    return true;
-}
-
-bool decrypt_meshtastic_payload(
-    const ::chat::meshtastic::PacketHeaderWire& header,
-    const std::uint8_t* cipher,
-    std::size_t cipher_len,
-    const std::uint8_t* psk,
-    std::size_t psk_len,
-    std::uint8_t* out_plaintext,
-    std::size_t* out_plain_len)
-{
-    if (cipher == nullptr || psk == nullptr || out_plaintext == nullptr ||
-        out_plain_len == nullptr || cipher_len == 0)
-    {
-        return false;
-    }
-    if (*out_plain_len < cipher_len)
-    {
-        *out_plain_len = cipher_len;
-        return false;
-    }
-    std::memcpy(out_plaintext, cipher, cipher_len);
-    std::uint8_t nonce[16] = {};
-    make_meshtastic_nonce(header, nonce, sizeof(nonce));
-    if (!aes_ctr_crypt(psk, psk_len, nonce, out_plaintext, cipher_len))
-    {
-        return false;
-    }
-    *out_plain_len = cipher_len;
-    return true;
-}
-
-bool build_meshtastic_wire_packet(const std::uint8_t* data_payload,
-                                  std::size_t data_len,
-                                  std::uint32_t from_node,
-                                  std::uint32_t packet_id,
-                                  std::uint32_t dest_node,
-                                  std::uint8_t channel_hash,
-                                  std::uint8_t hop_limit,
-                                  bool want_ack,
-                                  const std::uint8_t* psk,
-                                  std::size_t psk_len,
-                                  std::uint8_t* out_buffer,
-                                  std::size_t* out_size)
-{
-    if (data_payload == nullptr || data_len == 0 || out_buffer == nullptr ||
-        out_size == nullptr || data_len > 256)
-    {
-        return false;
-    }
-
-    std::uint8_t payload[256] = {};
-    std::memcpy(payload, data_payload, data_len);
-
-    ::chat::meshtastic::PacketHeaderWire header{};
-    header.to = dest_node;
-    header.from = from_node;
-    header.id = packet_id;
-    const std::uint8_t hop_start = hop_limit;
-    header.flags =
-        (hop_limit & ::chat::meshtastic::PACKET_FLAGS_HOP_LIMIT_MASK) |
-        ((hop_start << ::chat::meshtastic::PACKET_FLAGS_HOP_START_SHIFT) &
-         ::chat::meshtastic::PACKET_FLAGS_HOP_START_MASK);
-    if (want_ack)
-    {
-        header.flags |= ::chat::meshtastic::PACKET_FLAGS_WANT_ACK_MASK;
-    }
-    header.channel = channel_hash;
-    header.next_hop = 0;
-    header.relay_node = static_cast<std::uint8_t>(from_node & 0xFF);
-
-    if (psk != nullptr && psk_len > 0)
-    {
-        std::uint8_t nonce[16] = {};
-        make_meshtastic_nonce(header, nonce, sizeof(nonce));
-        if (!aes_ctr_crypt(psk, psk_len, nonce, payload, data_len))
-        {
-            return false;
-        }
-    }
-
-    const std::size_t required =
-        sizeof(::chat::meshtastic::PacketHeaderWire) + data_len;
-    if (*out_size < required)
-    {
-        *out_size = required;
-        return false;
-    }
-    std::memcpy(out_buffer,
-                &header,
-                sizeof(::chat::meshtastic::PacketHeaderWire));
-    std::memcpy(out_buffer + sizeof(::chat::meshtastic::PacketHeaderWire),
-                payload,
-                data_len);
-    *out_size = required;
-    return true;
 }
 
 ::platform::linux_runtime::PacketLogEntry make_lora_log(
@@ -3066,18 +2875,18 @@ bool LinuxRawLoraMeshAdapter::sendMeshtasticPayload(
     }
     std::uint8_t wire[255] = {};
     std::size_t wire_size = sizeof(wire);
-    if (!build_meshtastic_wire_packet(wire_payload,
-                                      wire_payload_size,
-                                      self_node_id_,
-                                      msg_id,
-                                      dest,
-                                      channel_hash,
-                                      config_.hop_limit,
-                                      air_want_ack,
-                                      psk,
-                                      psk_len,
-                                      wire,
-                                      &wire_size))
+    if (!::chat::meshtastic::buildWirePacket(wire_payload,
+                                             wire_payload_size,
+                                             self_node_id_,
+                                             msg_id,
+                                             dest,
+                                             channel_hash,
+                                             config_.hop_limit,
+                                             air_want_ack,
+                                             psk,
+                                             psk_len,
+                                             wire,
+                                             &wire_size))
     {
         append_lora_system_log(
             "Meshtastic TX packet build failed",
@@ -3221,18 +3030,18 @@ bool LinuxRawLoraMeshAdapter::sendMeshtasticNodeInfoTo(
     std::uint8_t wire[255] = {};
     std::size_t wire_size = sizeof(wire);
     const bool want_ack = want_response && dest != kBroadcastNodeId;
-    if (!build_meshtastic_wire_packet(data_payload,
-                                      data_size,
-                                      self_node_id_,
-                                      msg_id,
-                                      dest,
-                                      channel_hash,
-                                      config_.hop_limit,
-                                      want_ack,
-                                      psk,
-                                      psk_len,
-                                      wire,
-                                      &wire_size))
+    if (!::chat::meshtastic::buildWirePacket(data_payload,
+                                             data_size,
+                                             self_node_id_,
+                                             msg_id,
+                                             dest,
+                                             channel_hash,
+                                             config_.hop_limit,
+                                             want_ack,
+                                             psk,
+                                             psk_len,
+                                             wire,
+                                             &wire_size))
     {
         append_lora_system_log(
             "Meshtastic NodeInfo packet build failed",
@@ -3841,18 +3650,18 @@ bool LinuxRawLoraMeshAdapter::sendKeyVerificationPacket(
 
     std::uint8_t wire[255] = {};
     std::size_t wire_size = sizeof(wire);
-    if (!build_meshtastic_wire_packet(pki_buf,
-                                      pki_len,
-                                      self_node_id_,
-                                      msg_id,
-                                      dest,
-                                      0,
-                                      config_.hop_limit,
-                                      false,
-                                      nullptr,
-                                      0,
-                                      wire,
-                                      &wire_size))
+    if (!::chat::meshtastic::buildWirePacket(pki_buf,
+                                             pki_len,
+                                             self_node_id_,
+                                             msg_id,
+                                             dest,
+                                             0,
+                                             config_.hop_limit,
+                                             false,
+                                             nullptr,
+                                             0,
+                                             wire,
+                                             &wire_size))
     {
         return false;
     }
@@ -3927,18 +3736,18 @@ bool LinuxRawLoraMeshAdapter::sendRoutingAck(::chat::NodeId dest,
 
     std::uint8_t wire[255] = {};
     std::size_t wire_size = sizeof(wire);
-    if (!build_meshtastic_wire_packet(data_buf,
-                                      data_stream.bytes_written,
-                                      self_node_id_,
-                                      msg_id,
-                                      dest,
-                                      channel_hash,
-                                      config_.hop_limit,
-                                      false,
-                                      psk,
-                                      psk_len,
-                                      wire,
-                                      &wire_size))
+    if (!::chat::meshtastic::buildWirePacket(data_buf,
+                                             data_stream.bytes_written,
+                                             self_node_id_,
+                                             msg_id,
+                                             dest,
+                                             channel_hash,
+                                             config_.hop_limit,
+                                             false,
+                                             psk,
+                                             psk_len,
+                                             wire,
+                                             &wire_size))
     {
         return false;
     }
@@ -4081,11 +3890,11 @@ bool LinuxRawLoraMeshAdapter::parseMeshtasticPacket(
     ::chat::meshtastic::PacketHeaderWire header{};
     std::uint8_t payload[256] = {};
     std::size_t payload_size = sizeof(payload);
-    if (!parse_meshtastic_wire_packet(packet.data.data(),
-                                      packet.size,
-                                      &header,
-                                      payload,
-                                      &payload_size))
+    if (!::chat::meshtastic::parseWirePacket(packet.data.data(),
+                                             packet.size,
+                                             &header,
+                                             payload,
+                                             &payload_size))
     {
         append_lora_system_log(
             "Meshtastic RX parse failed",
@@ -4218,13 +4027,13 @@ bool LinuxRawLoraMeshAdapter::parseMeshtasticPacket(
                 }});
             return true;
         }
-        if (!decrypt_meshtastic_payload(header,
-                                        payload,
-                                        payload_size,
-                                        psk,
-                                        psk_len,
-                                        plaintext,
-                                        &plaintext_len))
+        if (!::chat::meshtastic::decryptPayload(header,
+                                                payload,
+                                                payload_size,
+                                                psk,
+                                                psk_len,
+                                                plaintext,
+                                                &plaintext_len))
         {
             append_lora_system_log(
                 "Meshtastic RX decrypt failed",

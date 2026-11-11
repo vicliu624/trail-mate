@@ -2,6 +2,7 @@
 #include "chat/infra/meshcore/meshcore_protocol_helpers.h"
 #include "chat/linux_meshcore_group_wire.h"
 #include "chat/linux_raw_lora_mesh_adapter.h"
+#include "mesh/protocol/meshcore/meshcore_protocol_strategy.h"
 #include "platform/linux/mesh/linux_sqlite_mesh_identity_store.h"
 #include "sys/event_bus.h"
 #include <cassert>
@@ -80,6 +81,19 @@ int main()
         assert(wire::decode(config, frame.bytes.data(), frame.size, decoded));
         assert(decoded.text && decoded.sender == 0 && decoded.timestamp == 0x12345678);
         assert(std::string(reinterpret_cast<char*>(decoded.payload.data()), decoded.size) == "peer: hi");
+        const uint8_t app_body[] = {1, 0, 2, 3};
+        wire::Frame app_frame;
+        assert(wire::encodeData(config, chat::ChannelId::PRIMARY, 99, 123, app_body, sizeof(app_body), app_frame));
+        mesh::meshcore::MeshCoreProtocolStrategy shared;
+        mesh::ProtocolBuildContext context{};
+        context.local_node = mesh::NodeId{99};
+        context.channel_key = mesh::ByteView{config.meshcore_channels[0].key, 16};
+        context.meshcore_payload_ver = chat::meshcore::payloadVersion(version ? chat::meshcore::PayloadProfile::V2 : chat::meshcore::PayloadProfile::V1);
+        mesh::DirectMessageCommand command{mesh::NodeId{}, mesh::ByteView{app_body, sizeof(app_body)}, false};
+        command.application_port = 123;
+        mesh::EncodedPacket expected;
+        assert(shared.buildDirectMessage(context, command, expected).ok);
+        assert(app_frame.size == expected.size && !std::memcmp(app_frame.bytes.data(), expected.bytes, expected.size));
         auto corrupt = frame;
         corrupt.bytes[corrupt.size - 1] ^= 1;
         assert(!wire::decode(config, corrupt.bytes.data(), corrupt.size, decoded));
@@ -135,7 +149,7 @@ int main()
         assert(!sender.sendText(chat::ChannelId::PRIMARY, "direct", &id, 22));
         assert(sender.getCapabilities().supports_unicast_text);
         assert(sender.sendTextDetailed(chat::ChannelId::PRIMARY, "missing", 0, 22).failure == chat::MeshOperationFailure::PeerKeyMissing);
-        assert(!sender.isPkiReady());
+        assert(sender.isPkiReady()); // MeshCore's persisted identity is ready.
         assert(sender.sendAppData(chat::ChannelId::PRIMARY, 123, body, sizeof(body)));
         rx.incoming.push_back(tx.sent);
         chat::MeshIncomingData data;
@@ -246,7 +260,8 @@ int main()
         sender.tick();
         assert(sys::EventBus::subscribe(&event) && event->type == sys::EventType::NodeInfoUpdate);
         update = static_cast<const sys::NodeInfoUpdateEvent*>(event);
-        assert(update->node_id == 0x33333333 && !update->has_public_key && !update->has_public_key_state);
+        assert(update->node_id == 0x33333333 && update->has_public_key && update->has_public_key_state);
+        assert(!update->key_manually_verified && !update->has_key_manually_verified_state);
         delete event;
         assert(!sys::EventBus::subscribe(&event));
         sender.applyProtocolConfig(chat::MeshProtocol::Meshtastic, config);

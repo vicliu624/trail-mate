@@ -25,6 +25,11 @@
 #define TRAILMATE_MT_AES_CTR_USE_ARDUINO_CRYPTO 0
 #endif
 
+#if !TRAILMATE_MT_AES_CTR_USE_SOFTWARE && !TRAILMATE_MT_AES_CTR_USE_ARDUINO_CRYPTO && defined(TRAIL_MATE_HAS_OPENSSL)
+#include <limits>
+#include <openssl/evp.h>
+#endif
+
 namespace chat
 {
 namespace meshtastic
@@ -335,6 +340,28 @@ bool aesCtrCryptInPlace(const uint8_t* key, size_t key_len,
         ctr.encrypt(buffer, scratch, len);
     }
     return true;
+#elif defined(TRAIL_MATE_HAS_OPENSSL)
+    if (len > static_cast<size_t>(std::numeric_limits<int>::max()))
+    {
+        return false;
+    }
+    EVP_CIPHER_CTX* context = EVP_CIPHER_CTX_new();
+    if (!context)
+    {
+        return false;
+    }
+    int count = 0;
+    int tail = 0;
+    // EVP permits identical input/output buffers for CTR. No protocol-sized
+    // temporary copy or platform-specific packet implementation is needed.
+    const bool ok =
+        EVP_EncryptInit_ex(context, key_len == 16 ? EVP_aes_128_ctr() : EVP_aes_256_ctr(),
+                           nullptr, key, counter) == 1 &&
+        EVP_EncryptUpdate(context, buffer, &count, buffer, static_cast<int>(len)) == 1 &&
+        EVP_EncryptFinal_ex(context, buffer + count, &tail) == 1 &&
+        static_cast<size_t>(count + tail) == len;
+    EVP_CIPHER_CTX_free(context);
+    return ok;
 #else
     return false;
 #endif

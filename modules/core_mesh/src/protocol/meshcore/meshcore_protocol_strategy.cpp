@@ -57,10 +57,10 @@ bool copyPayload(const DirectMessageCommand& command,
         return false;
     }
 
-    size_t body_len = command.payload.size;
-    if (body_len + prefix_size > plain_capacity)
+    const size_t body_len = command.payload.size;
+    if (body_len > plain_capacity - prefix_size)
     {
-        body_len = plain_capacity - prefix_size;
+        return false;
     }
     if (body_len == 0)
     {
@@ -206,24 +206,28 @@ ProtocolResult MeshCoreProtocolStrategy::buildDirectMessage(
         size_t payload_len = 0;
         uint8_t dest_hash[chat::meshcore::kMeshCoreV2HashBytes] = {};
         uint8_t src_hash[chat::meshcore::kMeshCoreV2HashBytes] = {};
-        bool hashes_ok = false;
-        if (profile == chat::meshcore::PayloadProfile::V1)
-        {
-            dest_hash[0] = lowNodeHash(command.to);
-            src_hash[0] = lowNodeHash(context.local_node);
-            hashes_ok = src_hash[0] != 0;
-        }
-        else if (context.meshcore_peer_hash.data &&
-                 context.meshcore_local_hash.data &&
-                 context.meshcore_peer_hash.size >= hash_bytes &&
-                 context.meshcore_local_hash.size >= hash_bytes)
+        if (context.meshcore_peer_hash.data &&
+            context.meshcore_local_hash.data &&
+            context.meshcore_peer_hash.size >= hash_bytes &&
+            context.meshcore_local_hash.size >= hash_bytes)
         {
             std::memcpy(dest_hash, context.meshcore_peer_hash.data, hash_bytes);
             std::memcpy(src_hash, context.meshcore_local_hash.data, hash_bytes);
-            hashes_ok = true;
         }
-        if (!hashes_ok ||
-            !chat::meshcore::buildPeerDatagramPayload(profile,
+        else if (profile == chat::meshcore::PayloadProfile::V1)
+        {
+            dest_hash[0] = lowNodeHash(command.to);
+            src_hash[0] = lowNodeHash(context.local_node);
+            if (src_hash[0] == 0)
+            {
+                return ProtocolResult::fail(ProtocolFailure::EncodeFailed);
+            }
+        }
+        else
+        {
+            return ProtocolResult::fail(ProtocolFailure::EncodeFailed);
+        }
+        if (!chat::meshcore::buildPeerDatagramPayload(profile,
                                                       dest_hash,
                                                       src_hash,
                                                       key16,

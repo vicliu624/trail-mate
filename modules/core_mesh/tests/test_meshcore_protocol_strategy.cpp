@@ -346,5 +346,25 @@ int main()
     assert(event.advert.node_type == advert_type_chat);
     assert(event.advert.timestamp == advert_ts);
 
+    // Explicit identity hashes are authoritative in both profiles. In V1 a
+    // valid public key can start with zero; neither that byte nor the peer's
+    // hash may be reconstructed from unrelated application node IDs.
+    mesh::ProtocolBuildContext explicit_v1{};
+    explicit_v1.local_node = mesh::NodeId{0x123456AA};
+    explicit_v1.channel_key = mesh::ByteView{direct_secret, sizeof(direct_secret)};
+    const uint8_t explicit_peer[] = {0x17};
+    const uint8_t explicit_self[] = {0};
+    explicit_v1.meshcore_peer_hash = mesh::ByteView{explicit_peer, sizeof(explicit_peer)};
+    explicit_v1.meshcore_local_hash = mesh::ByteView{explicit_self, sizeof(explicit_self)};
+    assert(strategy.buildDirectMessage(explicit_v1, command, encoded).ok);
+    chat::meshcore::ParsedPacket explicit_packet{};
+    assert(chat::meshcore::parsePacket(encoded.bytes, encoded.size, &explicit_packet));
+    assert(explicit_packet.payload[0] == 0x17 && explicit_packet.payload[1] == 0);
+    const uint8_t too_large[180] = {1};
+    auto oversized = command;
+    oversized.payload = mesh::ByteView{too_large, sizeof(too_large)};
+    assert(!strategy.buildDirectMessage(explicit_v1, oversized, encoded).ok && encoded.size == 0);
+    oversized.to = mesh::NodeId{};
+    assert(!strategy.buildDirectMessage(explicit_v1, oversized, encoded).ok && encoded.size == 0);
     return 0;
 }

@@ -1,5 +1,6 @@
 #include "chat/linux_meshcore_direct_wire.h"
 #include "chat/infra/meshcore/meshcore_payload_helpers.h"
+#include "mesh/protocol/meshcore/meshcore_protocol_strategy.h"
 #include <cstring>
 #if defined(TRAIL_MATE_HAS_OPENSSL)
 #include <openssl/crypto.h>
@@ -77,17 +78,26 @@ bool encodeDirectData(const Identity& self, const std::array<uint8_t, 32>& peer,
 {
     ack = 0;
     frame = {};
-    if (!port || !bytes || !size || size > 177) return false;
+    if (!port || !bytes || !size || size > 177 || !self.ready() || peer == self.publicKey()) return false;
     const bool verification = port == 12 && size == 12 && bytes[0] == 'T' && bytes[1] == 'M' &&
                               bytes[2] == 2 && bytes[3] >= 1 && bytes[3] <= 3;
     if (bytes[size - 1] == 0 && !verification && !mc::isFixedNodeInfoPayload(port, bytes, size)) return false;
-    std::array<uint8_t, 184> plain{};
-    plain[0] = 0xDA;
-    plain[1] = 0x7A;
-    plain[2] = want_ack ? 1 : 0;
-    put32(plain.data() + 3, port);
-    std::memcpy(plain.data() + 7, bytes, size);
-    if (!encode(self, peer, profile, 7, plain.data(), 7 + size, frame)) return false;
+    Secret secret;
+    if (!self.sharedSecret(peer.data(), secret.bytes)) return false;
+    mesh::meshcore::MeshCoreProtocolStrategy strategy;
+    mesh::ProtocolBuildContext context{};
+    context.local_node = mesh::NodeId{self.nodeId()};
+    context.channel_key = mesh::ByteView{secret.bytes, sizeof(secret.bytes)};
+    context.meshcore_payload_ver = mc::payloadVersion(profile);
+    context.meshcore_local_hash = mesh::ByteView{self.publicKey().data(), mc::payloadHashBytes(profile)};
+    context.meshcore_peer_hash = mesh::ByteView{peer.data(), mc::payloadHashBytes(profile)};
+    mesh::DirectMessageCommand command{mesh::NodeId{mc::deriveNodeIdFromPubkey(peer.data(), peer.size())},
+                                       mesh::ByteView{bytes, size}, want_ack};
+    command.application_port = port;
+    mesh::EncodedPacket encoded;
+    if (!strategy.buildDirectMessage(context, command, encoded).ok || encoded.size > frame.bytes.size()) return false;
+    std::memcpy(frame.bytes.data(), encoded.bytes, encoded.size);
+    frame.size = encoded.size;
     mc::ParsedPacket parsed;
     if (!mc::parsePacket(frame.bytes.data(), frame.size, &parsed)) return false;
     ack = want_ack ? mc::packetSignature(7, 0, parsed.payload, parsed.payload_len) : 0;

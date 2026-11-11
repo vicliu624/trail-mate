@@ -141,7 +141,8 @@ relayed sample cannot replace a newer displayed location.
 Native fixtures cover compatible crypto and tamper rejection, private snapshot
 save/reload and truncation rejection, authenticated presence, relay/delivery
 deduplication, newest-position projection, SX1262 standby/FIFO sequencing and RX
-restoration, Contacts Team visibility, and real worker queueing under carrier
+restoration, rejection of simultaneous RX_DONE/CRC/header error IRQs, Contacts
+Team visibility and conversation routing, and real worker queueing under carrier
 activity. Queue tests also cover idle-worker wake-up, eventual transmission,
 timer rollover and CPU-spin avoidance.
 
@@ -167,3 +168,56 @@ Manual test coordinates must not be presented as a live fix. A “Team location 
 ready” result when no fix exists is distinct from a radio delivery failure.
 Independent application-resume timers must protect any exclusive-radio diagnostic
 that temporarily stops the normal app.
+
+## Shared protocol ownership
+
+Linux is a useful test host for the protocol code that also runs on ESP32. The
+same protocol must not acquire a second wire implementation merely because its
+radio or operating system changes. Team enrollment and mesh transport remain
+separate; successful ESP-NOW enrollment does not qualify a mesh bearer.
+
+| Protocol | Canonical shared implementation | Platform responsibility |
+| --- | --- | --- |
+| Meshtastic | `core_chat` packet wire format, nonce, channel framing, protobuf helpers, PKI primitives and runtime effects | Radio I/O, scheduler, persistent identity, event/store integration; the AES primitive selects the existing ESP implementation or Linux OpenSSL backend |
+| MeshCore | `core_chat` crypto, payload helpers and identity primitives; `core_mesh::MeshCoreProtocolStrategy` builds both group and private AppData | Resolve channel/peer keys and paths, maintain bounded pending sends, persist identities, and project received events |
+| Reticulum / LXMF | `core_chat` packet/token format, signature and handshake calculations, packet router, path/session/resource owners and delivery planning | Interface sockets/radio, clock/random/crypto providers, persistence, allocation budget and application acceptance |
+
+`LinuxRawLoraMeshAdapter` calls Meshtastic `buildWirePacket`, `parseWirePacket`
+and `decryptPayload`; it does not maintain its own AES-CTR, nonce or packet
+codec. The Linux OpenSSL primitive operates in place. ESP preprocessing excludes
+that backend, including its OpenSSL context allocation.
+
+Linux MeshCore group/private AppData calls the same strategy used by the ESP
+adapter. Explicit public-key hashes take precedence in both V1 and V2, including
+a valid zero first byte. Oversized AppData fails instead of silently transmitting
+a truncated application envelope. Linux admission checks still reject ambiguous
+zero-padded application tails and disabled channel slots. Existing text and PATH
+ACK composition, platform relay scheduling and adapter orchestration have not
+all been consolidated; sharing AppData does not claim that the whole adapter is
+platform independent.
+
+Reticulum's ESP compatibility headers already forward to canonical `core_chat`
+owners. Keep that direction of dependency. Linux's heap buffers, SQLite
+transactions and socket lifecycle must not become ESP task-stack buffers or a
+second copy of the shared session/resource runtime. Remaining platform envelope
+orchestration can be reduced only while preserving its caller-owned storage and
+durable acceptance boundary.
+
+### Memory and compatibility checks
+
+The Meshtastic backend change produces byte-identical ESP preprocessed code.
+An ESP32-S3 `-Os -fstack-usage` compile of the MeshCore strategy before/after the
+AppData convergence reports 3,266 bytes of code and zero static data/BSS for both
+translation units. The send implementation's reported stack frame changes from
+688 to 704 bytes; its wrapper remains 48 bytes and RX remains 416 bytes. These
+are isolated compiler checks, not whole-firmware RAM or runtime high-water
+measurements. No strategy member, queue, allocation or buffer capacity is added.
+
+Native contracts independently decrypt actual Linux Meshtastic AES-128/256
+packets with OpenSSL and compare their complete bytes with the shared codec.
+MeshCore contracts compare group/private V1/V2 AppData with the shared strategy,
+retain independent encrypted text vectors, and test explicit zero hashes and
+oversize rejection. Cardputer Zero registers those existing MeshCore fixtures
+in its native suite, so they run against the same common library as the device.
+The repository ESP stack hygiene check remains required. Software contracts do
+not establish new MeshCore or Reticulum on-air qualification.

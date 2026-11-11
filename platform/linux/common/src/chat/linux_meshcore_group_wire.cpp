@@ -1,5 +1,6 @@
 #include "chat/linux_meshcore_group_wire.h"
 #include "chat/infra/meshcore/meshcore_payload_helpers.h"
+#include "mesh/protocol/meshcore/meshcore_protocol_strategy.h"
 #include <algorithm>
 #include <cstring>
 
@@ -80,13 +81,20 @@ bool encodeData(const chat::MeshConfig& config, chat::ChannelId channel,
     // Refuse an ambiguous tail instead of reporting a lossy send as success.
     if (!sender || sender == 0xFFFFFFFFU || !port || !payload || !size || (payload[size - 1] == 0 && !mc::isFixedNodeInfoPayload(port, payload, size)) ||
         size > plainBudget(profileFor(config)) - 10) return false;
-    std::array<uint8_t, max_payload> plain{};
-    plain[0] = 'G';
-    plain[1] = 'D';
-    put32(plain.data() + 2, sender);
-    put32(plain.data() + 6, port);
-    std::memcpy(plain.data() + 10, payload, size);
-    return encode(config, channel, 6, plain.data(), size + 10, frame);
+    const auto* key = channelKey(config, channel);
+    if (!key) return false;
+    mesh::meshcore::MeshCoreProtocolStrategy strategy;
+    mesh::ProtocolBuildContext context{};
+    context.local_node = mesh::NodeId{sender};
+    context.channel_key = mesh::ByteView{key, chat::kMeshCoreChannelKeyLen};
+    context.meshcore_payload_ver = mc::payloadVersion(profileFor(config));
+    mesh::DirectMessageCommand command{mesh::NodeId{}, mesh::ByteView{payload, size}, false};
+    command.application_port = port;
+    mesh::EncodedPacket encoded;
+    if (!strategy.buildDirectMessage(context, command, encoded).ok || encoded.size > frame.bytes.size()) return false;
+    std::memcpy(frame.bytes.data(), encoded.bytes, encoded.size);
+    frame.size = encoded.size;
+    return true;
 }
 bool decode(const chat::MeshConfig& config, const uint8_t* bytes,
             std::size_t size, Incoming& incoming)
