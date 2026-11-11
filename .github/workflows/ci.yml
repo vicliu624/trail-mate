@@ -344,6 +344,9 @@ jobs:
       - name: Verify ESP stack hygiene
         run: python3 scripts/check_esp_stack_hygiene.py
 
+      - name: Verify board-independent Meshtastic radio configuration and receive
+        run: python3 tests/meshtastic_radio/test_configure_receive.py
+
       - name: Verify firmware version selection
         run: python3 tests/test_firmware_version.py
 

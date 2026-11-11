@@ -3524,23 +3524,25 @@ void MtAdapter::configureRadio()
     }
     config_.tx_power = radio.tx_power_dbm;
 
+    const int state = board_.configureLoraRadio(radio.freq_mhz,
+                                                radio.bw_khz,
+                                                radio.sf,
+                                                radio.cr_denom,
+                                                radio.tx_power_dbm,
+                                                radio.preamble_len,
+                                                radio.sync_word,
+                                                radio.crc_len);
+    if (state != RADIOLIB_ERR_NONE)
+    {
+        ready_ = false;
+        LORA_LOG("[LORA] radio config failed state=%d; adapter not ready\n", state);
+        return;
+    }
+
     radio_freq_hz_ = static_cast<uint32_t>(std::lround(radio.freq_mhz * 1000000.0f));
     radio_bw_hz_ = static_cast<uint32_t>(std::lround(radio.bw_khz * 1000.0f));
     radio_sf_ = radio.sf;
     radio_cr_ = radio.cr_denom;
-
-#if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280) || \
-    defined(ARDUINO_LILYGO_LORA_LR1121)
-    board_.configureLoraRadio(radio.freq_mhz,
-                              radio.bw_khz,
-                              radio.sf,
-                              radio.cr_denom,
-                              radio.tx_power_dbm,
-                              radio.preamble_len,
-                              radio.sync_word,
-                              radio.crc_len);
-#endif
-
     ready_ = true;
     // Suppress auto NodeInfo broadcast at boot; wait for interval to elapse.
     last_nodeinfo_ms_ = millis();
@@ -3647,8 +3649,6 @@ void MtAdapter::startRadioReceive()
         app::AppTasks::requestRadioReceiveRestart();
         return;
     }
-#if defined(ARDUINO_LILYGO_LORA_SX1262) || defined(ARDUINO_LILYGO_LORA_SX1280) || \
-    defined(ARDUINO_LILYGO_LORA_LR1121)
     app::AppTasks::requestRadioReceiveRestart();
     int state = board_.startRadioReceive();
     if (state == RADIOLIB_ERR_NONE)
@@ -3660,7 +3660,6 @@ void MtAdapter::startRadioReceive()
         app::AppTasks::requestRadioReceiveRestart();
         LORA_LOG("[LORA] RX start fail state=%d\n", state);
     }
-#endif
 }
 
 bool MtAdapter::transmitWirePacket(const uint8_t* wire_data, size_t wire_size)

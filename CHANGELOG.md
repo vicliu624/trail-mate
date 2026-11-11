@@ -10,6 +10,21 @@ stable firmware release. Hardware support and validation remain target-specific.
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-11-11
+
+### Fixed
+
+- Meshtastic applies radio settings and starts reception through the shared
+  `LoraBoard` interface without a board-name macro whitelist. Wio Tracker L2
+  and other implementations now receive the selected frequency, bandwidth,
+  spreading factor and framing settings instead of retaining boot defaults.
+- Failed hardware configuration leaves the Meshtastic adapter unavailable and
+  preserves the last applied radio parameters. A rejected request is no longer
+  reported as a ready adapter with the requested frequency.
+- Native regression coverage exercises the production configuration and receive
+  methods with no board identity macros, including CN / LongFast derivation,
+  rejected settings, offline hardware and receive restart failures.
+
 ## [1.2.1] - 2026-11-10
 
 ### Fixed
