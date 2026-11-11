@@ -2572,7 +2572,9 @@ static void open_chat_compose()
             ::ui::feedback::show_notice(chat_support::team_chat_unavailable_message(), 2200);
             return;
         }
-        channel = chat::ChannelId::PRIMARY;
+        // Preserve the virtual Team identity for Chat's workflow selection.
+        // The Team workflow separately chooses its physical bearer channel.
+        channel = chat::ChannelId::TEAM;
         peer_id = 0;
         title = contacts_team_title();
     }
