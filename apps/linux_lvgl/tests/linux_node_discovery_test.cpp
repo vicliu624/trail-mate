@@ -1,5 +1,6 @@
 #include "chat/infra/mesh_peer_directory_core.h"
 #include "chat/infra/meshcore/meshcore_payload_helpers.h"
+#include "chat/infra/meshtastic/mt_packet_wire.h"
 #include "chat/linux_raw_lora_mesh_adapter.h"
 #include "chat/runtime/meshcore_runtime.h"
 #include "chat/usecase/contact_service.h"
@@ -296,7 +297,18 @@ void exchange(const std::filesystem::path& root, chat::MeshProtocol protocol,
     assert(!br.sent.empty());
     // The scanner learns only DISCOVER_RESP, never B's signed advert.
     if (protocol == chat::MeshProtocol::Meshtastic)
-        ar.incoming.push_back(br.sent.back());
+    {
+        // A due relay can be the latest RF output. Select B's addressed answer,
+        // rather than feeding A its own relayed request as a discovery response.
+        const auto answer = std::find_if(br.sent.rbegin(), br.sent.rend(), [&](const auto& packet)
+                                         {
+                                             chat::meshtastic::PacketHeaderWire header{};
+                                             if (packet.size < sizeof(header)) return false;
+                                             std::memcpy(&header, packet.data.data(), sizeof(header));
+                                             return header.from == b.getNodeId() && header.to == a.getNodeId(); });
+        assert(answer != br.sent.rend());
+        ar.incoming.push_back(*answer);
+    }
     else
         for (const auto& packet : br.sent) ar.incoming.push_back(packet);
     useRoot(root / "a");

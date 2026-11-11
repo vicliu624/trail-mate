@@ -62,8 +62,8 @@ int main(int argc, char** argv)
         assert(find_label(lv_group_get_focused(menu_g), "Team"));
         key(Key::Enter);
         assert(ui_get_active_app() && !std::strcmp(ui_get_active_app()->stable_id(), "team"));
-        auto* create_label = find_label(lv_screen_active(), "Create Team");
-        auto* join_label = find_label(lv_screen_active(), "Join Team");
+        auto* create_label = find_label(lv_screen_active(), "Create");
+        auto* join_label = find_label(lv_screen_active(), "Join");
         assert(create_label && join_label);
         auto* create = lv_obj_get_parent(create_label);
         auto* join = lv_obj_get_parent(join_label);

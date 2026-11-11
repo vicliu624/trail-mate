@@ -2,6 +2,7 @@
 #include "ui/menu/menu_runtime.h"
 #include "ui/screens/chat/chat_compose_components.h"
 #include "ui/screens/chat/chat_conversation_layout.h"
+#include "ui/screens/chat/chat_conversation_styles.h"
 #include "ui/shell_ui_runner.h"
 #include "ui/widgets/ime/ime_widget.h"
 #include <cassert>
@@ -153,10 +154,14 @@ int main()
         }
         {
             auto conversation = chat::ui::layout::create_conversation_base(lv_screen_active());
+            chat::ui::conversation::styles::apply_root(conversation.root);
             lv_obj_update_layout(conversation.root);
             assert(lv_obj_get_height(conversation.action_bar) == 24);
             assert(lv_obj_get_height(conversation.reply_btn) == 20);
-            assert(lv_obj_get_width(conversation.reply_btn) == 54);
+            lv_area_t send_bounds{};
+            lv_obj_get_coords(conversation.reply_btn, &send_bounds);
+            assert((send_bounds.x1 + send_bounds.x2 + 1) / 2 == 48); // Physical key 4.
+            assert(lv_obj_get_width(conversation.reply_btn) <= 60);  // Stay in its key cell.
             lv_obj_delete(conversation.root);
         }
         ui::menu_runtime::setScene(ui::menu_runtime::Scene::Menu);

@@ -72,7 +72,7 @@ int main(int argc, char** argv)
         assert(ui_get_active_app() && !std::strcmp(ui_get_active_app()->stable_id(), "team"));
         if (!restore)
         {
-            auto* label = find_label(lv_screen_active(), leader ? "Create Team" : "Join Team");
+            auto* label = find_label(lv_screen_active(), leader ? "Create" : "Join");
             assert(label && !lv_obj_has_state(lv_obj_get_parent(label), LV_STATE_DISABLED));
             lv_obj_send_event(lv_obj_get_parent(label), LV_EVENT_CLICKED, nullptr);
             std::puts("REAL_UI_PAIRING_STARTED");
