@@ -128,6 +128,9 @@ does not schedule work: the ESP lifecycles must also produce that event.
 The initial Team state load is completed only after a successful read, so an
 early tick cannot permanently skip restoration while ESP storage is starting.
 Failed reads preserve the existing in-memory Team identity and credentials.
+Before that initial restoration, automatic empty or partial projections are
+not written back. An explicit pending join or a complete newly created Team
+can initialize the store; subsequent leave or join cancellation still clears it.
 
 Protocol, region, actual frequency, modulation and channel keys
 must agree across participants. The live CN / LongFast exercises used

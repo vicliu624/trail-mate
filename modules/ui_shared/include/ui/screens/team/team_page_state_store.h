@@ -55,7 +55,7 @@ class TeamPageStateStore
                  TeamPagePersistentState& state,
                  TeamPageColorContext color_context);
     void save(ITeamUiSnapshotStore& store,
-              const TeamPagePersistentState& state) const;
+              const TeamPagePersistentState& state);
     void resetLoaded();
 
     static TeamUiSnapshot snapshotFromState(const TeamPagePersistentState& state);

@@ -17,6 +17,9 @@ stable firmware release. Hardware support and validation remain target-specific.
   receives its missing clock input; Linux no longer queues a tick every loop.
 - Team restoration retries when storage is not ready on the first UI tick,
   preserving existing credentials until the persisted state can be read.
+- Automatic empty or partial Team projections cannot overwrite unread
+  membership or keys during startup; explicit creation, joining and leaving
+  retain their normal persistence behavior.
 - Shared Team background presence continues after enrollment retries finish.
   Leaders periodically send a complete authenticated roster, while members
   retain the leader's roster and announce their own presence. Linux uses the

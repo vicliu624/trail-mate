@@ -49,9 +49,20 @@ bool TeamPageStateStore::refresh(ITeamUiSnapshotStore& store,
 }
 
 void TeamPageStateStore::save(ITeamUiSnapshotStore& store,
-                              const TeamPagePersistentState& state) const
+                              const TeamPagePersistentState& state)
 {
+    // An early, ignored Team event can reach this path before storage is ready.
+    // Only an explicit join or a complete new Team may initialize unread state;
+    // empty/partial projections must not overwrite persisted membership/keys.
+    const bool complete_team =
+        state.in_team && state.has_team_id && state.has_team_psk;
+    if (!loaded_ && !state.pending_join && !complete_team)
+    {
+        return;
+    }
     store.save(snapshotFromState(state));
+    // A newly created Team can be left or a join canceled before the next tick.
+    loaded_ = true;
 }
 
 void TeamPageStateStore::resetLoaded()

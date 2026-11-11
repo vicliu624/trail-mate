@@ -165,15 +165,42 @@ void testLoadOnceAndRefresh()
 void testSaveWritesSnapshot()
 {
     FakeSnapshotStore fake;
-    const auto state = makeState();
-
+    fake.snapshot = team::ui::TeamPageStateStore::snapshotFromState(makeState());
     team::ui::TeamPageStateStore store;
+
+    // A transiently unavailable old Team must survive an automatic empty save.
+    store.save(fake, {});
+    assert(fake.save_count == 0);
+    team::ui::TeamPagePersistentState partial;
+    partial.has_team_id = true;
+    partial.team_id[0] = 0x99;
+    store.save(fake, partial);
+    assert(fake.save_count == 0);
+    assert(fake.snapshot.has_team_psk && fake.snapshot.team_psk[0] == 0xAA);
+
+    auto state = makeState();
+    state.pending_join = false;
+    state.kicked_out = false;
     store.save(fake, state);
 
     assert(fake.save_count == 1);
     assert(fake.has_snapshot);
     assert(fake.snapshot.team_name == "Trail");
     assert(fake.snapshot.members.size() == 2);
+
+    // Explicit creation establishes ownership, so immediate leave still clears.
+    store.save(fake, {});
+    assert(fake.save_count == 2);
+    assert(!fake.snapshot.in_team && !fake.snapshot.has_team_psk);
+
+    FakeSnapshotStore joining;
+    team::ui::TeamPageStateStore join_store;
+    team::ui::TeamPagePersistentState pending;
+    pending.pending_join = true;
+    join_store.save(joining, pending);
+    assert(joining.save_count == 1 && joining.snapshot.pending_join);
+    join_store.save(joining, {});
+    assert(joining.save_count == 2 && !joining.snapshot.pending_join);
 }
 
 } // namespace
