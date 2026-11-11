@@ -573,7 +573,7 @@ void TeamPageLvglRenderer::renderTeamHome(
     if (context.action_btns && context.action_btn_count > 1)
     {
         context.action_btns[1] =
-            createActionButton(context, "Manage", handlers.manage);
+            createActionButton(context, LV_SYMBOL_SETTINGS, handlers.manage);
         registerFocus(context, context.action_btns[1]);
     }
     if (context.action_btns && context.action_btn_count > 2)

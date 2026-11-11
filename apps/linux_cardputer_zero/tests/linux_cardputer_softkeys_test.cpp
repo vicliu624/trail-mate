@@ -110,6 +110,17 @@ int main()
         key('4');
         assert(visible_label(lv_screen_active(), membership.team_name.c_str()));
         assert(!visible_label(lv_screen_active(), "Roster"));
+        auto* manage = visible_label(lv_screen_active(), LV_SYMBOL_SETTINGS);
+        assert(manage && lv_obj_get_height(manage) <= lv_obj_get_content_height(lv_obj_get_parent(manage)));
+        unsigned manage_clicks = 0;
+        lv_obj_add_event_cb(
+            lv_obj_get_parent(manage), [](lv_event_t* event)
+            { ++*static_cast<unsigned*>(lv_event_get_user_data(event)); },
+            LV_EVENT_CLICKED, &manage_clicks);
+        key('5');
+        assert(manage_clicks == 1);
+        assert(visible_label(lv_screen_active(), LV_SYMBOL_SETTINGS));
+        tick(2100ms);
         shell.enqueueInputs({{Key::Power}});
         tick(200ms);
         assert(visible_label(lv_screen_active(), "Roster"));
