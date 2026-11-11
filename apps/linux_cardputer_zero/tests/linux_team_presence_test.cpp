@@ -1,3 +1,4 @@
+#include "app/app_system_tick.h"
 #include "platform/linux/team_protocol_crypto.h"
 #include "platform/ui/team_ui_snapshot_store.h"
 #include "ui/screens/team/team_page_deferred_dispatch.h"
@@ -108,8 +109,40 @@ class Dispatch final : public team::ui::ITeamPageDeferredDispatchPort
     team::TeamService& service_;
 };
 
+void testSystemTickCadence()
+{
+    assert(sys::EventBus::init(1));
+    app::AppSystemTickPublisher publisher;
+    assert(publisher.publish(0));
+    assert(!publisher.publish(999));
+    assert(sys::EventBus::pendingCount() == 1);
+    // A full bus drops the tick without spinning or retaining another event.
+    assert(!publisher.publish(1000));
+    sys::Event* event = nullptr;
+    assert(sys::EventBus::subscribe(&event, 0));
+    assert(event && event->type == sys::EventType::SystemTick);
+    delete event;
+    assert(!publisher.publish(1001));
+    assert(publisher.publish(2000));
+    assert(sys::EventBus::subscribe(&event, 0));
+    delete event;
+    assert(!sys::EventBus::subscribe(&event, 0));
+
+    app::AppSystemTickPublisher rollover;
+    assert(rollover.publish(UINT32_MAX - 499U));
+    assert(sys::EventBus::subscribe(&event, 0));
+    delete event;
+    assert(!rollover.publish(499));
+    assert(rollover.publish(500));
+    assert(sys::EventBus::subscribe(&event, 0));
+    delete event;
+    assert(sizeof(app::AppSystemTickPublisher) <= 8);
+    assert(sys::EventBus::init());
+}
+
 int main()
 {
+    testSystemTickCadence();
     Runtime runtime;
     Mesh alice, bob;
     bob.self = 0x2222;
@@ -131,10 +164,22 @@ int main()
     Dispatch port(a);
     team::proto::TeamStatus status;
     status.key_id = 7;
-    presence.processStatusBroadcasts(dispatch_state, status, port, 1000);
+    app::AppSystemTickPublisher system_tick;
+    const auto pump = [&](uint32_t seconds)
+    {
+        runtime.now = (seconds - 1000U) * 1000U;
+        system_tick.publish(runtime.now);
+        sys::Event* event = nullptr;
+        while (sys::EventBus::subscribe(&event, 0))
+        {
+            assert(event && event->type == sys::EventType::SystemTick);
+            presence.processStatusBroadcasts(dispatch_state, status, port, seconds);
+            delete event;
+        }
+    };
+    pump(1000);
     assert(alice.sent.empty());
-    runtime.now = 5000;
-    presence.processStatusBroadcasts(dispatch_state, status, port, 1005);
+    pump(1005);
     assert(alice.sent.size() == 1);
 
     // A late member understands the ordinary authenticated Status wire without
@@ -176,7 +221,7 @@ int main()
     status.has_members = true;
     status.leader_id = alice.self;
     status.members = {alice.self, bob.self, 0x9A94};
-    presence.processStatusBroadcasts(dispatch_state, status, port, 1070);
+    pump(1070);
     bob.incoming.push_back(alice.sent.back());
     b.processIncoming();
     assert(bob_sink.last.msg.has_members && bob_sink.last.msg.leader_id == alice.self);

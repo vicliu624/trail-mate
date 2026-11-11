@@ -4,6 +4,7 @@
 #include "app/app_config.h"
 #include "app/app_facade_access.h"
 #include "app/app_facades.h"
+#include "app/app_system_tick.h"
 #include "app/config_persistence_runtime.h"
 #include "board/BoardBase.h"
 #include "chat/delivery/chat_delivery_event_port.h"
@@ -1546,6 +1547,7 @@ class IdfAppFacadeRuntime final : public app::IAppFacade
 
     void tickEventRuntime() override
     {
+        app::publishSystemTick(sys::millis_now());
         // The IDF app loop runs on a dedicated FreeRTOS task. Keep every LVGL
         // projection inside tickBoundLifecycle()'s display lock instead of
         // allowing the loop task to update the call overlay independently.

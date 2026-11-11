@@ -1,4 +1,5 @@
 #include "app/linux_app_services.h"
+#include "app/app_system_tick.h"
 #include "app/linux_app_config_blob.h"
 #include "app/linux_phone_runtime.h"
 #include "app/linux_tms_store.h"
@@ -2606,7 +2607,7 @@ void LinuxAppServices::tickEventRuntime()
     {
         impl_->native_pairing_service.update();
     }
-    ::sys::EventBus::publish(new ::sys::Event(::sys::EventType::SystemTick), 0);
+    ::app::publishSystemTick(::sys::millis_now());
 }
 
 void LinuxAppServices::dispatchPendingEvents(std::size_t max_events)

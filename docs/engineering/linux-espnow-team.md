@@ -119,6 +119,13 @@ single 32-bit deadline is added to the dispatcher; periodic sends do not allocat
 queue entries. Existing finite enrollment retries retain their compatibility
 messages, while periodic presence is authenticated only.
 
+Arduino, ESP-IDF and Linux UI lifecycle adapters all call the same system-tick
+publisher before dispatching UI events. It attempts at most one event per
+second, including after queue backpressure, and handles millisecond rollover.
+The publisher has eight bytes of clock state and uses the existing event bus;
+it adds no task, queue capacity or protocol buffer. A SystemTick consumer alone
+does not schedule work: the ESP lifecycles must also produce that event.
+
 Protocol, region, actual frequency, modulation and channel keys
 must agree across participants. The live CN / LongFast exercises used
 478.875 MHz, BW 250 kHz, SF11, CR 4/5, sync 0x2B and a 16-symbol preamble.

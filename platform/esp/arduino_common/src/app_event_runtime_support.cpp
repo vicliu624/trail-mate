@@ -5,6 +5,7 @@
 #include <string>
 
 #include "app/app_facades.h"
+#include "app/app_system_tick.h"
 #include "chat/usecase/chat_service.h"
 #include "chat/usecase/contact_service.h"
 #include "platform/esp/arduino_common/app_runtime_support.h"
@@ -170,6 +171,7 @@ void handleChatSendResultFeedback(app::IAppFacade& app_context,
 
 void tickUiRuntime(app::IAppFacade& app_context)
 {
+    app::publishSystemTick(sys::millis_now());
     platform::esp::arduino_common::tickRuntime(app_context);
 
     chat::ui::IChatUiRuntime* chat_ui_runtime = app_context.getChatUiRuntime();
