@@ -1121,7 +1121,7 @@ lv_obj_t* s_zero_footer_buttons[5]{};
 void updateZeroFooter()
 {
     const bool feed = ui::menu::dashboard::isFeedOpen();
-    const char* labels[] = {"Chat", "Map", "Track", "Nodes", feed ? "Menu" : "Set"};
+    const char* labels[] = {"Chat", "Map", "Track", "Nodes", feed ? "Menu" : "Widgets"};
     for (unsigned index = 0; index < 5; ++index)
     {
         auto* button = s_zero_footer_buttons[index];
@@ -1135,14 +1135,15 @@ void updateZeroFooter()
 void zeroFooterClicked(lv_event_t* event)
 {
     const auto slot = reinterpret_cast<uintptr_t>(lv_event_get_user_data(event));
-    if (ui::menu::dashboard::isFeedOpen())
+    if (slot == 4)
     {
-        if (slot == 4) ui::menu::dashboard::setActive(false);
+        (void)ui::menu::dashboard::handleKey('v');
         updateZeroFooter();
         return;
     }
-    const char* applications[] = {"chat", "map", "tracker", "contacts", "settings"};
-    if (slot < 5) (void)ui::menu_layout::launchAppByStableId(applications[slot]);
+    if (ui::menu::dashboard::isFeedOpen()) return;
+    const char* applications[] = {"chat", "map", "tracker", "contacts"};
+    if (slot < 4) (void)ui::menu_layout::launchAppByStableId(applications[slot]);
 }
 #endif
 
@@ -1347,12 +1348,19 @@ void createAppGrid()
     s_bottom_psram_chip = {};
 #if defined(TRAIL_MATE_CARDPUTER_ZERO_LINUX)
     ::ui::input::cardputer::softkeys::install_row(s_bottom_bar);
-    const char* labels[] = {"Chat", "Map", "Track", "Nodes", "Set"};
+    const char* labels[] = {"Chat", "Map", "Track", "Nodes", "Widgets"};
     for (unsigned slot = 0; slot < 5; ++slot)
     {
         auto* button = ::ui::components::bottom_bar::add_button(
             s_bottom_bar, labels[slot], zeroFooterClicked, reinterpret_cast<void*>(static_cast<uintptr_t>(slot)));
         s_zero_footer_buttons[slot] = button;
+        if (slot == 4)
+        {
+            // Keep launcher focus on its app icon so V and directional keys
+            // still reach menuButtonKeyCallback after returning from Widgets.
+            lv_group_remove_obj(button);
+            lv_obj_remove_flag(button, LV_OBJ_FLAG_CLICK_FOCUSABLE);
+        }
         lv_obj_set_style_text_font(button, profile.node_id_font, LV_PART_MAIN);
         lv_obj_set_style_text_font(lv_obj_get_child(button, 0), profile.node_id_font, LV_PART_MAIN);
     }

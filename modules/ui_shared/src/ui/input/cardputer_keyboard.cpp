@@ -260,8 +260,9 @@ bool handle_key(uint32_t& key, bool pressed, lv_group_t* group, State& state)
     if (launcher && key == kHelpKey) key = 'h';
     if (launcher && key >= '4' && key <= '8')
     {
-        const char* applications[] = {"chat", "map", "tracker", "contacts", "settings"};
-        state.consumed = ::ui::menu_layout::launchAppByStableId(applications[key - '4']);
+        const char* applications[] = {"chat", "map", "tracker", "contacts"};
+        state.consumed = key == '8' ? ::ui::menu::dashboard::handleKey('v')
+                                    : ::ui::menu_layout::launchAppByStableId(applications[key - '4']);
     }
     else if (key >= '4' && key <= '8' && !std::strcmp(id, "music")) state.consumed = music_action(key);
     else if (key >= '4' && key <= '8' && !std::strcmp(id, "tracker"))

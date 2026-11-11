@@ -3,6 +3,7 @@
 #include "ui/app_runtime.h"
 #include "ui/components/bottom_bar.h"
 #include "ui/input/cardputer_keyboard.h"
+#include "ui/menu/menu_dashboard.h"
 #include "ui/menu/menu_layout.h"
 #include "ui/shell_ui_runner.h"
 #include <cassert>
@@ -60,7 +61,41 @@ int main()
         char node_id[12]{};
         std::snprintf(node_id, sizeof(node_id), "!%08lX", static_cast<unsigned long>(shell.facade().getSelfNodeId()));
         assert(!visible_label(lv_screen_active(), node_id));
-        key('8');
+        auto* widgets = visible_label(lv_screen_active(), "Widgets");
+        assert(widgets && !visible_label(lv_screen_active(), "Set"));
+        assert(lv_obj_get_height(widgets) <= lv_obj_get_content_height(lv_obj_get_parent(widgets)));
+        auto* launcher_focus = lv_group_get_focused(lv_group_get_default());
+        const auto widget_key = [&](char value)
+        {
+            key(value);
+            tick(250ms); // Allow the existing 180 ms feed transition to settle.
+        };
+        widget_key('8');
+        assert(!ui_get_active_app() && ui::menu::dashboard::isFeedOpen());
+        assert(visible_label(lv_screen_active(), "Menu"));
+        widget_key('8');
+        assert(!ui::menu::dashboard::isFeedOpen());
+        assert(lv_group_get_focused(lv_group_get_default()) == launcher_focus);
+        widget_key('v');
+        assert(ui::menu::dashboard::isFeedOpen());
+        widget_key('8');
+        assert(!ui::menu::dashboard::isFeedOpen());
+        widget_key('8');
+        assert(ui::menu::dashboard::isFeedOpen());
+        widget_key('v');
+        assert(!ui::menu::dashboard::isFeedOpen());
+        widgets = visible_label(lv_screen_active(), "Widgets");
+        assert(widgets);
+        lv_obj_send_event(lv_obj_get_parent(widgets), LV_EVENT_CLICKED, nullptr);
+        tick(400ms);
+        assert(ui::menu::dashboard::isFeedOpen());
+        auto* menu = visible_label(lv_screen_active(), "Menu");
+        assert(menu);
+        lv_obj_send_event(lv_obj_get_parent(menu), LV_EVENT_CLICKED, nullptr);
+        tick(400ms);
+        assert(!ui::menu::dashboard::isFeedOpen());
+        assert(ui::menu_layout::launchAppByStableId("settings"));
+        tick(200ms);
         assert(ui_get_active_app() && !std::strcmp(ui_get_active_app()->stable_id(), "settings"));
         key('8');
         auto* device = visible_label(lv_screen_active(), "Device");

@@ -12,6 +12,9 @@ stable firmware release. Hardware support and validation remain target-specific.
 
 ### Fixed
 
+- Cardputer Zero's rightmost main-menu shortcut opens Widgets instead of
+  Settings. The physical 8 key and footer button toggle between Widgets and
+  Menu without disabling the widget feed; the existing V shortcut is retained.
 - Arduino Team receive timestamps use the shared Unix clock when available,
   retaining uptime only while the clock is unset. Recently received members
   no longer appear to have an unknown last-seen time on Pager.

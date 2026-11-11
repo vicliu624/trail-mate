@@ -223,7 +223,7 @@ The **4–8** shortcuts depend on the current page and its visible action row:
 
 | Page | 4 | 5 | 6 | 7 | 8 |
 | --- | --- | --- | --- | --- | --- |
-| Main menu | Chat | Map | Tracker | Contacts | Settings |
+| Main menu | Chat | Map | Tracker | Contacts | Widgets |
 | Map | Zoom out | Zoom in | Position | Team | Menu |
 | Chat conversation | Compose | — | — | — | Help |
 | Compose (outside editor) | Send | Position | — | — | Cancel |
@@ -231,6 +231,9 @@ The **4–8** shortcuts depend on the current page and its visible action row:
 | Tracker | Record / stop | Tracks | Routes | Actions | Menu |
 | Route preview | Zoom out | Zoom in | Fit | Load | Help |
 | Music | Visible action | Visible action | Visible action | Visible action | Menu / Browse |
+
+The main menu's **8** opens Widgets; the same key returns to Menu from Widgets.
+**V** keeps its existing open/close behavior. Settings remains in the app grid.
 
 In Map's location picker, **7 / 8** select **Pick / Cancel**. Map's **L** layer
 shortcut and **H / Fn+H** help remain available. Music keeps **Space** for
