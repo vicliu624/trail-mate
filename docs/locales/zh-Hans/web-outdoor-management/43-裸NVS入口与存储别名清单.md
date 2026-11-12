@@ -13,14 +13,14 @@
 | nvs_open | namespace | &record_handle | kPrefsNs | 动态/不适用 | [platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_identity.cpp:165](../../../../platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_identity.cpp#L165) |
 | nvs_get_blob | key | record_handle | "native_v1" | native_v1 | [platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_identity.cpp:168](../../../../platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_identity.cpp#L168) |
 | nvs_close | close | record_handle |  | 动态/不适用 | [platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_identity.cpp:169](../../../../platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_identity.cpp#L169) |
-| nvs_open | namespace | &nvs | "hl_chat" | hl_chat | [platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp:34](../../../../platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp#L34) |
-| nvs_get_blob | key | nvs | "store" | store | [platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp:36](../../../../platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp#L36) |
-| nvs_set_blob | key | nvs | "store" | store | [platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp:40](../../../../platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp#L40) |
-| nvs_commit | commit | nvs |  | 动态/不适用 | [platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp:40](../../../../platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp#L40) |
-| nvs_close | close | nvs |  | 动态/不适用 | [platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp:43](../../../../platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp#L43) |
-| nvs_get_blob | key | nvs | key | 动态/不适用 | [platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp:75](../../../../platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp#L75) |
-| nvs_set_blob | key | nvs | key | 动态/不适用 | [platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp:84](../../../../platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp#L84) |
-| nvs_commit | commit | nvs |  | 动态/不适用 | [platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp:84](../../../../platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp#L84) |
+| nvs_open | namespace | &nvs | "hl_chat" | hl_chat | [platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp:35](../../../../platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp#L35) |
+| nvs_get_blob | key | nvs | "store" | store | [platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp:37](../../../../platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp#L37) |
+| nvs_set_blob | key | nvs | "store" | store | [platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp:41](../../../../platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp#L41) |
+| nvs_commit | commit | nvs |  | 动态/不适用 | [platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp:41](../../../../platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp#L41) |
+| nvs_close | close | nvs |  | 动态/不适用 | [platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp:44](../../../../platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp#L44) |
+| nvs_get_blob | key | nvs | key | 动态/不适用 | [platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp:76](../../../../platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp#L76) |
+| nvs_set_blob | key | nvs | key | 动态/不适用 | [platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp:85](../../../../platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp#L85) |
+| nvs_commit | commit | nvs |  | 动态/不适用 | [platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp:85](../../../../platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp#L85) |
 | nvs_open | namespace | &handle_ | ns | 动态/不适用 | [platform/esp/common/include/platform/esp/common/config_preferences.h:29](../../../../platform/esp/common/include/platform/esp/common/config_preferences.h#L29) |
 | nvs_close | close | handle_ |  | 动态/不适用 | [platform/esp/common/include/platform/esp/common/config_preferences.h:33](../../../../platform/esp/common/include/platform/esp/common/config_preferences.h#L33) |
 | nvs_get_u8 | key | handle_ | key | 动态/不适用 | [platform/esp/common/include/platform/esp/common/config_preferences.h:39](../../../../platform/esp/common/include/platform/esp/common/config_preferences.h#L39) |

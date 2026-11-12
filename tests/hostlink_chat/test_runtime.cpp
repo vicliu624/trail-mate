@@ -99,6 +99,10 @@ int main()
         assert(record.state == SubmissionState::Reserved);
     };
     prepare(1, "hello");
+    platform::esp::arduino_common::storage::external_owner = true;
+    assert(command(Operation::ChatSend, deferred) == Status::Busy);
+    assert(fake_app::service.sends == 0);
+    platform::esp::arduino_common::storage::external_owner = false;
     assert(command(Operation::ChatSend, deferred) == Status::Ok && deferred);
     std::fill(body.begin(), body.end(), 0xff); // Request arena may be reused immediately.
     pump(false);                               // Disconnect does not cancel or repeat accepted work.

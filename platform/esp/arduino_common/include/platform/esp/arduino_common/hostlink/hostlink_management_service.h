@@ -557,15 +557,20 @@ inline ErrorCode execute_management(PendingCommand& command)
     uint8_t* body = command.payload + 41;
     size_t body_size = 1;
     Status status = Status::Unsupported;
+    // Keep the shared management mutation window until accepted chat work has
+    // finished its durable commit, even if the caller closes its session.
+    const bool chat_conflict = chat_runtime::busy() && request.code > uint16_t(Operation::SessionClose);
 #if (defined(ESP_PLATFORM) && !defined(ARDUINO)) || defined(TRAIL_MATE_USB_HOSTLINK_AUTOSTART)
     if (route_install_owner && routeInstallBlocksOperation(request.code) && route_install_owner->status() != Status::Busy && route_install_owner->status() != Status::Internal)
         release_route_install();
-    if (download_mode::active()) status = Status::Busy;
+    if (chat_conflict) status = Status::Busy;
+    else if (download_mode::active()) status = Status::Busy;
     else if (route_install_owner && routeInstallBlocksOperation(request.code)) status = Status::Busy;
     else if (ip_confirmation_runtime::holdsStorage() && ip_confirmation_runtime::blocksOperation(request.code)) status = Status::Busy;
     else
 #else
-    if (download_mode::active()) status = Status::Busy;
+    if (chat_conflict) status = Status::Busy;
+    else if (download_mode::active()) status = Status::Busy;
     else
 #endif
         if (request.code == static_cast<uint16_t>(Operation::Capabilities))

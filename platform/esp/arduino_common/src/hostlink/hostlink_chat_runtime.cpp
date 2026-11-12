@@ -6,6 +6,7 @@
 #include "hostlink/chat_management_codec.h"
 #include "hostlink/chat_submission_journal.h"
 #include "platform/esp/arduino_common/hostlink/hostlink_service.h"
+#include "platform/esp/arduino_common/storage/sd_card_runtime.h"
 #include "platform/esp/common/mbedtls_sha256_compat.h"
 #include "platform/ui/team_ui_store_runtime.h"
 #include "ui/presentation_sources/team_chat_action_sink.h"
@@ -86,6 +87,7 @@ class Runtime final : public JournalIo, public SubmissionPort
     Status validate(const SubmissionRecord& binding, const uint8_t* expected_context, const uint8_t*, size_t) override
     {
         if (!initialize()) return Status::StorageUnavailable;
+        if (platform::esp::arduino_common::storage::sd_external_block_owner_active()) return Status::Busy;
         if (std::memcmp(binding.store, store, kIdSize) != 0 || !context() ||
             std::memcmp(expected_context, current_context, kIdSize) != 0) return Status::StaleIdentity;
         TargetView target;
