@@ -323,6 +323,12 @@ jobs:
           ctest --test-dir .codex-build/map-tile-pipeline --output-on-failure
           python3 tests/map_tile_pipeline/test_ui_contract.py
 
+      - name: Verify Arduino Team position persistence and legacy rings
+        run: |
+          cmake -S tests/team_position_store -B .codex-build/team-position-store -DCMAKE_BUILD_TYPE=Debug
+          cmake --build .codex-build/team-position-store --parallel 2
+          ctest --test-dir .codex-build/team-position-store --output-on-failure
+
       - name: Verify Agenda, saved waypoints and SD session isolation
         run: |
           cmake -S modules/core_agenda -B .codex-build/agenda-core -DCMAKE_BUILD_TYPE=Debug

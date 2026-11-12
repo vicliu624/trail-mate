@@ -64,6 +64,7 @@ constexpr uint8_t kRoleMember = 1;
 constexpr uint8_t kRoleLeader = 2;
 
 constexpr uint32_t kPosRecSize = 28;
+constexpr uint32_t kPosRecFieldsSize = 24;
 constexpr uint32_t kPosRingCapacity = kPosRecSize * 512;
 constexpr uint32_t kPosHeaderSize = 24;
 constexpr uint32_t kPosMinIntervalSec = 15;
@@ -827,23 +828,18 @@ bool should_write_pos(uint32_t member_id, int32_t lat_e7, int32_t lon_e7, uint32
 
 bool init_posring(SdRuntimeFile& f)
 {
-    f.seek(0);
-    f.write(reinterpret_cast<const uint8_t*>("PSR1"), 4);
-    write_u8(f, kPosringVersion);
-    write_u8(f, 0);
-    write_u8(f, 0);
-    write_u8(f, 0);
-    write_u32(f, kPosRingCapacity);
-    write_u32(f, 0);
-    write_u32(f, kPosRecSize);
-    write_u32(f, 0);
-    f.flush();
-    return true;
+    uint8_t header[kPosHeaderSize] = {'P', 'S', 'R', '1', kPosringVersion};
+    for (unsigned i = 0; i < 4; ++i)
+    {
+        header[8 + i] = static_cast<uint8_t>(kPosRingCapacity >> (8 * i));
+        header[16 + i] = static_cast<uint8_t>(kPosRecSize >> (8 * i));
+    }
+    return f.seek(0) && f.write(header, sizeof(header)) == sizeof(header) && f.flush();
 }
 
 bool read_posring_header(SdRuntimeFile& f, uint32_t& write_offset)
 {
-    f.seek(0);
+    if (!f.seek(0)) return false;
     uint8_t header[kPosHeaderSize];
     if (f.read(header, sizeof(header)) != sizeof(header))
     {
@@ -873,24 +869,20 @@ bool read_posring_header(SdRuntimeFile& f, uint32_t& write_offset)
     {
         offset = 0;
     }
-    write_offset = offset;
+    write_offset = offset - offset % kPosRecSize;
     return true;
 }
 
 bool write_posring_header(SdRuntimeFile& f, uint32_t write_offset)
 {
-    f.seek(0);
-    f.write(reinterpret_cast<const uint8_t*>("PSR1"), 4);
-    write_u8(f, kPosringVersion);
-    write_u8(f, 0);
-    write_u8(f, 0);
-    write_u8(f, 0);
-    write_u32(f, kPosRingCapacity);
-    write_u32(f, write_offset);
-    write_u32(f, kPosRecSize);
-    write_u32(f, 0);
-    f.flush();
-    return true;
+    uint8_t header[kPosHeaderSize] = {'P', 'S', 'R', '1', kPosringVersion};
+    for (unsigned i = 0; i < 4; ++i)
+    {
+        header[8 + i] = static_cast<uint8_t>(kPosRingCapacity >> (8 * i));
+        header[12 + i] = static_cast<uint8_t>(write_offset >> (8 * i));
+        header[16 + i] = static_cast<uint8_t>(kPosRecSize >> (8 * i));
+    }
+    return f.seek(0) && f.write(header, sizeof(header)) == sizeof(header) && f.flush();
 }
 
 TeamUiSnapshot s_cached_snapshot{};
@@ -1145,49 +1137,63 @@ bool team_ui_posring_append(const TeamId& team_id,
     }
 
     std::string path = dir_path + "/" + kPosringName;
-    SdRuntimeFile f;
-    bool exists = f.open(path.c_str(), "r");
-    if (exists)
-    {
-        f.close();
-    }
     SdRuntimeFile rw;
-    if (!rw.open(path.c_str(), exists ? "r+" : "w+"))
+    if (!rw.open(path.c_str(), "r+"))
     {
-        return false;
-    }
-    if (!exists)
-    {
-        init_posring(rw);
+        // A failed open may mean contention, not absence. Exclusive creation
+        // cannot truncate an existing history file in either case.
+        if (rw.read_busy() || !rw.open(path.c_str(), "wx+") || !init_posring(rw)) return false;
     }
 
     uint32_t write_offset = 0;
     if (!read_posring_header(rw, write_offset))
     {
-        init_posring(rw);
-        write_offset = 0;
+        // Do not rewrite an existing file after a short/busy read or when its
+        // header belongs to an unsupported format. Team credentials are separate.
+        return false;
     }
 
-    uint32_t data_offset = kPosHeaderSize + write_offset;
-    rw.seek(data_offset);
-    write_u16(rw, 0x5053);
-    write_u8(rw, kPosringVersion);
-    write_u8(rw, 0);
-    write_u32(rw, ts);
-    write_u32(rw, member_id);
-    write_u32(rw, static_cast<uint32_t>(lat_e7));
-    write_u32(rw, static_cast<uint32_t>(lon_e7));
-    write_u16(rw, static_cast<uint16_t>(alt_m));
-    write_u16(rw, speed_dmps);
+    const uint64_t file_size = rw.size();
+    if (rw.read_busy() || file_size < kPosHeaderSize) return false;
+    const uint32_t data_size = static_cast<uint32_t>(
+        std::min<uint64_t>(file_size - kPosHeaderSize, kPosRingCapacity));
+    const uint32_t tail_size = data_size % kPosRecSize;
+    const uint32_t append_offset = data_size - tail_size +
+                                   (tail_size >= kPosRecFieldsSize ? kPosRecSize : 0);
+    if (data_size < kPosRingCapacity && write_offset > append_offset) write_offset = append_offset;
+    const uint32_t data_offset = kPosHeaderSize + write_offset;
+    if (data_offset > file_size)
+    {
+        // V1's 24-byte tail has at most four missing reserved bytes. This is a
+        // bounded append at EOF, never a sparse seek or a history migration.
+        const uint8_t padding[4]{};
+        const auto missing = static_cast<size_t>(data_offset - file_size);
+        if (missing > sizeof(padding) || !rw.seek(file_size) ||
+            rw.write(padding, missing) != missing) return false;
+    }
+    if (!rw.seek(data_offset)) return false;
+    uint8_t record[kPosRecSize] = {0x53, 0x50, kPosringVersion};
+    for (unsigned i = 0; i < 4; ++i)
+    {
+        record[4 + i] = static_cast<uint8_t>(ts >> (8 * i));
+        record[8 + i] = static_cast<uint8_t>(member_id >> (8 * i));
+        record[12 + i] = static_cast<uint8_t>(static_cast<uint32_t>(lat_e7) >> (8 * i));
+        record[16 + i] = static_cast<uint8_t>(static_cast<uint32_t>(lon_e7) >> (8 * i));
+    }
+    record[20] = static_cast<uint8_t>(alt_m);
+    record[21] = static_cast<uint8_t>(static_cast<uint16_t>(alt_m) >> 8);
+    record[22] = static_cast<uint8_t>(speed_dmps);
+    record[23] = static_cast<uint8_t>(speed_dmps >> 8);
+    if (rw.write(record, sizeof(record)) != sizeof(record)) return false;
 
     write_offset += kPosRecSize;
     if (write_offset >= kPosRingCapacity)
     {
         write_offset = 0;
     }
-    write_posring_header(rw, write_offset);
+    const bool committed = write_posring_header(rw, write_offset);
     rw.close();
-    return true;
+    return committed;
 }
 
 bool team_ui_posring_load_latest(const TeamId& team_id,
@@ -1216,65 +1222,48 @@ bool team_ui_posring_load_latest(const TeamId& team_id,
         f.close();
         return false;
     }
-    if (f.size() < kPosHeaderSize + kPosRecSize)
+    const uint64_t file_size = f.size();
+    if (f.read_busy() || file_size < kPosHeaderSize + kPosRecFieldsSize)
     {
         f.close();
         return false;
     }
-    size_t data_size = kPosRingCapacity;
-    if (kPosHeaderSize + data_size > f.size())
+    const auto data_size = static_cast<size_t>(
+        std::min<uint64_t>(file_size - kPosHeaderSize, kPosRingCapacity));
+    if (!f.seek(kPosHeaderSize)) return false;
+    // Keep only one slot in scratch storage, not the 14 KiB history. The last
+    // legacy V1 slot may contain all 24 fields without its four reserved bytes.
+    uint8_t record[kPosRecSize];
+    for (size_t base = 0; base + kPosRecFieldsSize <= data_size; base += kPosRecSize)
     {
-        data_size = f.size() - kPosHeaderSize;
-    }
-    std::vector<uint8_t> buf(data_size);
-    f.seek(kPosHeaderSize);
-    bool ok = (f.read(buf.data(), buf.size()) == buf.size());
-    f.close();
-    if (!ok)
-    {
-        return false;
-    }
-
-    for (size_t base = 0; base + kPosRecSize <= buf.size(); base += kPosRecSize)
-    {
-        size_t off = base;
-        uint16_t magic = 0;
-        uint8_t ver = 0;
-        uint8_t flags = 0;
-        uint32_t ts = 0;
-        uint32_t member_id = 0;
-        uint32_t lat_u = 0;
-        uint32_t lon_u = 0;
-        uint16_t alt_u = 0;
-        uint16_t speed_u = 0;
-        if (!read_u16(buf, off, magic) ||
-            !read_u8(buf, off, ver) ||
-            !read_u8(buf, off, flags) ||
-            !read_u32(buf, off, ts) ||
-            !read_u32(buf, off, member_id) ||
-            !read_u32(buf, off, lat_u) ||
-            !read_u32(buf, off, lon_u) ||
-            !read_u16(buf, off, alt_u) ||
-            !read_u16(buf, off, speed_u))
+        const size_t bytes = std::min<size_t>(kPosRecSize, data_size - base);
+        if (f.read(record, bytes) != static_cast<int>(bytes))
         {
-            break;
+            out.clear();
+            return false;
         }
-        if (magic != 0x5053 || ver != kPosringVersion || ts == 0)
+        const auto u32 = [&](size_t offset)
+        {
+            return static_cast<uint32_t>(record[offset]) |
+                   (static_cast<uint32_t>(record[offset + 1]) << 8) |
+                   (static_cast<uint32_t>(record[offset + 2]) << 16) |
+                   (static_cast<uint32_t>(record[offset + 3]) << 24);
+        };
+        if (record[0] != 0x53 || record[1] != 0x50 || record[2] != kPosringVersion || u32(4) == 0)
         {
             continue;
         }
-        (void)flags;
         TeamPosSample sample;
-        sample.member_id = member_id;
-        sample.lat_e7 = static_cast<int32_t>(lat_u);
-        sample.lon_e7 = static_cast<int32_t>(lon_u);
-        sample.alt_m = static_cast<int16_t>(alt_u);
-        sample.speed_dmps = speed_u;
-        sample.ts = ts;
+        sample.member_id = u32(8);
+        sample.lat_e7 = static_cast<int32_t>(u32(12));
+        sample.lon_e7 = static_cast<int32_t>(u32(16));
+        sample.alt_m = static_cast<int16_t>(record[20] | (static_cast<uint16_t>(record[21]) << 8));
+        sample.speed_dmps = record[22] | (static_cast<uint16_t>(record[23]) << 8);
+        sample.ts = u32(4);
 
         auto it = std::find_if(out.begin(), out.end(),
                                [&](const TeamPosSample& s)
-                               { return s.member_id == member_id; });
+                               { return s.member_id == sample.member_id; });
         if (it == out.end())
         {
             out.push_back(sample);

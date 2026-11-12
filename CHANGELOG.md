@@ -12,6 +12,10 @@ stable firmware release. Hardware support and validation remain target-specific.
 
 ### Fixed
 
+- Arduino Team position history writes complete 28-byte slots and reads legacy
+  24-byte tails without rewriting them. The reader streams one slot at a time
+  instead of allocating the full 14 KiB ring; failed I/O does not silently
+  advance a record or reinitialize an existing file.
 - Cardputer Zero's rightmost main-menu shortcut opens Widgets instead of
   Settings. The physical 8 key and footer button toggle between Widgets and
   Menu without disabling the widget feed; the existing V shortcut is retained.
