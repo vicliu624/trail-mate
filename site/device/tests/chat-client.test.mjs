@@ -12,6 +12,7 @@ function fixture({sendError, persistError} = {}) {
   const connection = {subscribe: fn => {listener = fn; return () => {listener = null;};}};
   const session = {id: owner, async request(code, body) {
     calls.push({code, body});
+    if (code === OPERATION.CAPABILITIES) return [1, 512, 320, 1, [0, 112, 113, 114], 7];
     if (code === OPERATION.CHAT_CAPABILITIES) return [1, store, context, 1, 256, 16, 15, [new Uint8Array(8).fill(6), 1, 2]];
     const intent = persisted.at(-1);
     const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(intent.text)));
@@ -133,4 +134,14 @@ test('Team text decoder preserves full wire IDs and validates Unicode and versio
   assert.equal(decoded.text, '队伍 hello'); assert.equal(decoded.from, 0xa1b3b57c); assert.equal(decoded.messageId, 0x12345678);
   bytes[0] = 2; assert.throws(() => decodeTeamChat(bytes), /Invalid/);
   bytes[0] = 1; bytes[16] = 0xff; assert.throws(() => decodeTeamChat(bytes));
+});
+test('feature discovery requires all advertised operations before querying chat or reserving an intent', async () => {
+  const f = fixture();
+  f.session.request = async code => {
+    assert.equal(code, OPERATION.CAPABILITIES);
+    return [1, 512, 320, 1, [0, 112, 113], 7];
+  };
+  await assert.rejects(f.client.prepare(target, 'hello'), {code: 'UNSUPPORTED'});
+  assert.equal(f.persisted.length, 0);
+  f.client.close();
 });

@@ -120,7 +120,7 @@ function validateTarget(target, protocol) {
 // Share the caller's existing connection AND management session. A chat
 // consumer must never close the shared session used by settings/GC/routes.
 export class ChatClient {
-  #connection; #session; #persist; #random; #unsubscribe; #caps; #pending = false; #closed = false; #listeners = new Set(); #assembler;
+  #connection; #session; #persist; #random; #unsubscribe; #caps; #operations; #pending = false; #closed = false; #listeners = new Set(); #assembler;
   constructor(connection, session, {persistIntent, randomBytes = size => crypto.getRandomValues(new Uint8Array(size)), receiveLimits} = {}) {
     this.#connection = connection; this.#session = session; this.#persist = persistIntent; this.#random = randomBytes;
     this.#assembler = new AppDataAssembler(receiveLimits);
@@ -146,6 +146,15 @@ export class ChatClient {
   #emit(event) { for (const listener of this.#listeners) { try { listener(event); } catch (error) { this.#connection.onListenerError?.(error); } } }
   async capabilities() {
     if (this.#closed) throw new HostlinkError('Chat client closed', 'DISCONNECTED');
+    if (!this.#operations) {
+      const row = await this.#session.request(OPERATION.CAPABILITIES, []);
+      if (!Array.isArray(row) || row.length !== 6 || row[0] !== 1 || !Array.isArray(row[4]) ||
+          row[4].length > 128 || row[4].some(value => !Number.isInteger(value) || value < 0 || value > 65535) ||
+          new Set(row[4]).size !== row[4].length) throw protocolError('Invalid management capabilities');
+      if (![OPERATION.CHAT_CAPABILITIES, OPERATION.CHAT_SEND, OPERATION.CHAT_SEND_GET].every(code => row[4].includes(code)))
+        throw new HostlinkError('Firmware does not advertise recoverable chat operations', 'UNSUPPORTED');
+      this.#operations = new Set(row[4]);
+    }
     this.#caps = capabilities(await this.#session.request(OPERATION.CHAT_CAPABILITIES, []));
     return {...this.#caps, store: this.#caps.store.slice(), context: this.#caps.context.slice(), team: copy(this.#caps.team)};
   }
