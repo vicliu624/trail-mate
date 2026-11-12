@@ -17,8 +17,11 @@ def emit(value):
 def main():
     port = serial.Serial(port=None, baudrate=int(sys.argv[2]), timeout=0.1, write_timeout=2)
     port.port = sys.argv[1]
-    port.dtr = False
-    port.rts = False
+    # Set both in the initial DCB when opening Windows native USB CDC. Some
+    # drivers do not publish the later separate EscapeCommFunction updates as
+    # one connected line-state transition. HostlinkConnection asserts both too.
+    port.dtr = True
+    port.rts = True
     reader = None
     try:
         port.open()

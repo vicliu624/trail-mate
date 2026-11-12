@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {ChatClient, AppDataAssembler, decodeAppChunk, decodeTextEvent, decodeTxResult} from '../src/chat-client.js';
+import {ChatClient, AppDataAssembler, decodeAppChunk, decodeTextEvent, decodeTxResult, decodeTeamChat} from '../src/chat-client.js';
 import {FRAME} from '../src/hostlink.js';
 import {OPERATION} from '../src/management-protocol.js';
 
@@ -125,4 +125,12 @@ test('fragmented application data without a packet ID cannot be mixed silently',
   assert.throws(() => assembler.accept(app(0, [1, 2], 5, 0)), /packet ID/);
   assembler.accept(app(0, [1, 2]));
   assert.throws(() => assembler.accept(app(0, [9, 9])), /Conflicting/);
+});
+test('Team text decoder preserves full wire IDs and validates Unicode and version', () => {
+  const text = new TextEncoder().encode('队伍 hello'), bytes = new Uint8Array(16 + text.length), view = new DataView(bytes.buffer);
+  bytes.set([1, 1]); view.setUint32(4, 0x12345678, true); view.setUint32(12, 0xa1b3b57c, true); bytes.set(text, 16);
+  const decoded = decodeTeamChat(bytes);
+  assert.equal(decoded.text, '队伍 hello'); assert.equal(decoded.from, 0xa1b3b57c); assert.equal(decoded.messageId, 0x12345678);
+  bytes[0] = 2; assert.throws(() => decodeTeamChat(bytes), /Invalid/);
+  bytes[0] = 1; bytes[16] = 0xff; assert.throws(() => decodeTeamChat(bytes));
 });
