@@ -1,5 +1,6 @@
 #pragma once
 
+#include "chat/infra/lxmf/lxmf_announce_defaults.h"
 #include "chat/linux_reticulum_announce.h"
 #include <cstring>
 #include <string>
@@ -17,8 +18,10 @@ class LinuxReticulumRadioAnnounce
 
     void configure(bool enabled, const std::string& name, uint32_t now)
     {
+        const char* effective_name = ::chat::lxmf::announceDisplayName(name.c_str());
+        if (enabled_ == enabled && name_ == effective_name) return;
         enabled_ = enabled;
-        name_ = name;
+        name_ = effective_name;
         started_ = now;
         interval_ = 5000;
         responded_ = false;
@@ -29,7 +32,7 @@ class LinuxReticulumRadioAnnounce
         if (!enabled_ || uint32_t(now - started_) < interval_) return;
         started_ = now;
         interval_ = 30000;
-        if (advertise(utc, false, send, context)) interval_ = 600000;
+        if (advertise(utc, false, send, context)) interval_ = ::chat::lxmf::kDefaultAnnounceIntervalMs;
     }
 
     bool receive(const uint8_t* bytes, size_t size, uint32_t now, uint32_t utc, Sender send, void* context)

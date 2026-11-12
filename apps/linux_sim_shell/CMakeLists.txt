@@ -524,6 +524,7 @@ if(BUILD_TESTING)
         "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_announce_scheduler.cpp")
     target_include_directories(trailmate_lxmf_announce_scheduler_smoke
         PRIVATE
+            "${TRAIL_MATE_REPO_ROOT}/modules/core_chat/include"
             "${TRAIL_MATE_REPO_ROOT}/platform/esp/arduino_common/include")
     target_compile_features(trailmate_lxmf_announce_scheduler_smoke
         PRIVATE cxx_std_17)

@@ -6,6 +6,7 @@
 #pragma once
 
 #include "board/LoraBoard.h"
+#include "chat/infra/lxmf/lxmf_announce_defaults.h"
 #include "chat/infra/lxmf/lxmf_wire.h"
 #include "chat/infra/mesh_incoming_queue.h"
 #include "chat/ports/i_geocaching_transport.h"
@@ -172,7 +173,7 @@ class LxmfAdapter : public IMeshAdapter, private runtime::IPeerProjectionSink
         const uint8_t destination_hash[reticulum::kTruncatedHashSize],
         LocalDestinationKind* out_kind);
 
-    static constexpr uint32_t kAnnounceIntervalMs = 120000;
+    static constexpr uint32_t kAnnounceIntervalMs = kDefaultAnnounceIntervalMs;
     static constexpr uint32_t kInitialAnnounceDelayMs = 1500;
     static constexpr uint32_t kPendingAnnounceRetryMs = 30000;
     static constexpr uint8_t kMaxIngressPacketsPerPoll = 4;

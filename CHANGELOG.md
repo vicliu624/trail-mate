@@ -12,6 +12,14 @@ stable firmware release. Hardware support and validation remain target-specific.
 
 ### Fixed
 
+- Reticulum periodic announcements use one four-hour default across ESP, Linux
+  radio and Linux gateways ([#112](https://github.com/vicliu624/trail-mate/issues/112)).
+  First announcements, explicit broadcasts and path responses remain responsive.
+- New Cardputer Zero installations and empty LXMF display names use
+  `Anonymous Peer` ([#113](https://github.com/vicliu624/trail-mate/issues/113)).
+  Existing saved names, including the old `Cardputer Zero` default, remain
+  unchanged because the configuration cannot distinguish an old default from
+  the same text explicitly chosen by a user.
 - Arduino Team position history writes complete 28-byte slots and reads legacy
   24-byte tails without rewriting them. The reader streams one slot at a time
   instead of allocating the full 14 KiB ring; failed I/O does not silently

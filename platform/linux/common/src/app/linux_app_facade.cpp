@@ -3,6 +3,7 @@
 #include <cstring>
 
 #include "app/app_facade_access.h"
+#include "chat/infra/lxmf/lxmf_announce_defaults.h"
 #include "platform/linux/geocaching_source.h"
 #include "platform/linux/runtime_paths.h"
 #include "sys/event_bus.h"
@@ -82,7 +83,7 @@ void setTeamUiEventDispatcher(TeamUiEventDispatcher dispatcher)
 
 MinimalLinuxAppFacade::MinimalLinuxAppFacade()
     : services_(::trailmate::linux_app::LinuxAppServicesOptions{
-          .default_node_name = "Cardputer Zero",
+          .default_node_name = ::chat::lxmf::kDefaultAnnounceDisplayName,
           .default_short_name = "CZ",
           .demo_broadcast_text = "Broadcast: Cardputer Zero local mesh online.",
           .ble_supported = false,

@@ -10094,15 +10094,7 @@ uint32_t LxmfAdapter::currentTimestampSeconds() const
 
 const char* LxmfAdapter::effectiveDisplayName() const
 {
-    if (!user_long_name_.empty())
-    {
-        return user_long_name_.c_str();
-    }
-    if (!user_short_name_.empty())
-    {
-        return user_short_name_.c_str();
-    }
-    return nullptr;
+    return announceDisplayName(user_long_name_.c_str(), user_short_name_.c_str());
 }
 
 void LxmfAdapter::populateRxMeta(RxMeta* out) const

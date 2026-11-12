@@ -59,6 +59,44 @@ int main()
         sent.ok = true;
         announce.tick(43000, 1794130004, send, &sent);
         assert(sent.count == 4);
+        constexpr uint32_t interval = chat::lxmf::kDefaultAnnounceIntervalMs;
+        announce.tick(43000 + 600000, 1794130604, send, &sent);
+        assert(sent.count == 4);
+        // Unchanged settings cannot restart the initial-announcement timer.
+        announce.configure(true, "Retry", 650000);
+        announce.tick(655000, 1794130616, send, &sent);
+        assert(sent.count == 4);
+        announce.tick(43000 + interval - 1, 1794144403, send, &sent);
+        assert(sent.count == 4);
+        announce.tick(43000 + interval, 1794144404, send, &sent);
+        assert(sent.count == 5);
+
+        const auto label = [&]()
+        {
+            assert(chat::reticulum::parsePacket(sent.packet.data(), sent.packet.size(), &packet));
+            assert(packet.payload_len >= 148);
+            return std::string(reinterpret_cast<const char*>(packet.payload + 148), packet.payload_len - 148);
+        };
+        assert(label() == "Retry");
+        announce.configure(true, "", 43000 + interval);
+        announce.tick(48000 + interval, 1794144409, send, &sent);
+        assert(sent.count == 6 && label() == "Anonymous Peer");
+        // Saved text is preserved even when it matches the old factory name.
+        announce.configure(true, "Cardputer Zero", 48000 + interval);
+        announce.tick(53000 + interval, 1794144414, send, &sent);
+        assert(sent.count == 7 && label() == "Cardputer Zero");
+
+        // Re-enabling is an actual new session; the four-hour period still
+        // works when the 32-bit millisecond counter wraps.
+        constexpr uint32_t start = UINT32_MAX - 5000U;
+        announce.configure(false, "Wrap", start - 1U);
+        announce.configure(true, "Wrap", start);
+        announce.tick(start + 5000U, 1794144500, send, &sent);
+        assert(sent.count == 8);
+        announce.tick(start + 5000U + interval - 1U, 1794158899, send, &sent);
+        assert(sent.count == 8);
+        announce.tick(start + 5000U + interval, 1794158900, send, &sent);
+        assert(sent.count == 9);
     }
     std::filesystem::remove_all(path);
 }

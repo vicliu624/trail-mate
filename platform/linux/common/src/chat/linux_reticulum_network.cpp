@@ -1,4 +1,5 @@
 #include "chat/linux_reticulum_network.h"
+#include "chat/infra/lxmf/lxmf_announce_defaults.h"
 #include "chat/infra/reticulum/link_handshake_wire.h"
 #include "chat/infra/reticulum/path_request_wire.h"
 #include "chat/linux_reticulum_announce.h"
@@ -401,7 +402,7 @@ struct LinuxReticulumNetwork::Impl
         {
             auto& interface = interfaces[index];
             if (!live(index) || !transmit || anonymous) continue;
-            if (interface.delivery_announced && uint32_t(now - interface.announced_at) > 600000) interface.delivery_announced = interface.call_announced = false;
+            if (interface.delivery_announced && uint32_t(now - interface.announced_at) >= ::chat::lxmf::kDefaultAnnounceIntervalMs) interface.delivery_announced = interface.call_announced = false;
             if (!interface.delivery_announced && advertise(index, LinuxReticulumAnnounce::Aspect::Delivery))
             {
                 interface.delivery_announced = true;

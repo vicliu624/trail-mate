@@ -12,6 +12,7 @@
 #include "board/GpsBoard.h"
 #include "board/LoraBoard.h"
 #include "board/MotionBoard.h"
+#include "chat/infra/lxmf/lxmf_announce_defaults.h"
 #include "chat/infra/mesh_protocol_utils.h"
 #include "chat/ports/i_mesh_adapter.h"
 #include "chat/runtime/self_identity_policy.h"
@@ -959,6 +960,10 @@ void AppContext::getEffectiveUserInfo(char* out_long, size_t long_len,
     chat::runtime::SelfIdentityInput input{};
     input.node_id = getSelfNodeId();
     input.configured_long_name = config_.node_name;
+    if (config_.mesh_protocol == chat::MeshProtocol::Reticulum)
+    {
+        input.configured_long_name = chat::lxmf::announceDisplayName(config_.node_name, config_.short_name);
+    }
     input.configured_short_name = config_.short_name;
     input.fallback_long_prefix = "TM";
     input.fallback_ble_prefix = "TrailMate";

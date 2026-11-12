@@ -1,4 +1,5 @@
 #include "chat/linux_reticulum_announce.h"
+#include "chat/infra/lxmf/lxmf_announce_defaults.h"
 #include <algorithm>
 #include <cstring>
 #if defined(TRAIL_MATE_HAS_OPENSSL)
@@ -17,6 +18,7 @@ bool LinuxReticulumAnnounce::build(Aspect aspect, const char* name, uint32_t utc
 {
     size_ = 0;
     if (!identity_.ready() || !utc) return false;
+    name = ::chat::lxmf::announceDisplayName(name);
     uint8_t target[16];
     destination(aspect, target);
     std::memcpy(payload_.data(), identity_.publicKey().data(), 64);
