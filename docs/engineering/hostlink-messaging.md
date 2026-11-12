@@ -145,3 +145,26 @@ atomic-NVS and USB test ports, the real shared Team chat action, portable
 journal/reboot/capacity tests, and browser no-retry/receive/correlation tests.
 The native hash double tests ownership and matching only; firmware uses the
 existing mbedTLS SHA-256 compatibility layer.
+
+### Pager verification, 2026-11-12
+
+The `tlora_pager_sx1262` application built from `cc738eee` completed with
+92,616 bytes static RAM and 5,216,001 bytes reported Flash. Static RAM increased
+by eight bytes relative to the accepted Contacts recovery image. The runtime
+uses lazy PSRAM storage and the existing app loop. The retained application
+image SHA-256 is
+`5a0904b4a3eeee95cc60834d7dfa68605210a3dfeae022085004c2f77ebea1fe`.
+
+The actual native USB CDC device accepted one Team text and one primary-channel
+text using the shared JavaScript client. A fresh connection recovered the
+original Team receipt. After a device restart, the operation store UUID stayed
+the same, the context changed, and both original operations were recovered
+using their original owners and IDs. The Team receipt retained queue admission;
+the ordinary chat receipt refreshed to Sent from ChatService. The original
+Team, security round, leader role, and three-member roster were preserved.
+Every host process closed the serial port after its bounded operation.
+
+This hardware record establishes USB submission and durable recovery. The
+receive decoders and chunk fault paths are exercised by protocol fixtures;
+remote recipient delivery requires the protocol's corresponding proof. The
+user waived further Pager-to-Linux radio acceptance runs for this change.
