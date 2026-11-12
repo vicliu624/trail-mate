@@ -243,6 +243,12 @@ int main()
     size_t written;
     auto dispatch = [&](uint16_t op, const uint8_t* body, size_t length)
     {assert(management::encodeEnvelope(session.data(),request.data(),op,body,length,command.payload,sizeof(command.payload),written));command.payload_len=static_cast<uint16_t>(written);assert(management::execute_management(command)==ErrorCode::Ok);management::EnvelopeView view;assert(management::decodeEnvelope(response.data(),response.size(),view));assert(response_sequence==92);assert(!std::memcmp(view.session,session.data(),16));return view; };
+    chat_runtime::submitting = true;
+    assert(dispatch(17, empty, sizeof(empty)).code == uint16_t(management::Status::Busy));
+    assert(dispatch(10, empty, sizeof(empty)).code == uint16_t(management::Status::Busy));
+    assert(dispatch(3, empty, sizeof(empty)).code == 0);
+    assert(chat_runtime::submitting); // Closing a session cannot cancel accepted work.
+    chat_runtime::submitting = false;
     auto caps = dispatch(0, empty, sizeof(empty));
     assert(caps.code == 0);
     geocaching::protocol::CmpReader cap_reader({caps.body, caps.body_size});

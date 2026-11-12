@@ -749,6 +749,7 @@ void process_pending_commands()
     PendingCommand command{};
     if (!usb_cdc::is_connected() || !is_ready(s_session))
     {
+        chat_runtime::advance(command.payload, sizeof(command.payload), false);
 #if (defined(ESP_PLATFORM) && !defined(ARDUINO)) || defined(TRAIL_MATE_USB_HOSTLINK_AUTOSTART)
         management::advance_route_install(command.payload, sizeof(command.payload), management::snapshot_runtime::nowMs(), false);
 #endif
@@ -767,6 +768,8 @@ void process_pending_commands()
         xQueueReset(s_cmd_queue);
         return;
     }
+
+    chat_runtime::advance(command.payload, sizeof(command.payload), true);
 
     if (xQueueReceive(s_cmd_queue, &command, 0) == pdPASS)
     {

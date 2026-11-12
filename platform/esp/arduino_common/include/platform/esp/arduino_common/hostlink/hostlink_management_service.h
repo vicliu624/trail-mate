@@ -11,6 +11,7 @@
 #include "hostlink/sensitive_memory.h"
 #include "platform/esp/arduino_common/app_config_sd_tms_runtime.h"
 #include "platform/esp/arduino_common/geocaching/browse_runtime.h"
+#include "platform/esp/arduino_common/hostlink/hostlink_chat_runtime.h"
 #include "platform/esp/arduino_common/hostlink/hostlink_download_mode.h"
 #include "platform/esp/arduino_common/hostlink/hostlink_service.h"
 #include "platform/esp/arduino_common/hostlink/web_config_upload.h"
@@ -556,15 +557,20 @@ inline ErrorCode execute_management(PendingCommand& command)
     uint8_t* body = command.payload + 41;
     size_t body_size = 1;
     Status status = Status::Unsupported;
+    // Keep the shared management mutation window until accepted chat work has
+    // finished its durable commit, even if the caller closes its session.
+    const bool chat_conflict = chat_runtime::busy() && request.code > uint16_t(Operation::SessionClose);
 #if (defined(ESP_PLATFORM) && !defined(ARDUINO)) || defined(TRAIL_MATE_USB_HOSTLINK_AUTOSTART)
     if (route_install_owner && routeInstallBlocksOperation(request.code) && route_install_owner->status() != Status::Busy && route_install_owner->status() != Status::Internal)
         release_route_install();
-    if (download_mode::active()) status = Status::Busy;
+    if (chat_conflict) status = Status::Busy;
+    else if (download_mode::active()) status = Status::Busy;
     else if (route_install_owner && routeInstallBlocksOperation(request.code)) status = Status::Busy;
     else if (ip_confirmation_runtime::holdsStorage() && ip_confirmation_runtime::blocksOperation(request.code)) status = Status::Busy;
     else
 #else
-    if (download_mode::active()) status = Status::Busy;
+    if (chat_conflict) status = Status::Busy;
+    else if (download_mode::active()) status = Status::Busy;
     else
 #endif
         if (request.code == static_cast<uint16_t>(Operation::Capabilities))
@@ -582,9 +588,12 @@ inline ErrorCode execute_management(PendingCommand& command)
             geocaching::protocol::CmpWriter writer(body, sizeof(command.payload) - 41);
             bool ok = writer.array(6) && writer.unsignedInteger(1) && writer.unsignedInteger(kMaxFrameLen) &&
                       writer.unsignedInteger(320) && writer.unsignedInteger(1) &&
-                      writer.array(sizeof(operations) + (bootloader ? 1U : 0U));
+                      writer.array(sizeof(operations) + (bootloader ? 1U : 0U) + (chat_runtime::supported() ? 3U : 0U));
             for (uint8_t operation : operations) ok = ok && writer.unsignedInteger(operation);
             if (bootloader) ok = ok && writer.unsignedInteger(static_cast<uint16_t>(Operation::EnterBootloader));
+            if (chat_runtime::supported())
+                for (const auto operation : {Operation::ChatCapabilities, Operation::ChatSend, Operation::ChatSendGet})
+                    ok = ok && writer.unsignedInteger(static_cast<uint16_t>(operation));
             ok = ok && writer.unsignedInteger(7);
             body_size = writer.size();
             status = ok ? Status::Ok : Status::Internal;
@@ -592,13 +601,22 @@ inline ErrorCode execute_management(PendingCommand& command)
     }
     else if (request.code == static_cast<uint16_t>(Operation::EnterBootloader))
     {
+        if (chat_runtime::busy()) status = Status::Busy;
+        else
 #if (defined(ESP_PLATFORM) && !defined(ARDUINO)) || defined(TRAIL_MATE_USB_HOSTLINK_AUTOSTART)
-        if (route_install_owner || snapshot_runtime::owner || prepare_runtime::prepareHoldsStorage() ||
-            publication_runtime::holdsStorage() || ip_confirmation_runtime::holdsStorage()) status = Status::Busy;
+            if (route_install_owner || snapshot_runtime::owner || prepare_runtime::prepareHoldsStorage() ||
+                publication_runtime::holdsStorage() || ip_confirmation_runtime::holdsStorage())
+            status = Status::Busy;
         else
 #endif
             status = download_mode::request(request, command.sequence);
         if (status == Status::Ok) return ErrorCode::Ok; // Correlated response follows storage quiescence.
+    }
+    else if (request.code >= uint16_t(Operation::ChatCapabilities) && request.code <= uint16_t(Operation::ChatSendGet))
+    {
+        bool deferred = false;
+        status = chat_runtime::process(request, command.sequence, body, sizeof(command.payload) - 41, body_size, deferred);
+        if (status == Status::Ok && deferred) return ErrorCode::Ok;
     }
     else if (request.code == static_cast<uint16_t>(Operation::SessionClose))
     {

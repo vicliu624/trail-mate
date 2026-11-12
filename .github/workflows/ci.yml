@@ -79,6 +79,11 @@ jobs:
           cmake --build .codex-build/hostlink-codec/native --parallel 2
           test -x .codex-build/hostlink-codec/native/track_snapshot_owner
           ctest --test-dir .codex-build/hostlink-codec/native --output-on-failure
+            cmake -S tests/hostlink_chat -B .codex-build/hostlink-chat -DCMAKE_BUILD_TYPE=Debug
+            cmake --build .codex-build/hostlink-chat --parallel 2
+            ctest --test-dir .codex-build/hostlink-chat --output-on-failure
+            node --test site/device/tests/chat-client.test.mjs
+            python3 -m unittest tools.hostlink.test_serial_stream
           cmake -S tests/tracker_recording -B .codex-build/tracker-recording -DCMAKE_BUILD_TYPE=Debug
           cmake --build .codex-build/tracker-recording --parallel 2
           ctest --test-dir .codex-build/tracker-recording --output-on-failure

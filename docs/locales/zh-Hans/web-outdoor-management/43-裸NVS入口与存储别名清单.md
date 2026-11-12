@@ -2,7 +2,7 @@
 
 由 scripts/audit_nvs_access.mjs 扫描 Git 跟踪的 ESP、共享 UI 和仓库 third_party C/C++ 文件；不递归已初始化子模块，也不混入本地生成文件。只记录 NVS 函数、namespace/key/handle 实参和位置，不读取设备、不记录值/默认值/缓冲/分区名。不把最近的 nvs_open 自动推断为后续调用的 namespace；跨作用域句柄、宏和条件编译仍需人工核对。
 
-扫描 1574 个源文件，找到 106 个候选调用，分布于 8 个文件。显式打开 15，键访问 45，其余为提交/关闭/清域。调用数不是独立配置数。
+扫描 1578 个源文件，找到 114 个候选调用，分布于 9 个文件。显式打开 16，键访问 49，其余为提交/关闭/清域。调用数不是独立配置数。
 
 这是源码入口清单，不是全部配置或硬件生效证明。系统 SDK、构建环境依赖、其他平台、函数指针/包装器实参以及复杂原始字符串不由此表自动覆盖。依赖库可单独调用 collectNvsAccesses 指定根目录审计；输出应单独记录其版本，不能写进与机器无关的仓库清单。
 
@@ -13,6 +13,14 @@
 | nvs_open | namespace | &record_handle | kPrefsNs | 动态/不适用 | [platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_identity.cpp:165](../../../../platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_identity.cpp#L165) |
 | nvs_get_blob | key | record_handle | "native_v1" | native_v1 | [platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_identity.cpp:168](../../../../platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_identity.cpp#L168) |
 | nvs_close | close | record_handle |  | 动态/不适用 | [platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_identity.cpp:169](../../../../platform/esp/arduino_common/src/chat/infra/lxmf/lxmf_identity.cpp#L169) |
+| nvs_open | namespace | &nvs | "hl_chat" | hl_chat | [platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp:35](../../../../platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp#L35) |
+| nvs_get_blob | key | nvs | "store" | store | [platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp:37](../../../../platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp#L37) |
+| nvs_set_blob | key | nvs | "store" | store | [platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp:41](../../../../platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp#L41) |
+| nvs_commit | commit | nvs |  | 动态/不适用 | [platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp:41](../../../../platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp#L41) |
+| nvs_close | close | nvs |  | 动态/不适用 | [platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp:44](../../../../platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp#L44) |
+| nvs_get_blob | key | nvs | key | 动态/不适用 | [platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp:76](../../../../platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp#L76) |
+| nvs_set_blob | key | nvs | key | 动态/不适用 | [platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp:85](../../../../platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp#L85) |
+| nvs_commit | commit | nvs |  | 动态/不适用 | [platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp:85](../../../../platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp#L85) |
 | nvs_open | namespace | &handle_ | ns | 动态/不适用 | [platform/esp/common/include/platform/esp/common/config_preferences.h:29](../../../../platform/esp/common/include/platform/esp/common/config_preferences.h#L29) |
 | nvs_close | close | handle_ |  | 动态/不适用 | [platform/esp/common/include/platform/esp/common/config_preferences.h:33](../../../../platform/esp/common/include/platform/esp/common/config_preferences.h#L33) |
 | nvs_get_u8 | key | handle_ | key | 动态/不适用 | [platform/esp/common/include/platform/esp/common/config_preferences.h:39](../../../../platform/esp/common/include/platform/esp/common/config_preferences.h#L39) |

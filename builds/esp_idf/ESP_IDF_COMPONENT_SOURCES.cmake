@@ -625,6 +625,7 @@ set(TRAILMATE_ESP_IDF_PLATFORM_COMMON_SOURCES
     "${TRAILMATE_ROOT}/third_party/rweather_crypto/Crypto.cpp"
     "${TRAILMATE_ROOT}/platform/esp/arduino_common/src/chat/infra/rnode/rnode_adapter.cpp"
     "${TRAILMATE_ROOT}/platform/esp/arduino_common/src/hostlink/hostlink_bridge_radio.cpp"
+    "${TRAILMATE_ROOT}/platform/esp/arduino_common/src/hostlink/hostlink_chat_runtime.cpp"
     "${TRAILMATE_ROOT}/platform/esp/arduino_common/src/hostlink/hostlink_config_service.cpp"
     "${TRAILMATE_ROOT}/platform/esp/arduino_common/src/hostlink/hostlink_service.cpp"
     "${TRAILMATE_ROOT}/platform/esp/arduino_common/src/rnode_kiss/rnode_kiss_service.cpp"
