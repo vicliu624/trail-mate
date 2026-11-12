@@ -91,6 +91,10 @@ for host usage and verification.
 
 ## Capabilities (HELLO_ACK)
 
+Management operations 112–114 provide bounded, recoverable text/Team
+submission and receipt lookup. See [HostLink messaging](../../docs/engineering/hostlink-messaging.md)
+for the wire contract, live receive client, retention limits, and host tool.
+
 Bitmask (uint32):
 - bit0: `CapTxMsg`
 - bit1: `CapConfig`

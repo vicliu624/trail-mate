@@ -76,6 +76,9 @@ enum class Operation : uint16_t
     TrackPackageSignPrepare = 99,
     TrackPackageInstall = 100,
     TrackPackageInstallStatus = 101,
+    ChatCapabilities = 112,
+    ChatSend = 113,
+    ChatSendGet = 114,
 };
 
 enum class Status : uint16_t

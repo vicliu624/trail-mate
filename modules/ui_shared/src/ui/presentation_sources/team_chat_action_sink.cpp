@@ -35,11 +35,13 @@ uint32_t currentTimestamp()
 TeamChatActionSink::TeamChatActionSink(::team::ui::ITeamUiSnapshotStore& snapshot_store,
                                        ::team::ui::ITeamUiChatLogStore& chat_log_store,
                                        ITeamChatCommandPort* command_port,
-                                       uint8_t team_channel_raw)
+                                       uint8_t team_channel_raw,
+                                       uint32_t initial_message_id)
     : snapshot_store_(snapshot_store),
       chat_log_store_(chat_log_store),
       command_port_(command_port),
-      team_channel_raw_(team_channel_raw)
+      team_channel_raw_(team_channel_raw),
+      next_message_id_(initial_message_id ? initial_message_id : kTeamComposeMsgIdStart)
 {
 }
 

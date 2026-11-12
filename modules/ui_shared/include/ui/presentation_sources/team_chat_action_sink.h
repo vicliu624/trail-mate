@@ -45,7 +45,8 @@ class TeamChatActionSink final : public ui::chat::IChatActionSink
     TeamChatActionSink(::team::ui::ITeamUiSnapshotStore& snapshot_store,
                        ::team::ui::ITeamUiChatLogStore& chat_log_store,
                        ITeamChatCommandPort* command_port,
-                       uint8_t team_channel_raw = 2);
+                       uint8_t team_channel_raw = 2,
+                       uint32_t initial_message_id = 1);
 
     ui::UiActionResult selectConversation(ui::chat::ConversationId id) override;
     ui::UiActionResult sendMessage(const ui::chat::SendMessageView& message) override;
