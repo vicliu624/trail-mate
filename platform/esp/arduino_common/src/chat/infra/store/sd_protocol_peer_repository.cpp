@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <limits>
 
 namespace chat
 {
@@ -519,6 +520,13 @@ SdProtocolPeerRepository::stepHydration(
                 return maintenanceFailure(
                     storage_contracts::StorageOperationResultKind::IoError);
             }
+            if (maintenance_kind_ == storage_v2::JournalKind::ContactDelta &&
+                maintenance_journal_.inspection().state ==
+                    storage_v2::FixedSlotJournalEngine::State::Incompatible)
+            {
+                maintenance_.phase = MaintenancePhase::ContactRepairPrepare;
+                break;
+            }
             {
                 const auto status = maintenance_journal_.next(
                     journal_,
@@ -583,6 +591,18 @@ SdProtocolPeerRepository::stepHydration(
             }
             break;
 
+        case MaintenancePhase::ContactRepairPrepare:
+        case MaintenancePhase::ContactRepairCopy:
+        case MaintenancePhase::ContactRepairLatest:
+        case MaintenancePhase::ContactRepairPublish:
+        case MaintenancePhase::ContactRepairFinish:
+        {
+            const auto result = stepContactRepair();
+            if (!result.inProgress())
+                return result;
+            break;
+        }
+
         case MaintenancePhase::HydrationFinalize:
         {
             ScopedRepositoryLock lock(mutex_);
@@ -618,6 +638,129 @@ SdProtocolPeerRepository::stepHydration(
     return storage_contracts::StorageOperationResult::inProgressResult(
         maintenance_.operation,
         maintenance_.generation);
+}
+
+platform::esp::common::storage::StorageOperationResult
+SdProtocolPeerRepository::stepContactRepair()
+{
+    const auto retry = [&]()
+    {
+        return maintenanceFailure(storage_contracts::StorageOperationResultKind::RetryLater);
+    };
+    const auto invalid = [&]()
+    {
+        return maintenanceFailure(storage_contracts::StorageOperationResultKind::IoError);
+    };
+    const auto progress = [&]()
+    {
+        return storage_contracts::StorageOperationResult::inProgressResult(
+            maintenance_.operation, maintenance_.generation);
+    };
+    const uint64_t header_size = storage_v2::FixedSlotJournalEngine::headerSize();
+    if (maintenance_.phase == MaintenancePhase::ContactRepairPrepare)
+    {
+        buildProtocolPath(maintenance_protocol_, "contacts.delta", maintenance_final_path_, sizeof(maintenance_final_path_));
+        buildProtocolPath(maintenance_protocol_, "contacts.delta.repair.tmp", maintenance_path_, sizeof(maintenance_path_));
+        buildProtocolPath(maintenance_protocol_, "contacts.delta.repair.bak", maintenance_backup_path_, sizeof(maintenance_backup_path_));
+        buildProtocolPath(maintenance_protocol_, "contacts.delta.corrupt", maintenance_delta_path_, sizeof(maintenance_delta_path_));
+        // Never replace an earlier forensic copy or an unfinished publication.
+        if (storage_runtime::sd_exists(maintenance_backup_path_) ||
+            storage_runtime::sd_exists(maintenance_delta_path_))
+            return invalid();
+
+        storage_runtime::SdRuntimeFile source;
+        if (!source.open(maintenance_final_path_, "r"))
+            return retry();
+        const uint64_t length = source.size();
+        if (source.read_busy())
+            return retry();
+        if (length < header_size + maintenance_slot_size_ ||
+            (length - header_size) % maintenance_slot_size_ != 0U ||
+            (length - header_size) / maintenance_slot_size_ > std::numeric_limits<uint32_t>::max())
+            return invalid();
+        if (source.read(maintenance_scratch_.data(), maintenance_slot_size_) != static_cast<int>(maintenance_slot_size_))
+            return retry();
+        storage_v2::ContactProjection latest{};
+        // This recovery is deliberately specific to the observed append-at-zero
+        // failure. Require a complete current-format, CRC-valid record at zero.
+        // Unknown data stays untouched and does not publish a false Ready state.
+        if (!storage_v2::decodeContactSlot(maintenance_protocol_, maintenance_scratch_.data(), maintenance_slot_size_, latest))
+            return invalid();
+        source.close();
+        if (!journal_.create(maintenance_path_, maintenance_protocol_, maintenance_kind_, maintenance_slot_size_))
+            return retry();
+        maintenance_.repair_slot_count = static_cast<uint32_t>((length - header_size) / maintenance_slot_size_);
+        maintenance_.repair_slot_index = 0U;
+        maintenance_.phase = MaintenancePhase::ContactRepairCopy;
+        return progress();
+    }
+
+    if (maintenance_.phase == MaintenancePhase::ContactRepairCopy ||
+        maintenance_.phase == MaintenancePhase::ContactRepairLatest)
+    {
+        const bool latest = maintenance_.phase == MaintenancePhase::ContactRepairLatest;
+        if (!latest && maintenance_.repair_slot_index >= maintenance_.repair_slot_count)
+        {
+            maintenance_.phase = MaintenancePhase::ContactRepairLatest;
+            return progress();
+        }
+        storage_runtime::SdRuntimeFile source;
+        if (!source.open(maintenance_final_path_, "r"))
+            return retry();
+        const uint64_t length = source.size();
+        if (source.read_busy())
+            return retry();
+        if (length != header_size + static_cast<uint64_t>(maintenance_.repair_slot_count) * maintenance_slot_size_)
+            return invalid();
+        const uint64_t offset = latest ? 0U : header_size + static_cast<uint64_t>(maintenance_.repair_slot_index) * maintenance_slot_size_;
+        if (!source.seek(offset) ||
+            source.read(maintenance_scratch_.data(), maintenance_slot_size_) != static_cast<int>(maintenance_slot_size_))
+            return retry();
+        source.close();
+        storage_v2::ContactProjection projection{};
+        if (storage_v2::decodeContactSlot(maintenance_protocol_, maintenance_scratch_.data(), maintenance_slot_size_, projection))
+        {
+            if (!journal_.append(maintenance_path_, maintenance_protocol_, maintenance_kind_, maintenance_slot_size_, maintenance_scratch_.data()))
+            {
+                // A failed write/flush may have changed the temporary file.
+                // Restart from the untouched original rather than duplicate it.
+                maintenance_.phase = MaintenancePhase::ContactRepairPrepare;
+                return retry();
+            }
+        }
+        else if (latest)
+            return invalid();
+        if (latest)
+            maintenance_.phase = MaintenancePhase::ContactRepairPublish;
+        else
+            ++maintenance_.repair_slot_index;
+        return progress();
+    }
+
+    if (maintenance_.phase == MaintenancePhase::ContactRepairPublish)
+    {
+        const auto inspection = journal_.inspect(maintenance_path_, maintenance_protocol_, maintenance_kind_, maintenance_slot_size_);
+        if (inspection.state != storage_v2::FixedSlotJournalEngine::State::Ready || inspection.slot_count == 0U)
+            return retry();
+        if (!storage_runtime::sd_rename(maintenance_final_path_, maintenance_backup_path_))
+            return retry();
+        maintenance_.phase = MaintenancePhase::ContactRepairFinish;
+    }
+    if (maintenance_.phase == MaintenancePhase::ContactRepairFinish)
+    {
+        // SdFat rename refuses an existing destination. The original remains in
+        // repair.bak across interruption, and startup restores it if needed.
+        if (!storage_runtime::sd_rename(maintenance_path_, maintenance_final_path_))
+            return retry();
+        // Keep the full original, including records we could not validate.
+        // If this last rename fails, startup retains repair.bak for forensics.
+        (void)storage_runtime::sd_rename(maintenance_backup_path_, maintenance_delta_path_);
+        maintenance_journal_.reset();
+        maintenance_.journal_started = false;
+        maintenance_.phase = MaintenancePhase::HydrationJournal;
+        return progress();
+    }
+    return invalid();
 }
 
 platform::esp::common::storage::StorageOperationResult
@@ -1079,9 +1222,27 @@ bool SdProtocolPeerRepository::ensureLayout()
 
 bool SdProtocolPeerRepository::ensureProtocolLayout(MeshProtocol protocol)
 {
-    char path[64] = {};
-    buildProtocolPath(protocol, nullptr, path, sizeof(path));
-    return ensureDirectory(path);
+    buildProtocolPath(protocol, nullptr, maintenance_path_, sizeof(maintenance_path_));
+    if (!ensureDirectory(maintenance_path_))
+        return false;
+    buildProtocolPath(protocol, "contacts.delta.repair.bak", maintenance_backup_path_, sizeof(maintenance_backup_path_));
+    const auto backup = journal_.inspect(maintenance_backup_path_, protocol,
+                                         storage_v2::JournalKind::ContactDelta, storage_v2::contactSlotSize(protocol));
+    if (backup.state == storage_v2::FixedSlotJournalEngine::State::IoError)
+        return false;
+    if (backup.state == storage_v2::FixedSlotJournalEngine::State::Missing)
+        return true;
+    buildProtocolPath(protocol, "contacts.delta", maintenance_final_path_, sizeof(maintenance_final_path_));
+    const auto final = journal_.inspect(maintenance_final_path_, protocol,
+                                        storage_v2::JournalKind::ContactDelta, storage_v2::contactSlotSize(protocol));
+    if (final.state == storage_v2::FixedSlotJournalEngine::State::IoError)
+        return false;
+    if (final.state == storage_v2::FixedSlotJournalEngine::State::Missing)
+        return storage_runtime::sd_rename(maintenance_backup_path_, maintenance_final_path_);
+    buildProtocolPath(protocol, "contacts.delta.corrupt", maintenance_delta_path_, sizeof(maintenance_delta_path_));
+    // Do not delete a backup, even if the previous final forensic rename failed.
+    (void)storage_runtime::sd_rename(maintenance_backup_path_, maintenance_delta_path_);
+    return true;
 }
 
 bool SdProtocolPeerRepository::rewritePeerSnapshotFrom(

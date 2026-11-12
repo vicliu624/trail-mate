@@ -485,6 +485,16 @@ void stop_deferred_storage()
     (void)s_owner.requestStop();
 }
 
+bool deferred_storage_stopped()
+{
+    return !s_owner.isArmed();
+}
+
+void resume_deferred_storage()
+{
+    start_deferred_storage(s_context.chat_store, s_context.peer_directory, s_context.active_protocol);
+}
+
 bool hydration_active()
 {
     return s_owner.hydrationActive();
@@ -498,6 +508,25 @@ bool initial_hydration_pending()
 bool initial_hydration_ready()
 {
     return s_owner.initialHydrationReady();
+}
+
+RuntimeDiagnostics runtime_diagnostics()
+{
+    const auto snapshot = s_owner.snapshot();
+    RuntimeDiagnostics result{};
+    result.state = static_cast<uint8_t>(snapshot.state);
+    result.active_operation = static_cast<uint8_t>(snapshot.active_operation);
+    result.pending_operation = static_cast<uint8_t>(snapshot.pending_operation);
+    result.retry_attempt = snapshot.retry_attempt;
+    result.flags = (s_owner.isArmed() ? 1U : 0U) |
+                   (s_owner.initialHydrationReady() ? 2U : 0U) |
+                   (s_owner.initialHydrationPending() ? 4U : 0U) |
+                   (snapshot.startup_gate_satisfied ? 8U : 0U) |
+                   (sd_card_ready() ? 16U : 0U) |
+                   (s_owner.hydrationActive() ? 32U : 0U);
+    result.generation = snapshot.generation;
+    result.retry_due_ms = snapshot.retry_due_ms;
+    return result;
 }
 
 bool consume_hydration_ready()

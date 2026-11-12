@@ -16,6 +16,10 @@ bool fail_record_read = false;
 bool short_record_write = false;
 bool fail_update_open = false;
 bool fail_header_read = false;
+bool fail_update_size_once = false;
+bool fail_contacts_open_once = false;
+bool fail_repair_publish = false;
+bool fail_forensic_rename_once = false;
 std::size_t largest_read = 0;
 } // namespace team_store_test
 
@@ -32,6 +36,7 @@ class SdRuntimeFile::Impl
 {
   public:
     std::FILE* file = nullptr;
+    bool update_mode = false;
 };
 SdRuntimeFile::SdRuntimeFile() : impl_(new Impl) {}
 SdRuntimeFile::~SdRuntimeFile()
@@ -42,6 +47,16 @@ SdRuntimeFile::~SdRuntimeFile()
 bool SdRuntimeFile::open(const char* path, const char* mode)
 {
     close();
+    read_busy_ = false;
+    impl_->update_mode = std::strcmp(mode, "r+") == 0;
+    const char* basename = std::strrchr(path, '/');
+    if (team_store_test::fail_contacts_open_once && std::strcmp(mode, "r") == 0 &&
+        std::strcmp(basename ? basename + 1 : path, "contacts.delta") == 0)
+    {
+        team_store_test::fail_contacts_open_once = false;
+        read_busy_ = true;
+        return false;
+    }
     if (team_store_test::fail_update_open && std::strcmp(mode, "r+") == 0) return false;
     impl_->file = std::fopen(path_for(path).c_str(), mode);
     return is_open();
@@ -55,6 +70,13 @@ bool SdRuntimeFile::is_open() const { return impl_->file != nullptr; }
 uint64_t SdRuntimeFile::position() const { return static_cast<uint64_t>(std::ftell(impl_->file)); }
 uint64_t SdRuntimeFile::size() const
 {
+    read_busy_ = false;
+    if (team_store_test::fail_update_size_once && impl_->update_mode)
+    {
+        team_store_test::fail_update_size_once = false;
+        read_busy_ = true;
+        return 0;
+    }
     const auto old = std::ftell(impl_->file);
     std::fseek(impl_->file, 0, SEEK_END);
     const auto length = std::ftell(impl_->file);
@@ -87,11 +109,41 @@ std::size_t SdRuntimeFile::write_byte(uint8_t value) { return write(&value, 1); 
 std::size_t SdRuntimeFile::print(const char* text) { return write(text, std::strlen(text)); }
 bool SdRuntimeFile::flush() { return !team_store_test::fail_flush && std::fflush(impl_->file) == 0; }
 bool sd_card_ready() { return true; }
+SdFileReadResult sd_read_file(const char* path, uint8_t* buffer, std::size_t capacity)
+{
+    SdFileReadResult result{};
+    const auto native = path_for(path);
+    if (!std::filesystem::exists(native))
+    {
+        result.status = SdFileReadStatus::Missing;
+        return result;
+    }
+    result.file_size = std::filesystem::file_size(native);
+    if (result.file_size == 0 || result.file_size > capacity)
+    {
+        result.status = SdFileReadStatus::Invalid;
+        return result;
+    }
+    auto* file = std::fopen(native.c_str(), "rb");
+    if (!file) return result;
+    result.bytes_read = std::fread(buffer, 1, result.file_size, file);
+    std::fclose(file);
+    if (result.bytes_read == result.file_size) result.status = SdFileReadStatus::Ready;
+    return result;
+}
 bool sd_exists(const char* path) { return std::filesystem::exists(path_for(path)); }
 bool sd_mkdir(const char* path) { return std::filesystem::create_directories(path_for(path)); }
 bool sd_remove(const char* path) { return std::filesystem::remove(path_for(path)); }
 bool sd_rename(const char* from, const char* to)
 {
+    if (team_store_test::fail_repair_publish && std::strstr(from, "contacts.delta.repair.tmp")) return false;
+    if (team_store_test::fail_forensic_rename_once && std::strstr(to, "contacts.delta.corrupt"))
+    {
+        team_store_test::fail_forensic_rename_once = false;
+        return false;
+    }
+    // Match SdFat: publication must never overwrite an existing destination.
+    if (std::filesystem::exists(path_for(to))) return false;
     std::error_code error;
     std::filesystem::rename(path_for(from), path_for(to), error);
     return !error;

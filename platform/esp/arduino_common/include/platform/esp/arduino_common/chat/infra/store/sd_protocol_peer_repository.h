@@ -188,6 +188,11 @@ class SdProtocolPeerRepository final : public IProtocolPeerRepository
         CompactionAdvance,
         Complete,
         Failed,
+        ContactRepairPrepare,
+        ContactRepairCopy,
+        ContactRepairLatest,
+        ContactRepairPublish,
+        ContactRepairFinish,
     };
 
     struct MaintenanceState
@@ -205,6 +210,8 @@ class SdProtocolPeerRepository final : public IProtocolPeerRepository
         uint32_t compaction_record_index = 0U;
         bool compact_peers = false;
         bool compact_contacts = false;
+        uint32_t repair_slot_index = 0U;
+        uint32_t repair_slot_count = 0U;
     };
 
     bool prepareMaintenanceJournal();
@@ -212,6 +219,7 @@ class SdProtocolPeerRepository final : public IProtocolPeerRepository
                                    storage::v2::JournalKind kind);
     platform::esp::common::storage::StorageOperationResult stepHydration(
         const platform::esp::common::storage::StorageOperationBudget& budget);
+    platform::esp::common::storage::StorageOperationResult stepContactRepair();
     platform::esp::common::storage::StorageOperationResult stepPersistence(
         const platform::esp::common::storage::StorageOperationBudget& budget);
     platform::esp::common::storage::StorageOperationResult stepCompaction(

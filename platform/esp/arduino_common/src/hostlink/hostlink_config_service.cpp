@@ -8,6 +8,11 @@
 #include "chat/usecase/chat_service.h"
 #include "platform/esp/arduino_common/hostlink/hostlink_bridge_radio.h"
 #include "platform/ui/device_runtime.h"
+#if defined(ARDUINO)
+#include "platform/esp/arduino_common/storage/storage_runtime.h"
+#include "sys/clock.h"
+#include <esp_heap_caps.h>
+#endif
 
 #if defined(TRAIL_MATE_ESP_BOARD_TAB5)
 #include "platform/esp/idf_common/tab5_rtc_runtime.h"
@@ -73,7 +78,34 @@ bool build_status_payload(std::vector<uint8_t>& out, uint8_t link_state, uint32_
     snapshot.aprs.self_enable = aprs.self_enable;
     copy_cstr_field(snapshot.aprs.self_callsign, aprs.self_callsign);
 
+#if defined(ARDUINO)
+    if (!encode_status_payload(out, snapshot, include_config)) return false;
+    if (include_config) return true;
+    // Optional read-only storage health snapshot. No filesystem access,
+    // configuration payload, paths, or credentials are included.
+    const auto storage = platform::esp::arduino_common::storage::runtime_diagnostics();
+    out.push_back(240);
+    out.push_back(26);
+    out.push_back(1);
+    out.push_back(storage.state);
+    out.push_back(storage.active_operation);
+    out.push_back(storage.pending_operation);
+    out.push_back(storage.retry_attempt);
+    out.push_back(storage.flags);
+    const auto append_u32 = [&out](uint32_t value)
+    {
+        for (unsigned shift = 0; shift < 32; shift += 8)
+            out.push_back(static_cast<uint8_t>(value >> shift));
+    };
+    append_u32(storage.generation);
+    append_u32(storage.retry_due_ms);
+    append_u32(sys::millis_now());
+    append_u32(heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    append_u32(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    return true;
+#else
     return encode_status_payload(out, snapshot, include_config);
+#endif
 }
 
 bool apply_config(const uint8_t* data, size_t len, uint32_t* out_err)

@@ -11,6 +11,7 @@
 #include "hostlink/sensitive_memory.h"
 #include "platform/esp/arduino_common/app_config_sd_tms_runtime.h"
 #include "platform/esp/arduino_common/geocaching/browse_runtime.h"
+#include "platform/esp/arduino_common/hostlink/hostlink_download_mode.h"
 #include "platform/esp/arduino_common/hostlink/hostlink_service.h"
 #include "platform/esp/arduino_common/hostlink/web_config_upload.h"
 #include "platform/esp/arduino_common/hostlink/web_publication_commit.h"
@@ -558,8 +559,12 @@ inline ErrorCode execute_management(PendingCommand& command)
 #if (defined(ESP_PLATFORM) && !defined(ARDUINO)) || defined(TRAIL_MATE_USB_HOSTLINK_AUTOSTART)
     if (route_install_owner && routeInstallBlocksOperation(request.code) && route_install_owner->status() != Status::Busy && route_install_owner->status() != Status::Internal)
         release_route_install();
-    if (route_install_owner && routeInstallBlocksOperation(request.code)) status = Status::Busy;
+    if (download_mode::active()) status = Status::Busy;
+    else if (route_install_owner && routeInstallBlocksOperation(request.code)) status = Status::Busy;
     else if (ip_confirmation_runtime::holdsStorage() && ip_confirmation_runtime::blocksOperation(request.code)) status = Status::Busy;
+    else
+#else
+    if (download_mode::active()) status = Status::Busy;
     else
 #endif
         if (request.code == static_cast<uint16_t>(Operation::Capabilities))
@@ -569,14 +574,31 @@ inline ErrorCode execute_management(PendingCommand& command)
         {
             // [version, frame bytes, read chunk bytes, pending window, operations, TMS schema]
 #if (defined(ESP_PLATFORM) && !defined(ARDUINO)) || defined(TRAIL_MATE_USB_HOSTLINK_AUTOSTART)
-            const uint8_t capabilities[] = {0x96, 1, 0xcd, 2, 0, 0xcd, 1, 0x40, 1, 0xdc, 0, 56, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 17, 20, 21, 32, 33, 34, 35, 36, 37, 38, 48, 50, 64, 65, 66, 67, 68, 70, 71, 72, 73, 74, 75, 76, 77, 80, 81, 82, 83, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 7};
+            static constexpr uint8_t operations[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 17, 20, 21, 32, 33, 34, 35, 36, 37, 38, 48, 50, 64, 65, 66, 67, 68, 70, 71, 72, 73, 74, 75, 76, 77, 80, 81, 82, 83, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101};
 #else
-            const uint8_t capabilities[] = {0x96, 1, 0xcd, 2, 0, 0xcd, 1, 0x40, 1, 0xdc, 0, 20, 0, 1, 2, 3, 17, 20, 21, 32, 33, 34, 35, 36, 48, 50, 64, 65, 66, 67, 68, 70, 7};
+            static constexpr uint8_t operations[] = {0, 1, 2, 3, 17, 20, 21, 32, 33, 34, 35, 36, 48, 50, 64, 65, 66, 67, 68, 70};
 #endif
-            std::memcpy(body, capabilities, sizeof(capabilities));
-            body_size = sizeof(capabilities);
-            status = Status::Ok;
+            const bool bootloader = download_mode::supported();
+            geocaching::protocol::CmpWriter writer(body, sizeof(command.payload) - 41);
+            bool ok = writer.array(6) && writer.unsignedInteger(1) && writer.unsignedInteger(kMaxFrameLen) &&
+                      writer.unsignedInteger(320) && writer.unsignedInteger(1) &&
+                      writer.array(sizeof(operations) + (bootloader ? 1U : 0U));
+            for (uint8_t operation : operations) ok = ok && writer.unsignedInteger(operation);
+            if (bootloader) ok = ok && writer.unsignedInteger(static_cast<uint16_t>(Operation::EnterBootloader));
+            ok = ok && writer.unsignedInteger(7);
+            body_size = writer.size();
+            status = ok ? Status::Ok : Status::Internal;
         }
+    }
+    else if (request.code == static_cast<uint16_t>(Operation::EnterBootloader))
+    {
+#if (defined(ESP_PLATFORM) && !defined(ARDUINO)) || defined(TRAIL_MATE_USB_HOSTLINK_AUTOSTART)
+        if (route_install_owner || snapshot_runtime::owner || prepare_runtime::prepareHoldsStorage() ||
+            publication_runtime::holdsStorage() || ip_confirmation_runtime::holdsStorage()) status = Status::Busy;
+        else
+#endif
+            status = download_mode::request(request, command.sequence);
+        if (status == Status::Ok) return ErrorCode::Ok; // Correlated response follows storage quiescence.
     }
     else if (request.code == static_cast<uint16_t>(Operation::SessionClose))
     {

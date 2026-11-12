@@ -7,6 +7,7 @@
 #include "hostlink/sensitive_memory.h"
 #include "platform/esp/arduino_common/hostlink/hostlink_bridge_radio.h"
 #include "platform/esp/arduino_common/hostlink/hostlink_config_service.h"
+#include "platform/esp/arduino_common/hostlink/hostlink_download_mode.h"
 #include "platform/esp/arduino_common/hostlink/hostlink_management_service.h"
 #include "usb/usb_cdc_transport.h"
 
@@ -65,10 +66,12 @@ struct TxItem
 {
     uint8_t* data = nullptr;
     size_t len = 0;
+    uint32_t completion_cookie = 0;
 };
 
 void release_tx_item(TxItem& item)
 {
+    if (item.completion_cookie) download_mode::reply_completed(item.completion_cookie, false);
     clearSensitiveBytes(item.data, item.len);
     free(item.data);
     item = {};
@@ -634,8 +637,16 @@ void hostlink_task(void* /*arg*/)
         {
             if (item.data && item.len)
             {
-                usb_cdc::write(item.data, item.len);
-                note_tx(s_session);
+                const size_t sent = usb_cdc::write(item.data, item.len);
+                if (sent) note_tx(s_session);
+                if (item.completion_cookie)
+                {
+#if defined(ARDUINO)
+                    if (sent == item.len) usb_cdc::flush_output();
+#endif
+                    download_mode::reply_completed(item.completion_cookie, sent == item.len);
+                    item.completion_cookie = 0;
+                }
             }
             release_tx_item(item);
         }
@@ -760,21 +771,23 @@ void process_pending_commands()
     if (xQueueReceive(s_cmd_queue, &command, 0) == pdPASS)
     {
         ErrorCode result = ErrorCode::Unsupported;
-        switch (command.type)
-        {
-        case PendingCommandType::Management:
-            result = management::execute_management(command);
-            break;
-        case PendingCommandType::TxMsg:
-            result = execute_cmd_tx_msg(command);
-            break;
-        case PendingCommandType::TxAppData:
-            result = execute_cmd_tx_app_data(command);
-            break;
-        default:
-            result = ErrorCode::Unsupported;
-            break;
-        }
+        if (download_mode::active() && command.type != PendingCommandType::Management) result = ErrorCode::Busy;
+        else
+            switch (command.type)
+            {
+            case PendingCommandType::Management:
+                result = management::execute_management(command);
+                break;
+            case PendingCommandType::TxMsg:
+                result = execute_cmd_tx_msg(command);
+                break;
+            case PendingCommandType::TxAppData:
+                result = execute_cmd_tx_app_data(command);
+                break;
+            default:
+                result = ErrorCode::Unsupported;
+                break;
+            }
         if (result != ErrorCode::Ok)
         {
             note_error(s_session, static_cast<uint32_t>(result));
@@ -820,7 +833,7 @@ Status get_status()
 }
 
 bool enqueue_event(uint8_t type, const uint8_t* payload, size_t len, bool high_priority,
-                   uint16_t reply_sequence)
+                   uint16_t reply_sequence, uint32_t completion_cookie)
 {
     if (!s_tx_queue || !is_ready(s_session))
     {
@@ -832,6 +845,7 @@ bool enqueue_event(uint8_t type, const uint8_t* payload, size_t len, bool high_p
     }
 
     TxItem item;
+    item.completion_cookie = completion_cookie;
     item.len = kHeaderSize + len + kCrcSize;
 #if HAS_PSRAM
     // These task-owned USB frames do not require DMA-capable storage. Keep

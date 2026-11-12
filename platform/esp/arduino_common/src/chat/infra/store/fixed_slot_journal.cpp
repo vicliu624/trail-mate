@@ -39,22 +39,32 @@ FixedSlotJournalEngine::Inspection FixedSlotJournalEngine::inspect(
         result.state = State::Incompatible;
         return result;
     }
-    if (!storage::sd_exists(path))
-    {
-        result.state = State::Missing;
-        return result;
-    }
-
     storage::SdRuntimeFile file;
     if (!file.open(path, "r"))
     {
         result.state = State::IoError;
+        const bool busy = file.read_busy();
+        if (!busy)
+        {
+            // sd_exists() conflates a bounded bus miss with absence. Only a
+            // typed, physically completed path probe can establish Missing.
+            uint8_t scratch = 0U;
+            const auto evidence = storage::sd_read_file(path, &scratch, sizeof(scratch));
+            if (evidence.status == storage::SdFileReadStatus::Missing)
+                result.state = State::Missing;
+        }
         return result;
     }
     Header header{};
-    if (file.size() < sizeof(header) || !readExact(file, &header, sizeof(header)))
+    const uint64_t file_size = file.size();
+    if (file.read_busy())
     {
-        result.state = State::Incompatible;
+        result.state = State::IoError;
+        return result;
+    }
+    if (file_size < sizeof(header) || !readExact(file, &header, sizeof(header)))
+    {
+        result.state = file.read_busy() ? State::IoError : State::Incompatible;
         return result;
     }
     if (!matches(header, protocol, kind, slot_size))
@@ -63,7 +73,7 @@ FixedSlotJournalEngine::Inspection FixedSlotJournalEngine::inspect(
         return result;
     }
 
-    const uint64_t payload_size = file.size() - sizeof(header);
+    const uint64_t payload_size = file_size - sizeof(header);
     if (payload_size % slot_size != 0U)
     {
         result.state = State::PartialTail;
@@ -125,7 +135,17 @@ bool FixedSlotJournalEngine::append(const char* path,
     }
 
     storage::SdRuntimeFile file;
-    if (!file.open(path, "r+") || !file.seek(file.size()))
+    if (!file.open(path, "r+"))
+    {
+        return false;
+    }
+    // size() returns zero on a bounded shared-SPI miss. Never use that
+    // ambiguous value as an append offset: it can overwrite the header.
+    const uint64_t expected_end = sizeof(Header) +
+                                  static_cast<uint64_t>(inspection.slot_count) * slot_size;
+    const uint64_t actual_size = file.size();
+    if (file.read_busy() || actual_size != expected_end ||
+        !file.seek(expected_end))
     {
         return false;
     }
@@ -215,6 +235,14 @@ FixedSlotJournalCursor::StepStatus FixedSlotJournalCursor::next(
     if (!active_ || !out_slot || out_len < slot_size_)
     {
         return StepStatus::Invalid;
+    }
+    if (inspection_.state == FixedSlotJournalEngine::State::IoError)
+    {
+        inspection_ = engine.inspect(path_, protocol_, kind_, slot_size_);
+        if (inspection_.state == FixedSlotJournalEngine::State::IoError)
+        {
+            return StepStatus::Unavailable;
+        }
     }
     if (inspection_.state ==
         FixedSlotJournalEngine::State::Missing)

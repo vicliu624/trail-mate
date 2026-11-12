@@ -123,6 +123,13 @@ bool is_connected()
 #endif
 }
 
+void flush_output()
+{
+#if CONFIG_TINYUSB_CDC_ENABLED && defined(TRAIL_MATE_ENABLE_USB_CDC_TRANSPORT)
+    if (s_status.started) s_cdc.flush();
+#endif
+}
+
 Status get_status()
 {
     return s_status;

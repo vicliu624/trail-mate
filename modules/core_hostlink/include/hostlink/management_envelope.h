@@ -21,6 +21,7 @@ enum class Operation : uint16_t
     RadioIdentityInfo = 7,
     RadioIdentityBackupExport = 8,
     RadioIdentityBackupRestore = 9,
+    EnterBootloader = 10,
     ConfigSchema = 16,
     ConfigSnapshot = 17,
     ConfigBegin = 18,

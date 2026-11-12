@@ -45,6 +45,8 @@ Constraints:
 | 0x13 | CMD_SET_TIME   | PC→Dev | Set device epoch time |
 | 0x14 | CMD_GET_GPS    | PC→Dev | Request current GPS snapshot |
 | 0x15 | CMD_TX_APP_DATA | PC→Dev | Send app payload (raw or Team-routed) |
+| 0x20 | MANAGEMENT_REQUEST | PC→Dev | Versioned management envelope |
+| 0x21 | MANAGEMENT_RESPONSE | Dev→PC | Correlated management business result |
 | 0x80 | EV_RX_MSG      | Dev→PC | Device received a message |
 | 0x81 | EV_TX_RESULT   | Dev→PC | Send result for CMD_TX_MSG |
 | 0x82 | EV_STATUS      | Dev→PC | Device status/config (TLV) |
@@ -64,6 +66,28 @@ Constraints:
 | 4    | INVALID_PARAM |
 | 5    | NOT_IN_MODE   |
 | 6    | INTERNAL      |
+
+### Explicit ROM download transition
+
+Management operation 10 (`EnterBootloader`) is optional. Query management
+Capabilities (operation 0) and require 10 in the returned operations array;
+do not infer support from a board name or operation count. The shared client
+encodes the envelope as `[1, session_id16, request_id16, operation, body]`.
+The request body must be exactly `[true]`. A successful response uses the same
+IDs and frame sequence, business status 0, and body `[true]`.
+
+Supported Arduino ESP32-S3/S2 targets stop the existing storage worker at its
+maintenance boundary and claim SD ownership before acknowledging. The USB
+writer must finish and flush the complete response before the restart is
+scheduled. A disconnected host, discarded response, or transition timeout
+restores storage service. No NVS, SD contents, or Team identity is erased.
+The feature does not install firmware or return automatically from ROM mode.
+
+`[false]` returns Unauthorized (2), a malformed body InvalidField (3), a
+conflicting owner Busy (5), and an unsupported platform Unsupported (1).
+These are management business statuses, distinct from the frame ACK codes
+above. See [the download command guide](../../docs/engineering/hostlink-download-mode.md)
+for host usage and verification.
 
 ## Capabilities (HELLO_ACK)
 
@@ -344,11 +368,37 @@ Status keys:
 - 41: AppRxFromIs (u32)
 - 42: AppRxDirect (u32)
 - 43: AppRxRelayed (u32)
+- 240: StorageHealth (optional, versioned 26-byte snapshot; periodic status only)
 
 `*` keys are only included in response to CMD_GET_CONFIG/CMD_SET_CONFIG.
 
 AppRx counters include EV_APP_DATA and EV_RX_MSG deliveries.
 Counters are cumulative since boot.
+
+StorageHealth version 1 uses six single-byte fields followed by five
+little-endian u32 fields:
+
+```text
+u8 version = 1
+u8 state
+u8 active_operation
+u8 pending_operation
+u8 retry_attempt
+u8 flags
+u32 generation
+u32 retry_due_ms
+u32 uptime_ms
+u32 free_internal_bytes
+u32 largest_internal_block_bytes
+```
+
+States 0-8 are Dormant, WaitingStartupGate, Hydrating, Ready, WaitingIdle,
+Persisting, Compacting, Backoff, and Done. Operations 0-3 are None, Hydrate,
+Persist, and Compact. Flag bits are armed (0), initial hydration ready (1),
+initial hydration pending (2), startup gate satisfied (3), SD ready (4), and
+hydration currently active (5). Missing keys and unknown versions must be
+ignored. Reading this snapshot performs no filesystem I/O, consumes no ready
+notification, and exposes no paths, contact data, configuration, or credentials.
 
 LinkState values:
 - 0: Stopped

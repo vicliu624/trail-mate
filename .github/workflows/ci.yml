@@ -353,6 +353,22 @@ jobs:
       - name: Verify shared storage retry ownership and fairness
         run: python3 platform/esp/common/tests/run_storage_adapter_retry.py
 
+      - name: Verify Arduino peer hydration and contact journal recovery
+        run: |
+          cmake -S tests/peer_store_recovery -B .codex-build/peer-store-recovery -DCMAKE_BUILD_TYPE=Debug
+          cmake --build .codex-build/peer-store-recovery --parallel 2
+          ctest --test-dir .codex-build/peer-store-recovery --output-on-failure
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify HostLink download ownership and production client
+        run: |
+          cmake -S tests/hostlink_download_mode -B .codex-build/hostlink-download-mode -DCMAKE_BUILD_TYPE=Debug
+          cmake --build .codex-build/hostlink-download-mode --parallel 2
+          ctest --test-dir .codex-build/hostlink-download-mode --output-on-failure
+          node tools/hostlink/test_enter_download_mode.mjs
+
       - name: Verify blocked storage-worker reservation before optional startup allocations
         run: |
           cmake -S tests/esp_storage_startup -B .codex-build/esp-storage-startup -DCMAKE_BUILD_TYPE=Debug

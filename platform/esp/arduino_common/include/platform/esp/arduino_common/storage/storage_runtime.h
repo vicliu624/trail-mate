@@ -11,6 +11,19 @@ class SdProtocolPeerRepository;
 namespace platform::esp::arduino_common::storage
 {
 
+struct RuntimeDiagnostics
+{
+    uint8_t state = 0;
+    uint8_t active_operation = 0;
+    uint8_t pending_operation = 0;
+    uint8_t retry_attempt = 0;
+    uint8_t flags = 0;
+    uint32_t generation = 0;
+    uint32_t retry_due_ms = 0;
+};
+
+RuntimeDiagnostics runtime_diagnostics();
+
 // Reserves the existing worker's queue and stack before optional startup
 // allocations. Does not arm recovery or perform SD I/O.
 bool prepare_deferred_storage();
@@ -27,6 +40,11 @@ void tick_deferred_storage();
 // Requests cancellation at the next operation boundary and stops accepting
 // foreground maintenance ticks.
 void stop_deferred_storage();
+
+// Shutdown helpers use the owner's acknowledgement, rather than a time delay,
+// before transferring storage. Resume preserves the existing backend objects.
+bool deferred_storage_stopped();
+void resume_deferred_storage();
 
 // Returns true while the initial SD-backed state is being hydrated. The
 // foreground lifecycle must not enter store/repository code during this

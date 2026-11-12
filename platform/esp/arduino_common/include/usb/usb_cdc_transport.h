@@ -17,6 +17,7 @@ bool start();
 void stop();
 size_t read(uint8_t* buffer, size_t max_len);
 size_t write(const uint8_t* data, size_t len);
+void flush_output();
 bool is_connected();
 Status get_status();
 
