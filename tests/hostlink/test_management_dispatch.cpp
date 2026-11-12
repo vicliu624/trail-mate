@@ -220,8 +220,9 @@ struct FakeAuthor final : chat::IMeshAdapter
 };
 namespace hostlink
 {
-bool enqueue_event(uint8_t type, const uint8_t* payload, size_t length, bool, uint16_t sequence)
+bool enqueue_event(uint8_t type, const uint8_t* payload, size_t length, bool, uint16_t sequence, uint32_t completion_cookie)
 {
+    assert(completion_cookie == 0);
     assert(type == static_cast<uint8_t>(FrameType::ManagementResponse));
     response.assign(payload, payload + length);
     response_sequence = sequence;

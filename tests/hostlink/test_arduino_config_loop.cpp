@@ -129,6 +129,13 @@ void process_pending_commands()
 }
 } // namespace hostlink
 
+#if defined(TRAIL_MATE_USB_HOSTLINK_AUTOSTART)
+namespace hostlink::download_mode
+{
+void service() { trace.push_back('b'); }
+} // namespace hostlink::download_mode
+#endif
+
 namespace ui::widgets::reticulum_call_overlay
 {
 void tick() {}
@@ -184,6 +191,14 @@ bool has(char event)
         if (value == event) return true;
     return false;
 }
+void expect_download_pump()
+{
+#if defined(TRAIL_MATE_USB_HOSTLINK_AUTOSTART)
+    assert(has('b'));
+#else
+    assert(!has('b'));
+#endif
+}
 void expect_restart()
 {
     trace.clear();
@@ -210,6 +225,7 @@ int main()
     sync_success = false;
     tick();
     assert(sync_count == 1 && !has('c') && has('v'));
+    expect_download_pump();
     clock_now = 1099;
     tick();
     assert(sync_count == 1);
@@ -245,6 +261,7 @@ int main()
     app::sd_tms::s_sync_pending = true;
     tick();
     assert(sync_count == 1 && !has('t') && !has('c') && has('v'));
+    expect_download_pump();
     app::sd_tms::scheduleWebManagementRestart();
     clock_now = 2100;
     expect_restart();
@@ -262,6 +279,7 @@ int main()
     trace.clear();
     tick();
     assert(sync_count == 1 && !has('c'));
+    expect_download_pump();
     app::sd_tms::s_web_restart_at = 301;
     clock_now = 301;
     expect_restart();
@@ -280,6 +298,7 @@ int main()
     app::sd_tms::s_sync_pending = true;
     tick();
     assert(sync_count == 1 && has('c') && has('e') && has('d'));
+    expect_download_pump();
 
     // Deadline arithmetic remains correct across the 32-bit millisecond wrap.
     reset();

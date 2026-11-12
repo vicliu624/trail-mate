@@ -12,6 +12,7 @@ foreach(target IN ITEMS arduino_s3 arduino_unsupported)
         ../../platform/esp/arduino_common/src/hostlink/hostlink_download_mode.cpp)
     target_compile_features(${target} PRIVATE cxx_std_17)
     target_compile_options(${target} PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+    target_compile_definitions(${target} PRIVATE ARDUINO=1)
     target_include_directories(${target} PRIVATE stubs ../../modules/core_hostlink/include
         ../../platform/esp/arduino_common/include)
     add_test(NAME ${target} COMMAND ${target})

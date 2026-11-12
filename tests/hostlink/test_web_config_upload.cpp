@@ -65,8 +65,9 @@ struct RecoveryAuthor final : chat::IMeshAdapter
 };
 namespace hostlink
 {
-bool enqueue_event(uint8_t, const uint8_t* bytes, size_t size, bool, uint16_t)
+bool enqueue_event(uint8_t, const uint8_t* bytes, size_t size, bool, uint16_t, uint32_t completion_cookie)
 {
+    assert(completion_cookie == 0);
     response.assign(bytes, bytes + size);
     return true;
 }
