@@ -12,10 +12,6 @@ stable firmware release. Hardware support and validation remain target-specific.
 
 ### Fixed
 
-- Arduino Team position rings write complete 28-byte records so the first and
-  latest received locations are immediately readable. Existing V1 files with
-  short reserved tails remain readable; appending repairs their tail and any
-  cursor advanced beyond the available records without clearing the ring.
 - Cardputer Zero's rightmost main-menu shortcut opens Widgets instead of
   Settings. The physical 8 key and footer button toggle between Widgets and
   Menu without disabling the widget feed; the existing V shortcut is retained.

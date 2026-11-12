@@ -64,7 +64,6 @@ constexpr uint8_t kRoleMember = 1;
 constexpr uint8_t kRoleLeader = 2;
 
 constexpr uint32_t kPosRecSize = 28;
-constexpr uint32_t kPosRecFieldsSize = 24;
 constexpr uint32_t kPosRingCapacity = kPosRecSize * 512;
 constexpr uint32_t kPosHeaderSize = 24;
 constexpr uint32_t kPosMinIntervalSec = 15;
@@ -1169,32 +1168,8 @@ bool team_ui_posring_append(const TeamId& team_id,
         write_offset = 0;
     }
 
-    const uint64_t file_size = rw.size();
-    if (file_size < kPosHeaderSize)
-    {
-        rw.close();
-        return false;
-    }
-    const uint32_t data_size = static_cast<uint32_t>(
-        std::min<uint64_t>(file_size - kPosHeaderSize, kPosRingCapacity));
-    const uint32_t tail_size = data_size % kPosRecSize;
-    const uint32_t append_offset = data_size - tail_size +
-                                   (tail_size >= kPosRecFieldsSize ? kPosRecSize : 0);
-    // Older V1 writers advanced the cursor by 28 but wrote only 24 bytes.
-    // A failed seek past that tail could advance it further without data.
-    if (data_size < kPosRingCapacity && write_offset > append_offset)
-    {
-        write_offset = append_offset;
-    }
-    const uint32_t data_offset = kPosHeaderSize + write_offset;
-    if (data_offset > file_size)
-    {
-        if (!rw.seek(file_size)) return false;
-        // At most the four missing V1 reserved bytes; never seek past EOF.
-        for (uint32_t padding = 0; padding < data_offset - file_size; ++padding)
-            if (rw.write_byte(0) != 1) return false;
-    }
-    if (!rw.seek(data_offset)) return false;
+    uint32_t data_offset = kPosHeaderSize + write_offset;
+    rw.seek(data_offset);
     write_u16(rw, 0x5053);
     write_u8(rw, kPosringVersion);
     write_u8(rw, 0);
@@ -1204,12 +1179,6 @@ bool team_ui_posring_append(const TeamId& team_id,
     write_u32(rw, static_cast<uint32_t>(lon_e7));
     write_u16(rw, static_cast<uint16_t>(alt_m));
     write_u16(rw, speed_dmps);
-    write_u32(rw, 0); // Reserved bytes complete the declared 28-byte slot.
-    if (rw.position() != data_offset + kPosRecSize || !rw.flush())
-    {
-        rw.close();
-        return false;
-    }
 
     write_offset += kPosRecSize;
     if (write_offset >= kPosRingCapacity)
@@ -1247,7 +1216,7 @@ bool team_ui_posring_load_latest(const TeamId& team_id,
         f.close();
         return false;
     }
-    if (f.size() < kPosHeaderSize + kPosRecFieldsSize)
+    if (f.size() < kPosHeaderSize + kPosRecSize)
     {
         f.close();
         return false;
@@ -1266,8 +1235,7 @@ bool team_ui_posring_load_latest(const TeamId& team_id,
         return false;
     }
 
-    // V1's final record may lack reserved padding but still has all fields.
-    for (size_t base = 0; base + kPosRecFieldsSize <= buf.size(); base += kPosRecSize)
+    for (size_t base = 0; base + kPosRecSize <= buf.size(); base += kPosRecSize)
     {
         size_t off = base;
         uint16_t magic = 0;
