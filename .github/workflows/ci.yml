@@ -353,6 +353,12 @@ jobs:
       - name: Verify shared storage retry ownership and fairness
         run: python3 platform/esp/common/tests/run_storage_adapter_retry.py
 
+      - name: Verify blocked storage-worker reservation before optional startup allocations
+        run: |
+          cmake -S tests/esp_storage_startup -B .codex-build/esp-storage-startup -DCMAKE_BUILD_TYPE=Debug
+          cmake --build .codex-build/esp-storage-startup --parallel 2
+          ctest --test-dir .codex-build/esp-storage-startup --output-on-failure
+
       - name: Verify ESP stack hygiene
         run: python3 scripts/check_esp_stack_hygiene.py
 

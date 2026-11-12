@@ -12,6 +12,13 @@ stable firmware release. Hardware support and validation remain target-specific.
 
 ### Fixed
 
+- Arduino startup reserves the existing blocked storage worker before BLE,
+  radio and UI allocations can prevent its creation. Deferred recovery keeps
+  its original shell-startup and display-transaction gates, task count and
+  stack size; a denied early reservation still uses the normal retry path.
+- Selecting a Team member on the shared map focuses their latest received
+  location even when no GPX track has been written. Existing tracks remain
+  available, and members without either source report that no position exists.
 - Pager selects the MIA-M10Q's CFG-VALSET configuration for GNSS systems, power
   mode and UART NMEA output. Shared Arduino UBX reply handling retains the first
   payload byte, validates both checksum bytes and preserves live NMEA during

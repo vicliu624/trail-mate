@@ -1869,12 +1869,36 @@ void select_member(uint32_t member_id)
     update_member_button_states();
 
     ::team::ui::TeamUiSnapshot snapshot;
+    bool has_location = false;
     if (load_team_snapshot(snapshot))
     {
         std::string track_path;
         if (::team::ui::team_ui_get_member_track_path(snapshot.team_id, member_id, track_path))
         {
-            (void)load_map_track_file_impl(track_path.c_str(), true);
+            has_location = load_map_track_file_impl(track_path.c_str(), false);
+        }
+    }
+
+    // A received location can exist before its first track file is written.
+    // Focus the same latest sample that supplies the member's map marker.
+    ::ui::presentation_sources::TeamMapLocation location;
+    if (team_map_overlay_source().loadMemberLocation(member_id, location))
+    {
+        const double lat = static_cast<double>(location.lat_e7) / 10000000.0;
+        const double lon = static_cast<double>(location.lon_e7) / 10000000.0;
+        if (::ui::map_geo::valid(lat, lon))
+        {
+            auto& model = map_workspace_model();
+            auto viewport = model.viewport();
+            viewport.center_lat = lat;
+            viewport.center_lon = lon;
+            viewport.zoom = current_map_zoom();
+            if (model.setViewport(viewport).ok)
+            {
+                s_map_pan_x = 0;
+                s_map_pan_y = 0;
+                has_location = true;
+            }
         }
     }
 
@@ -1883,7 +1907,7 @@ void select_member(uint32_t member_id)
                   sizeof(text),
                   "Member %04lX",
                   static_cast<unsigned long>(member_id & 0xFFFFU));
-    set_map_notice(text, 1200);
+    set_map_notice(has_location ? text : "No position yet", 1200);
     request_refresh_view();
 }
 

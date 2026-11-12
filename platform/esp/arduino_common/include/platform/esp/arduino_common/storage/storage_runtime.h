@@ -11,6 +11,10 @@ class SdProtocolPeerRepository;
 namespace platform::esp::arduino_common::storage
 {
 
+// Reserves the existing worker's queue and stack before optional startup
+// allocations. Does not arm recovery or perform SD I/O.
+bool prepare_deferred_storage();
+
 // Arms the stable storage maintenance owner. The task remains blocked on its
 // event queue after maintenance completes.
 void start_deferred_storage(chat::SdStore* store,

@@ -56,6 +56,13 @@ class StorageMaintenanceOwner final
     StorageMaintenanceOwner(const StorageMaintenanceOwner&) = delete;
     StorageMaintenanceOwner& operator=(const StorageMaintenanceOwner&) = delete;
 
+    // Reserve the existing worker while startup still has its memory budget.
+    // No command is queued, so storage remains dormant until arm().
+    bool prepareTask()
+    {
+        return ensureTask();
+    }
+
     bool arm(uint32_t now_ms, bool startup_gate_satisfied)
     {
         if (armed_.exchange(true, std::memory_order_acq_rel))

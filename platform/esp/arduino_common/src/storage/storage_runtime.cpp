@@ -399,26 +399,8 @@ bool startupGateSatisfied()
     return ::platform::esp::boards::storageStartupGateSatisfied();
 }
 
-} // namespace
-
-void start_deferred_storage(chat::SdStore* chat_store,
-                            chat::SdProtocolPeerRepository* peer_store,
-                            chat::MeshProtocol active_protocol)
+void configureOwner()
 {
-    if (s_owner.isArmed())
-    {
-        return;
-    }
-
-    if (!chat_store && !peer_store)
-    {
-        Serial.printf("[Storage] maintenance skipped backend=ram\n");
-        return;
-    }
-
-    s_context.chat_store = chat_store;
-    s_context.peer_directory = peer_store;
-    s_context.active_protocol = active_protocol;
     const bool shared_storage_topology =
         ::platform::esp::boards::storageCapabilities()
             .requiresDisplayTransactionGate();
@@ -439,6 +421,36 @@ void start_deferred_storage(chat::SdStore* chat_store,
     config.on_started = &ownerStarted;
     config.on_finished = &ownerFinished;
     s_owner.configure(config);
+}
+
+} // namespace
+
+bool prepare_deferred_storage()
+{
+    if (!sd_card_ready()) return false;
+    if (!s_owner.isArmed()) configureOwner();
+    return s_owner.prepareTask();
+}
+
+void start_deferred_storage(chat::SdStore* chat_store,
+                            chat::SdProtocolPeerRepository* peer_store,
+                            chat::MeshProtocol active_protocol)
+{
+    if (s_owner.isArmed())
+    {
+        return;
+    }
+
+    if (!chat_store && !peer_store)
+    {
+        Serial.printf("[Storage] maintenance skipped backend=ram\n");
+        return;
+    }
+
+    s_context.chat_store = chat_store;
+    s_context.peer_directory = peer_store;
+    s_context.active_protocol = active_protocol;
+    configureOwner();
     (void)s_owner.arm(millis(), startupGateSatisfied());
 }
 

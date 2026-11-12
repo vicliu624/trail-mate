@@ -6,6 +6,7 @@
 #include "platform/esp/arduino_common/app_context_platform_bindings.h"
 #include "platform/esp/arduino_common/app_event_runtime_support.h"
 #include "platform/esp/arduino_common/memory_diag.h"
+#include "platform/esp/arduino_common/storage/storage_runtime.h"
 #include "ui/ui_boot.h"
 
 #include <cstdio>
@@ -34,6 +35,10 @@ bool bootstrapAppContext(app::AppContext& app_context,
 
     memory_diag::logHeapSnapshot("bootstrap.after_app_context_init");
     app::bindAppFacade(app_context);
+    // Reserve the blocked storage worker before BLE, radio and UI consume the
+    // remaining internal heap. Recovery is still armed after shell startup.
+    (void)storage::prepare_deferred_storage();
+    memory_diag::logHeapSnapshot("bootstrap.after_storage_reservation");
     ui::boot::set_log_line("Preparing mesh services...");
     app_context.attachBleManager(platform::esp::arduino_common::createBleManager(app_context));
     memory_diag::logHeapSnapshot("bootstrap.after_mesh_services");
