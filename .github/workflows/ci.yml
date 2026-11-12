@@ -74,6 +74,7 @@ jobs:
         run: ../../.codex-build/reticulum-directory/venv/bin/python -m unittest test_packet_bridge test_packet_bridge_pacing
       - name: Verify native protocol, storage policy and cryptographic vectors
         run: |
+          node tools/hostlink/test_enter_download_mode.mjs
           cmake -S tests/hostlink -B .codex-build/hostlink-codec/native -DCMAKE_BUILD_TYPE=Debug -DTRAIL_MATE_ARDUINO_CRYPTO_DIR="$PWD/.codex-build/hostlink-codec/library-deps/Crypto" -DTRAIL_MATE_MODULE_NANOPB_DIR="$PWD/.codex-build/hostlink-codec/library-deps/Nanopb" -DTRAIL_MATE_REQUIRE_RADIO_IDENTITY_TESTS=ON -DTRAIL_MATE_MBEDTLS_DIR="$PWD/.codex-build/hostlink-codec/mbedtls-source"
           cmake --build .codex-build/hostlink-codec/native --parallel 2
           test -x .codex-build/hostlink-codec/native/track_snapshot_owner
@@ -359,15 +360,11 @@ jobs:
           cmake --build .codex-build/peer-store-recovery --parallel 2
           ctest --test-dir .codex-build/peer-store-recovery --output-on-failure
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Verify HostLink download ownership and production client
+      - name: Verify HostLink download owner and platform bindings
         run: |
           cmake -S tests/hostlink_download_mode -B .codex-build/hostlink-download-mode -DCMAKE_BUILD_TYPE=Debug
           cmake --build .codex-build/hostlink-download-mode --parallel 2
           ctest --test-dir .codex-build/hostlink-download-mode --output-on-failure
-          node tools/hostlink/test_enter_download_mode.mjs
 
       - name: Verify blocked storage-worker reservation before optional startup allocations
         run: |
