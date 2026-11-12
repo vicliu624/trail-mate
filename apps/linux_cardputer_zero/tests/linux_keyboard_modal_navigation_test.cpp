@@ -1,5 +1,6 @@
 #include "app/input_event.h"
 #include "ui/app_runtime.h"
+#include "ui/menu/menu_dashboard.h"
 #include "ui/menu/menu_layout.h"
 #include "ui/shell_ui_runner.h"
 #include <cassert>
@@ -176,6 +177,13 @@ int main(int argc, char** argv)
             require_menu("Map");
 
             key(Key::Character, '8');
+            tick(250ms); // Let the dashboard feed transition finish.
+            assert(!ui_get_active_app() && ui::menu::dashboard::isFeedOpen());
+            key(Key::Character, '8');
+            tick(250ms);
+            assert(!ui::menu::dashboard::isFeedOpen());
+            require_menu("Widgets");
+            assert(ui::menu_layout::launchAppByStableId("settings"));
             assert(ui_get_active_app() && !std::strcmp(ui_get_active_app()->stable_id(), "settings"));
             tick(400ms);
             click("Protocol");
