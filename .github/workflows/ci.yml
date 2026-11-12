@@ -329,6 +329,12 @@ jobs:
           cmake --build .codex-build/team-position-store --parallel 2
           ctest --test-dir .codex-build/team-position-store --output-on-failure
 
+      - name: Verify Arduino GNSS replies and Pager M10 configuration
+        run: |
+          cmake -S tests/gps_ubx -B .codex-build/gps-ubx -DCMAKE_BUILD_TYPE=Debug
+          cmake --build .codex-build/gps-ubx --parallel 2
+          ctest --test-dir .codex-build/gps-ubx --output-on-failure
+
       - name: Verify Agenda, saved waypoints and SD session isolation
         run: |
           cmake -S modules/core_agenda -B .codex-build/agenda-core -DCMAKE_BUILD_TYPE=Debug

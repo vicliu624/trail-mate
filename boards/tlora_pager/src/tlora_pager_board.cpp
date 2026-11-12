@@ -1696,7 +1696,7 @@ bool TLoRaPagerBoard::initGPS()
     Serial1.end();
     Serial1.begin(38400, SERIAL_8N1, GPS_RX, GPS_TX);
     delay(100); // Give Serial1 time to initialize
-    gps.attach(&Serial1);
+    gps.attach(&Serial1, GPS::ConfigProtocol::UbxValset);
     devices_probe |= HW_GPS_ONLINE;
     GPS_BOARD_LOG("[TLoRaPagerBoard::initGPS] GPS UART ready, devices_probe=0x%08X\n", devices_probe);
     return true;

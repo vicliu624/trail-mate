@@ -35,9 +35,10 @@ GPS::~GPS()
 {
 }
 
-void GPS::attach(Stream* stream)
+void GPS::attach(Stream* stream, ConfigProtocol config_protocol)
 {
     _stream = stream;
+    config_protocol_ = config_protocol;
     assert(_stream);
     debug_nmea_sentence_count_ = 0;
     debug_raw_sample_len_ = 0;
@@ -61,7 +62,9 @@ void GPS::attach(Stream* stream)
 
 bool GPS::init(Stream* stream)
 {
-    struct uBloxGnssModelInfo info;
+    struct uBloxGnssModelInfo info
+    {
+    };
 
     attach(stream);
 
@@ -130,9 +133,10 @@ bool GPS::init(Stream* stream)
 
             for (int i = 0; i < info.extensionNo; ++i)
             {
-                if (!strncmp(info.extension[i], "OD=", 3))
+                if (!strncmp(info.extension[i], "MOD=", 4))
                 {
-                    strcpy((char*)buffer, &(info.extension[i][3]));
+                    memcpy(buffer, &info.extension[i][4], 26);
+                    buffer[26] = '\0';
                     GPS_LOG("[GPS::init] GPS Model: %s\n", (char*)buffer);
                     log_i("GPS Model: %s", (char*)buffer);
                     model = (char*)buffer;
@@ -152,97 +156,89 @@ bool GPS::init(Stream* stream)
 
 int GPS::getAck(uint8_t* buffer, uint16_t size, uint8_t requestedClass, uint8_t requestedID)
 {
-    uint16_t ubxFrameCounter = 0;
-    uint32_t startTime = millis();
+    uint8_t phase = 0;
+    const uint32_t startTime = millis();
     uint16_t needRead = 0;
-    uint32_t bytesRead = 0;
+    uint16_t payloadRead = 0;
+    uint8_t ck_a = 0;
+    uint8_t ck_b = 0;
+    bool matches = false;
+    bool checksum_a_ok = false;
     assert(_stream);
-
-    GPS_LOG("[GPS::getAck] Waiting for ACK (class=0x%02X, id=0x%02X), timeout=800ms\n", requestedClass, requestedID);
 
     while (millis() - startTime < 800)
     {
         while (_stream->available())
         {
-            int c = _stream->read();
-            bytesRead++;
-            switch (ubxFrameCounter)
+            const int value = _stream->read();
+            if (value < 0) continue;
+            const uint8_t c = static_cast<uint8_t>(value);
+            switch (phase)
             {
             case 0:
                 if (c == 0xB5)
                 {
-                    ubxFrameCounter++;
-                    GPS_LOG("[GPS::getAck] Found sync byte 1 (0xB5)\n");
+                    phase = 1;
+                }
+                else
+                {
+                    // Configuration replies share UART with live navigation data.
+                    // Keep parsing NMEA while waiting for a complete UBX response.
+                    if (c == '$' || nmea_collecting_) encode(static_cast<char>(c));
+                    handleNmeaChar(static_cast<char>(c));
                 }
                 break;
             case 1:
-                if (c == 0x62)
-                {
-                    ubxFrameCounter++;
-                    GPS_LOG("[GPS::getAck] Found sync byte 2 (0x62)\n");
-                }
-                else
-                {
-                    ubxFrameCounter = 0;
-                }
+                phase = c == 0x62 ? 2 : (c == 0xB5 ? 1 : 0);
                 break;
             case 2:
-                if (c == requestedClass)
-                {
-                    ubxFrameCounter++;
-                    GPS_LOG("[GPS::getAck] Found class 0x%02X\n", c);
-                }
-                else
-                {
-                    ubxFrameCounter = 0;
-                }
+                matches = c == requestedClass;
+                ck_a = ck_b = 0;
+                calcUbxChecksum(&c, 1, ck_a, ck_b);
+                phase = 3;
                 break;
             case 3:
-                if (c == requestedID)
-                {
-                    ubxFrameCounter++;
-                    GPS_LOG("[GPS::getAck] Found ID 0x%02X\n", c);
-                }
-                else
-                {
-                    ubxFrameCounter = 0;
-                }
+                matches = matches && c == requestedID;
+                calcUbxChecksum(&c, 1, ck_a, ck_b);
+                phase = 4;
                 break;
             case 4:
                 needRead = c;
-                ubxFrameCounter++;
-                GPS_LOG("[GPS::getAck] Length low byte: %d\n", c);
+                calcUbxChecksum(&c, 1, ck_a, ck_b);
+                phase = 5;
                 break;
             case 5:
-                needRead |= (c << 8);
-                ubxFrameCounter++;
-                GPS_LOG("[GPS::getAck] Length high byte: %d, total length: %d\n", c, needRead);
+                needRead |= static_cast<uint16_t>(c) << 8;
+                payloadRead = 0;
+                calcUbxChecksum(&c, 1, ck_a, ck_b);
+                phase = needRead == 0 ? 7 : 6;
                 break;
             case 6:
-                if (needRead >= size)
+                if (matches && buffer != nullptr && needRead <= size)
                 {
-                    GPS_LOG("[GPS::getAck] ERROR: needRead (%d) >= size (%d)\n", needRead, size);
-                    ubxFrameCounter = 0;
-                    break;
+                    buffer[payloadRead] = c;
                 }
-                if (_stream->readBytes(buffer, needRead) != needRead)
+                calcUbxChecksum(&c, 1, ck_a, ck_b);
+                if (++payloadRead == needRead) phase = 7;
+                break;
+            case 7:
+                checksum_a_ok = c == ck_a;
+                phase = 8;
+                break;
+            case 8:
+                if (checksum_a_ok && c == ck_b && matches && buffer != nullptr && needRead <= size)
                 {
-                    GPS_LOG("[GPS::getAck] ERROR: Failed to read %d bytes\n", needRead);
-                    ubxFrameCounter = 0;
-                }
-                else
-                {
-                    GPS_LOG("[GPS::getAck] SUCCESS: Read %d bytes, total bytes read: %lu\n", needRead, bytesRead);
                     return needRead;
                 }
+                phase = 0;
                 break;
-
             default:
+                phase = 0;
                 break;
             }
         }
+        delay(1);
     }
-    GPS_LOG("[GPS::getAck] TIMEOUT: No ACK received after 800ms, bytes read: %lu, frame counter: %d\n", bytesRead, ubxFrameCounter);
     return 0;
 }
 
@@ -336,6 +332,13 @@ bool GPS::setReceiverMode(uint8_t mode, uint8_t sat_mask)
         want_power_save = false;
     }
 
+    if (config_protocol_ == ConfigProtocol::UbxValset)
+    {
+        static constexpr uint32_t key = 0x20D00001; // CFG-PM-OPERATEMODE
+        const uint8_t value = want_power_save ? 1 : 0;
+        return sendValsetU1(&key, &value, 1);
+    }
+
     uint8_t payload[2] = {0x00, static_cast<uint8_t>(want_power_save ? 0x01 : 0x00)};
     bool ok = sendUbx(0x06, 0x11, payload, sizeof(payload), true);
     GPS_LOG("[GPS] CFG-RXM lpMode=%u ok=%d\n", payload[1], ok ? 1 : 0);
@@ -347,6 +350,24 @@ bool GPS::configureGnss(uint8_t sat_mask)
     if (_stream == nullptr)
     {
         return false;
+    }
+
+    if (config_protocol_ == ConfigProtocol::UbxValset)
+    {
+        // Keep each receiver's supported signal selection; only select systems.
+        static constexpr uint32_t keys[] = {
+            0x1031001F, // CFG-SIGNAL-GPS_ENA
+            0x10310025, // CFG-SIGNAL-GLO_ENA
+            0x10310021, // CFG-SIGNAL-GAL_ENA
+            0x10310022, // CFG-SIGNAL-BDS_ENA
+        };
+        const uint8_t values[] = {static_cast<uint8_t>((sat_mask & 1) != 0),
+                                  static_cast<uint8_t>((sat_mask & 2) != 0),
+                                  static_cast<uint8_t>((sat_mask & 4) != 0),
+                                  static_cast<uint8_t>((sat_mask & 8) != 0)};
+        const bool ok = sendValsetU1(keys, values, 4);
+        if (ok) delay(600); // CFG-SIGNAL restarts GNSS; M10 requires >= 500 ms.
+        return ok;
     }
 
     struct GnssBlock
@@ -449,6 +470,21 @@ bool GPS::configureNmeaOutput(uint8_t output_hz, uint8_t sentence_mask)
         enable_gsv = false;
     }
 
+    if (config_protocol_ == ConfigProtocol::UbxValset)
+    {
+        static constexpr uint32_t keys[] = {
+            0x209100BB, // CFG-MSGOUT-NMEA_ID_GGA_UART1
+            0x209100C0, // CFG-MSGOUT-NMEA_ID_GSA_UART1
+            0x209100AC, // CFG-MSGOUT-NMEA_ID_RMC_UART1
+            0x209100C5, // CFG-MSGOUT-NMEA_ID_GSV_UART1
+        };
+        const uint8_t values[] = {static_cast<uint8_t>(enable_gga ? output_hz : 0),
+                                  static_cast<uint8_t>(enable_gsa ? output_hz : 0),
+                                  static_cast<uint8_t>(enable_rmc ? output_hz : 0),
+                                  static_cast<uint8_t>(enable_gsv ? output_hz : 0)};
+        return sendValsetU1(keys, values, 4);
+    }
+
     auto set_msg_rate = [this](uint8_t msg_id, uint8_t rate) -> bool
     {
         uint8_t payload[8] = {
@@ -465,10 +501,10 @@ bool GPS::configureNmeaOutput(uint8_t output_hz, uint8_t sentence_mask)
     };
 
     bool ok = true;
-    ok = ok && set_msg_rate(0x00, enable_gga ? output_hz : 0); // GGA
-    ok = ok && set_msg_rate(0x02, enable_gsa ? output_hz : 0); // GSA
-    ok = ok && set_msg_rate(0x04, enable_rmc ? output_hz : 0); // RMC
-    ok = ok && set_msg_rate(0x03, enable_gsv ? output_hz : 0); // GSV
+    ok = set_msg_rate(0x00, enable_gga ? output_hz : 0) && ok; // GGA
+    ok = set_msg_rate(0x02, enable_gsa ? output_hz : 0) && ok; // GSA
+    ok = set_msg_rate(0x04, enable_rmc ? output_hz : 0) && ok; // RMC
+    ok = set_msg_rate(0x03, enable_gsv ? output_hz : 0) && ok; // GSV
     Serial.printf("[GPS] nmea config rate=%u mask=%u gga=%u gsa=%u rmc=%u gsv=%u ok=%d\n",
                   static_cast<unsigned>(output_hz),
                   static_cast<unsigned>(sentence_mask),
@@ -478,6 +514,24 @@ bool GPS::configureNmeaOutput(uint8_t output_hz, uint8_t sentence_mask)
                   enable_gsv ? 1U : 0U,
                   ok ? 1 : 0);
     return ok;
+}
+
+bool GPS::sendValsetU1(const uint32_t* keys, const uint8_t* values, size_t count)
+{
+    if (keys == nullptr || values == nullptr || count == 0 || count > 4) return false;
+    // RAM layer only: never rewrite receiver BBR/flash on application startup.
+    uint8_t payload[4 + 4 * 5] = {0, 1, 0, 0};
+    size_t offset = 4;
+    for (size_t i = 0; i < count; ++i)
+    {
+        const uint32_t key = keys[i];
+        payload[offset++] = static_cast<uint8_t>(key);
+        payload[offset++] = static_cast<uint8_t>(key >> 8);
+        payload[offset++] = static_cast<uint8_t>(key >> 16);
+        payload[offset++] = static_cast<uint8_t>(key >> 24);
+        payload[offset++] = values[i];
+    }
+    return sendUbx(0x06, 0x8A, payload, static_cast<uint16_t>(offset), true);
 }
 
 size_t GPS::getSatellites(gps::GnssSatInfo* out, size_t max) const

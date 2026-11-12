@@ -12,6 +12,11 @@ stable firmware release. Hardware support and validation remain target-specific.
 
 ### Fixed
 
+- Pager selects the MIA-M10Q's CFG-VALSET configuration for GNSS systems, power
+  mode and UART NMEA output. Shared Arduino UBX reply handling retains the first
+  payload byte, validates both checksum bytes and preserves live NMEA during
+  configuration waits. Legacy receivers still attempt every sentence setting
+  after an individual failure, so GSV setup is not silently skipped.
 - Reticulum periodic announcements use one four-hour default across ESP, Linux
   radio and Linux gateways ([#112](https://github.com/vicliu624/trail-mate/issues/112)).
   First announcements, explicit broadcasts and path responses remain responsive.

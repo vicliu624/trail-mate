@@ -26,11 +26,17 @@
 class GPS : public TinyGPSPlus
 {
   public:
+    enum class ConfigProtocol : uint8_t
+    {
+        UbxLegacy,
+        UbxValset,
+    };
+
     GPS();
 
     ~GPS();
 
-    void attach(Stream* stream);
+    void attach(Stream* stream, ConfigProtocol config_protocol = ConfigProtocol::UbxLegacy);
     bool init(Stream* stream);
     bool factory();
     bool configureGnss(uint8_t sat_mask);
@@ -126,6 +132,7 @@ class GPS : public TinyGPSPlus
 
     int getAck(uint8_t* buffer, uint16_t size, uint8_t requestedClass, uint8_t requestedID);
     bool sendUbx(uint8_t cls, uint8_t id, const uint8_t* payload, uint16_t len, bool wait_ack);
+    bool sendValsetU1(const uint32_t* keys, const uint8_t* values, size_t count);
     void calcUbxChecksum(const uint8_t* data, uint16_t len, uint8_t& ck_a, uint8_t& ck_b);
 
     void observeDebugByte(uint8_t b);
@@ -176,5 +183,6 @@ class GPS : public TinyGPSPlus
     uint16_t debug_raw_burst_zero_ = 0;
     uint16_t debug_raw_burst_ubx_sync_ = 0;
     bool debug_raw_burst_logged_ = false;
+    ConfigProtocol config_protocol_ = ConfigProtocol::UbxLegacy;
     uint32_t last_loop_read_bytes_ = 0;
 };
