@@ -43,7 +43,7 @@ constexpr const char* kSnapshotTmpName = "snapshot.tmp";
 constexpr const char* kEventsName = "events.log";
 constexpr const char* kKeysName = "keys.bin";
 constexpr const char* kKeysTmpName = "keys.tmp";
-constexpr const char* kPosringName = "posring.log";
+constexpr const char* kPosringName = "posring-v2.log";
 constexpr const char* kChatlogName = "chatlog.log";
 constexpr const char* kChatlogOldName = "chatlog.old";
 constexpr const char* kTracksDirName = "tracks";
@@ -55,7 +55,7 @@ constexpr const char* kGpxHeader =
 
 constexpr uint16_t kEventVersion = 1;
 constexpr uint8_t kKeysVersion = 1;
-constexpr uint8_t kPosringVersion = 1;
+constexpr uint8_t kPosringVersion = 2;
 constexpr uint8_t kChatlogVersionV1 = 1;
 constexpr uint8_t kChatlogVersionV2 = 2;
 
@@ -64,7 +64,6 @@ constexpr uint8_t kRoleMember = 1;
 constexpr uint8_t kRoleLeader = 2;
 
 constexpr uint32_t kPosRecSize = 28;
-constexpr uint32_t kPosRecFieldsSize = 24;
 constexpr uint32_t kPosRingCapacity = kPosRecSize * 512;
 constexpr uint32_t kPosHeaderSize = 24;
 constexpr uint32_t kPosMinIntervalSec = 15;
@@ -828,7 +827,7 @@ bool should_write_pos(uint32_t member_id, int32_t lat_e7, int32_t lon_e7, uint32
 
 bool init_posring(SdRuntimeFile& f)
 {
-    uint8_t header[kPosHeaderSize] = {'P', 'S', 'R', '1', kPosringVersion};
+    uint8_t header[kPosHeaderSize] = {'P', 'S', 'R', '2', kPosringVersion};
     for (unsigned i = 0; i < 4; ++i)
     {
         header[8 + i] = static_cast<uint8_t>(kPosRingCapacity >> (8 * i));
@@ -845,7 +844,7 @@ bool read_posring_header(SdRuntimeFile& f, uint32_t& write_offset)
     {
         return false;
     }
-    if (std::memcmp(header, "PSR1", 4) != 0 || header[4] != kPosringVersion)
+    if (std::memcmp(header, "PSR2", 4) != 0 || header[4] != kPosringVersion)
     {
         return false;
     }
@@ -865,17 +864,17 @@ bool read_posring_header(SdRuntimeFile& f, uint32_t& write_offset)
     {
         return false;
     }
-    if (offset >= data_capacity)
+    if (offset >= data_capacity || offset % kPosRecSize != 0)
     {
-        offset = 0;
+        return false;
     }
-    write_offset = offset - offset % kPosRecSize;
+    write_offset = offset;
     return true;
 }
 
 bool write_posring_header(SdRuntimeFile& f, uint32_t write_offset)
 {
-    uint8_t header[kPosHeaderSize] = {'P', 'S', 'R', '1', kPosringVersion};
+    uint8_t header[kPosHeaderSize] = {'P', 'S', 'R', '2', kPosringVersion};
     for (unsigned i = 0; i < 4; ++i)
     {
         header[8 + i] = static_cast<uint8_t>(kPosRingCapacity >> (8 * i));
@@ -1154,24 +1153,10 @@ bool team_ui_posring_append(const TeamId& team_id,
     }
 
     const uint64_t file_size = rw.size();
-    if (rw.read_busy() || file_size < kPosHeaderSize) return false;
-    const uint32_t data_size = static_cast<uint32_t>(
-        std::min<uint64_t>(file_size - kPosHeaderSize, kPosRingCapacity));
-    const uint32_t tail_size = data_size % kPosRecSize;
-    const uint32_t append_offset = data_size - tail_size +
-                                   (tail_size >= kPosRecFieldsSize ? kPosRecSize : 0);
-    if (data_size < kPosRingCapacity && write_offset > append_offset) write_offset = append_offset;
+    if (rw.read_busy() || file_size < kPosHeaderSize ||
+        file_size > kPosHeaderSize + kPosRingCapacity) return false;
     const uint32_t data_offset = kPosHeaderSize + write_offset;
-    if (data_offset > file_size)
-    {
-        // V1's 24-byte tail has at most four missing reserved bytes. This is a
-        // bounded append at EOF, never a sparse seek or a history migration.
-        const uint8_t padding[4]{};
-        const auto missing = static_cast<size_t>(data_offset - file_size);
-        if (missing > sizeof(padding) || !rw.seek(file_size) ||
-            rw.write(padding, missing) != missing) return false;
-    }
-    if (!rw.seek(data_offset)) return false;
+    if (data_offset > file_size || !rw.seek(data_offset)) return false;
     uint8_t record[kPosRecSize] = {0x53, 0x50, kPosringVersion};
     for (unsigned i = 0; i < 4; ++i)
     {
@@ -1223,21 +1208,19 @@ bool team_ui_posring_load_latest(const TeamId& team_id,
         return false;
     }
     const uint64_t file_size = f.size();
-    if (f.read_busy() || file_size < kPosHeaderSize + kPosRecFieldsSize)
+    if (f.read_busy() || file_size < kPosHeaderSize + kPosRecSize ||
+        file_size > kPosHeaderSize + kPosRingCapacity)
     {
         f.close();
         return false;
     }
-    const auto data_size = static_cast<size_t>(
-        std::min<uint64_t>(file_size - kPosHeaderSize, kPosRingCapacity));
+    const auto data_size = static_cast<size_t>(file_size - kPosHeaderSize);
     if (!f.seek(kPosHeaderSize)) return false;
-    // Keep only one slot in scratch storage, not the 14 KiB history. The last
-    // legacy V1 slot may contain all 24 fields without its four reserved bytes.
+    // Keep one complete V2 slot in scratch storage, not the 14 KiB history.
     uint8_t record[kPosRecSize];
-    for (size_t base = 0; base + kPosRecFieldsSize <= data_size; base += kPosRecSize)
+    for (size_t base = 0; base + kPosRecSize <= data_size; base += kPosRecSize)
     {
-        const size_t bytes = std::min<size_t>(kPosRecSize, data_size - base);
-        if (f.read(record, bytes) != static_cast<int>(bytes))
+        if (f.read(record, sizeof(record)) != static_cast<int>(sizeof(record)))
         {
             out.clear();
             return false;

@@ -54,18 +54,20 @@ int main()
                                             250389000, 1027183000, 123, 0, 1700000000));
     std::filesystem::path ring;
     for (const auto& entry : std::filesystem::recursive_directory_iterator(root))
-        if (entry.path().filename() == "posring.log") ring = entry.path();
+        if (entry.path().filename() == "posring-v2.log") ring = entry.path();
     assert(!ring.empty());
 
-    // Use the exact short tail left by the old Arduino writer, not Linux's
-    // in-memory position adapter. Merely opening the map must not rewrite it.
-    std::filesystem::resize_file(ring, 48);
+    // Old position caches are outside the V2 format and are never migrated.
+    // Merely opening the map must not rewrite either position file.
+    const auto old_ring = ring.parent_path() / "posring.log";
+    const std::string old_data = "Old position cache, kept without migration";
+    std::ofstream(old_ring, std::ios::binary) << old_data;
     const auto contents = [&]()
     {
         std::ifstream file(ring, std::ios::binary);
         return std::vector<uint8_t>(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
     };
-    const auto legacy = contents();
+    const auto original = contents();
     clock_ms += 1001;
     assert(source.loadMemberLocation(cm0.node_id, location));
     assert(location.lat_e7 == 250389000 && location.lon_e7 == 1027183000);
@@ -76,7 +78,7 @@ int main()
     assert(std::strcmp(points[0].label, "A2AE") == 0);
     assert(std::abs(points[0].lat - 25.0389) < 1e-7);
     assert(std::abs(points[0].lon - 102.7183) < 1e-7);
-    assert(contents() == legacy);
+    assert(contents() == original);
 
     // Append another member through the production SD adapter, then ensure
     // the shared map's normal cache expiry exposes both members' positions.
@@ -98,6 +100,9 @@ int main()
     assert(reopened.loadMemberLocation(cm0.node_id, location));
     assert(reopened.loadMemberLocation(zero.node_id, location));
     assert(!reopened.loadMemberLocation(0x12345678, location));
+    std::ifstream old_file(old_ring, std::ios::binary);
+    const std::string retained((std::istreambuf_iterator<char>(old_file)), std::istreambuf_iterator<char>());
+    assert(retained == old_data);
 
     // Position history must not leak across team identities or an empty roster.
     auto another = snapshot;
