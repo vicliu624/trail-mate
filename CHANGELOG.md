@@ -10,8 +10,13 @@ stable firmware release. Hardware support and validation remain target-specific.
 
 ## [Unreleased]
 
+## [1.2.4] - 2026-11-12
+
 ### Fixed
 
+- Reticulum CLI listeners use the same four-hour periodic announcement default
+  as the native applications. A listener still announces once at startup;
+  explicit test intervals and disabling periodic announcements remain available.
 - Arduino startup reserves the existing blocked storage worker before BLE,
   radio and UI allocations can prevent its creation. Deferred recovery keeps
   its original shell-startup and display-transaction gates, task count and

@@ -19,6 +19,7 @@ DEFAULT_IDENTITY = "/home/vicliu/.reticulum-trailmate/identities/trailmate_lxmf_
 DEFAULT_STORAGE = "/home/vicliu/trailmate-reticulum/lxmf-cli"
 DEFAULT_LOG = "/home/vicliu/trailmate-reticulum/logs/lxmf-cli.log"
 LOG_MAX_BYTES = 256 * 1024
+DEFAULT_ANNOUNCE_INTERVAL = 4 * 60 * 60
 
 
 def now_iso() -> str:
@@ -258,7 +259,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     listen = sub.add_parser("listen")
     listen.add_argument("--duration", type=float, default=0.0)
-    listen.add_argument("--announce-interval", type=float, default=120.0)
+    listen.add_argument(
+        "--announce-interval", type=float, default=DEFAULT_ANNOUNCE_INTERVAL,
+        help="Periodic announcement interval in seconds (default: 4 hours; 0 disables). Use shorter values only for isolated tests.",
+    )
     listen.set_defaults(func=command_listen)
 
     return parser
