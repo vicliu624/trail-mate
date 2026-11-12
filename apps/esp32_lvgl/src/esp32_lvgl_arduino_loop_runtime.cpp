@@ -7,7 +7,9 @@
 #include "esp32_lvgl_arduino_app_runtime_access.h"
 #include "platform/esp/arduino_common/app_config_sd_tms_runtime.h"
 #include "platform/esp/arduino_common/display_runtime.h"
+#if defined(TRAIL_MATE_USB_HOSTLINK_AUTOSTART)
 #include "platform/esp/arduino_common/hostlink/hostlink_download_mode.h"
+#endif
 #include "platform/esp/boards/board_runtime.h"
 #include "ui/app_runtime.h"
 #include "ui/loop_shell.h"
@@ -85,7 +87,9 @@ void tick()
     // restart even when a saver, wake gate or overlay skips normal app work.
     // This is the sole Arduino service pump; no second task or config copy.
     app::sd_tms::serviceWorkingConfig();
+#if defined(TRAIL_MATE_USB_HOSTLINK_AUTOSTART)
     hostlink::download_mode::service();
+#endif
     // Also runs while an overlay is active; no Agenda page is required.
     trailmate::apps::esp32_lvgl::arduino_agenda::tick();
 }

@@ -5,10 +5,12 @@ requested firmware update to enter the ESP32-S3/S2 ROM loader without a second
 physical BOOT interaction. Unsupported adapters omit operation 10 from their
 capabilities and return Unsupported if it is requested.
 
-Run the command against the **application** port, with Python and PySerial
-available:
+Run the command against the **application** port, with Node, Python, and
+PySerial available. Install the website's pinned dependencies once because the
+command imports its production MessagePack codec:
 
 ```sh
+npm ci --ignore-scripts --prefix site
 node tools/hostlink/enter_download_mode.mjs --python /path/to/python APPLICATION_PORT
 ```
 
