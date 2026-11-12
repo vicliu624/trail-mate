@@ -168,3 +168,14 @@ This hardware record establishes USB submission and durable recovery. The
 receive decoders and chunk fault paths are exercised by protocol fixtures;
 remote recipient delivery requires the protocol's corresponding proof. The
 user waived further Pager-to-Linux radio acceptance runs for this change.
+
+The final management-window and SD-exclusive-owner hardening image,
+`7b2a62e3`, subsequently built with the same 92,616 static RAM bytes and
+5,216,049 reported Flash bytes. Its SHA-256 is
+`831b38f2f9e1e9c337bf83f70c3c38c1cf4539e706da1ac291f5c265e2d37110`.
+It was installed without erasing NVS or SD. Both original receipts were again
+recovered with their original IDs/owners, and the original Team/round/roster
+were retained. The host client's advertised-operation gate was also exercised
+against this device. Disassembly of the verified application shows a 1,680-byte
+lazy PSRAM runtime allocation; the messaging command frame uses the existing
+task stack and does not create another task or stack.
