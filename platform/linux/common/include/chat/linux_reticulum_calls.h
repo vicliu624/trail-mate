@@ -1,3 +1,15 @@
+/*
+ * LXST-derived portions: https://github.com/markqvist/LXST
+ * Copyright 2024-2026, Mark Qvist, unless otherwise noted.
+ * Upstream reference terms: LICENSES/LXST-CC-BY-NC-ND-4.0.txt.
+ * Sharing adapted LXST material requires separate authorization from Mark Qvist.
+ * This notice does not grant that authorization.
+ * Any RNS/LXMF-derived portions retain their original copyright and Reticulum
+ * License; see LICENSES/Reticulum-Derivatives.txt, LICENSES/Reticulum-RNS.txt
+ * and LICENSES/Reticulum-LXMF.txt. Other contributions retain their own terms.
+ * Component scope: docs/licensing/reticulum-sources.csv; see LICENSE.
+ */
+
 #pragma once
 #include "chat/linux_reticulum_links.h"
 #include "chat/ports/i_mesh_peer_directory.h"

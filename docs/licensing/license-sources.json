@@ -1,0 +1,109 @@
+{
+  "captured_date": "2026-11-13",
+  "purpose": "Pinned license-reference copies; these commits identify the license documents, not the revisions from which Trail Mate source was derived.",
+  "sources": [
+    {
+      "key": "rns",
+      "repo": "markqvist/Reticulum",
+      "path": "LICENSE",
+      "ref": "b280a734a2ca6d692e70afb1d693913da45f4016",
+      "date": "2026-01-10T21:53:55Z",
+      "url": "https://raw.githubusercontent.com/markqvist/Reticulum/b280a734a2ca6d692e70afb1d693913da45f4016/LICENSE",
+      "destination": "LICENSES/Reticulum-RNS.txt",
+      "sha256": "00d736d22a942ba144a5914d05877f0532288024dc189c1aadd1930ee9b4b295",
+      "normalization": "none; UTF-8 text exactly as fetched"
+    },
+    {
+      "key": "lxmf",
+      "repo": "markqvist/LXMF",
+      "path": "LICENSE",
+      "ref": "101fd447815b4f4f699f8bb700e0df613f71efce",
+      "date": "2026-11-08T10:12:02Z",
+      "url": "https://raw.githubusercontent.com/markqvist/LXMF/101fd447815b4f4f699f8bb700e0df613f71efce/LICENSE",
+      "destination": "LICENSES/Reticulum-LXMF.txt",
+      "sha256": "cd8e174285b7f4978b8c90fc883f8a0a76221ae63a2fd42aa8d74704a927faa8",
+      "normalization": "none; UTF-8 text exactly as fetched"
+    },
+    {
+      "key": "lxst",
+      "repo": "markqvist/LXST",
+      "path": "LICENSE",
+      "ref": "36246afe8caf04fdfacea0a320fe69b70417040d",
+      "date": "2025-03-11T15:41:15Z",
+      "url": "https://raw.githubusercontent.com/markqvist/LXST/36246afe8caf04fdfacea0a320fe69b70417040d/LICENSE",
+      "destination": "LICENSES/LXST-CC-BY-NC-ND-4.0.txt",
+      "sha256": "38762e3777f4ec00a6f769062a7c3f704fb78ce08303ecff88558da4c49cf9ea",
+      "normalization": "none; UTF-8 text exactly as fetched"
+    },
+    {
+      "key": "meshtastic",
+      "repo": "meshtastic/firmware",
+      "path": "LICENSE",
+      "ref": "cdb7153071c4b57dee0d6801825fb09e08fcd841",
+      "date": "2020-02-01T16:30:53Z",
+      "url": "https://raw.githubusercontent.com/meshtastic/firmware/cdb7153071c4b57dee0d6801825fb09e08fcd841/LICENSE",
+      "destination": null,
+      "sha256": "0ae0485a5bd37a63e63603596417e4eb0e653334fa6c7f932ca3a0e85d4af227",
+      "normalization": "none; UTF-8 text exactly as fetched"
+    },
+    {
+      "key": "protobufs",
+      "repo": "meshtastic/protobufs",
+      "path": "LICENSE",
+      "ref": "f4f1e0a80084d31db167c91a8ee224416f0533c7",
+      "date": "2020-03-02T17:44:55Z",
+      "url": "https://raw.githubusercontent.com/meshtastic/protobufs/f4f1e0a80084d31db167c91a8ee224416f0533c7/LICENSE",
+      "destination": "LICENSES/GPL-3.0.txt",
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "normalization": "none; UTF-8 text exactly as fetched"
+    },
+    {
+      "key": "meshcore",
+      "repo": "meshcore-dev/MeshCore",
+      "path": "license.txt",
+      "ref": "e4ec9aec0b4b8a3d756591d735f3d622e32e09ba",
+      "date": "2025-01-19T23:20:42Z",
+      "url": "https://raw.githubusercontent.com/meshcore-dev/MeshCore/e4ec9aec0b4b8a3d756591d735f3d622e32e09ba/license.txt",
+      "destination": "LICENSES/MeshCore-MIT.txt",
+      "sha256": "3426328fb2c024c0374ec18e6f587bf0f35782bf04c5d3e90b52d282b156489d",
+      "normalization": "none; UTF-8 text exactly as fetched"
+    },
+    {
+      "key": "lgpl21",
+      "repo": "spdx/license-list-data",
+      "path": "text/LGPL-2.1-only.txt",
+      "ref": "8c88e4bc067213ba82da3ab94a59b739ab446c38",
+      "date": "2024-05-10T15:16:32Z",
+      "url": "https://raw.githubusercontent.com/spdx/license-list-data/8c88e4bc067213ba82da3ab94a59b739ab446c38/text/LGPL-2.1-only.txt",
+      "destination": "LICENSES/LGPL-2.1.txt",
+      "sha256": "5749785c8bdefafcb5d798270ed0a967036fe2ca63dcedade1627565dfef81d2",
+      "normalization": "none; UTF-8 text exactly as fetched"
+    },
+    {
+      "key": "u-msgpack-python",
+      "repo": "markqvist/Reticulum",
+      "path": "RNS/vendor/umsgpack.py",
+      "ref": "16621a78e35e2ba5156c72af7fe492458ba092d5",
+      "url": "https://raw.githubusercontent.com/markqvist/Reticulum/16621a78e35e2ba5156c72af7fe492458ba092d5/RNS/vendor/umsgpack.py",
+      "destination": "LICENSES/u-msgpack-python-MIT.txt",
+      "sha256": "cc8272c8c26f216bfeade275b7a7d28d1e8ac713200dec83e395568ad248a031",
+      "normalization": "Complete MIT notice with Python comment markers removed; UTF-8 LF."
+    }
+  ],
+  "preserved_previous_root_license": {
+    "destination": "LICENSES/AGPL-3.0.txt",
+    "source": "LICENSE at main commit 0386a5360596de108871ed12d5128dab8b23f024",
+    "git_blob": "bae94e189e62df1b8d5bd11435d954b25bee9d7b",
+    "sha256": "4df3c306dddaaf4baffdff5ca820cc679ac8cd6dc263c6a74517783e42fa7a3b",
+    "normalization": "none; exact original Git blob, independent of checkout line-ending conversion"
+  },
+  "reticulum_derivative_notice": {
+    "source": "https://github.com/vicliu624/trail-mate/issues/114#issuecomment-6830173680",
+    "source_author": "markqvist",
+    "source_comment_id": 6830173680,
+    "destination": "LICENSES/Reticulum-Derivatives.txt",
+    "sha256": "9f6bd33b270f6510a38e7e3129d81212b56b55f584d9a9ce4a4dc32eed634c98",
+    "transformation": "Extract the complete fenced license; replace only YOUR NAME HERE with Liu Weikai (Vic Liu); UTF-8 with LF and final newline.",
+    "scope": "RNS and LXMF derivatives; preserve any additional upstream or file-specific notices."
+  }
+}

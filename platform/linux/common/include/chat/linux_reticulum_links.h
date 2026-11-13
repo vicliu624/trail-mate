@@ -1,3 +1,16 @@
+/*
+ * Reticulum License - RNS/LXMF-derived portions.
+ * Derived from https://github.com/markqvist/Reticulum
+ * Copyright (c) 2016-2026 Mark Qvist (Reticulum-derived portions).
+ * Derived from https://github.com/markqvist/LXMF
+ * Copyright (c) 2020-2026 Mark Qvist (LXMF-derived portions).
+ * Full license: LICENSES/Reticulum-Derivatives.txt.
+ * Original notices: LICENSES/Reticulum-RNS.txt and LICENSES/Reticulum-LXMF.txt.
+ * Other contributions retain their applicable terms; see LICENSE.
+ * Component scope: docs/licensing/reticulum-sources.csv.
+ * LXST/call portions require separate authorization.
+ */
+
 #pragma once
 #include "chat/delivery/chat_delivery_types.h"
 #include "chat/domain/chat_types.h"

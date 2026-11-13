@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://github.com/vicliu624/trail-mate/stargazers"><img src="https://img.shields.io/github/stars/vicliu624/trail-mate?style=flat-square&amp;label=stars&amp;color=4285f4" alt="GitHub stars" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-orange?style=flat-square" alt="License: AGPL-3.0" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Multiple%20licenses-orange?style=flat-square" alt="License: Multiple licenses" /></a>
   <a href="https://github.com/vicliu624/trail-mate/releases"><img src="https://img.shields.io/github/v/release/vicliu624/trail-mate?sort=semver&amp;style=flat-square&amp;label=version&amp;color=4285f4" alt="Latest stable release" /></a>
   <a href="https://github.com/vicliu624/trail-mate/releases"><img src="https://img.shields.io/github/downloads/vicliu624/trail-mate/total?style=flat-square&amp;label=downloads&amp;color=65b821" alt="Total GitHub release asset downloads" /></a>
   <br />
@@ -10,6 +10,21 @@
   <a href="#-current-device-support--development-status"><img src="https://img.shields.io/badge/platforms-ESP32%20%7C%20nRF52%20%7C%20Linux-00897b?style=flat-square" alt="Platforms: ESP32, nRF52, and Linux" /></a>
   <a href="https://discord.gg/shkueG4zfc"><img src="https://img.shields.io/badge/Discord-join%20community-5865F2?style=flat-square&amp;logo=discord&amp;logoColor=white" alt="Join the Trail Mate Discord community" /></a>
 </p>
+
+> **Copyright and licensing**
+>
+> Trail Mate's RNS/LXMF implementations are derived from
+> [Mark Qvist's Reticulum](https://github.com/markqvist/Reticulum) and
+> [LXMF](https://github.com/markqvist/LXMF) reference implementations. All derived,
+> generated and subsequently regenerated portions retain Mark Qvist's copyright
+> and the [Reticulum License](LICENSES/Reticulum-Derivatives.txt). Earlier blanket
+> AGPL and maintainer-ownership claims are void for those portions, including in
+> earlier revisions and releases. Eligible original material is available under
+> MIT; third-party material retains its own terms. **Affected releases remain
+> paused pending LXST authorization and combined-license compatibility.** See
+> [LICENSE](LICENSE), [LICENSING.md](LICENSING.md) and
+> [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
 
 ![trail mate page](docs/images/ChatGPTImage.png)
 
@@ -85,7 +100,7 @@ separate release contents from hardware-support claims. The earlier
 - **Validation:** multi-target CI builds, native regression tests, LVGL integration tests, architecture boundary checks, stack and runtime-budget checks, and OTA-size validation
 - **Releases:** automated firmware packaging, ARM64/ARMHF Linux device packages, web-flasher images for selected targets, nRF52 UF2 images, and tagged-release debug symbols
 - **Core capabilities:** GNSS · offline maps · LoRa messaging · local storage · on-device team awareness
-- **License:** [AGPL-3.0](LICENSE)
+- **Licenses:** [MIT for eligible originals; third-party terms retained](LICENSE)
 
 Capabilities vary with memory, peripherals, input hardware, and port maturity. The simplified nRF52 targets currently provide Meshtastic / MeshCore messaging rather than the full feature set. See the device table below for current status.
 
@@ -880,31 +895,32 @@ See [CHANGELOG.md](CHANGELOG.md) for version history. The [Roadmap](https://gith
 
 ## 📄 License
 
-This project is licensed under the **GNU Affero General Public License v3.0 (AGPLv3)**.
+Trail Mate contains material under multiple licenses:
 
-The license is intended to ensure that:
+* Eligible original material is available under [MIT](LICENSES/MIT.txt), within
+  the scope of [LICENSE](LICENSE).
+* RNS/LXMF-derived material retains Mark Qvist's copyright and the
+  [Reticulum License](LICENSES/Reticulum-Derivatives.txt), including generated
+  and subsequently regenerated derivatives.
+* Third-party components retain their own terms and notices. TMAP's eligible
+  owner-held originals have an [additional MIT grant](docs/licensing/TMAP_RELICENSING.md).
+* LXST requires separate authorization for the Trail Mate derivative.
 
-* Source code remains available when the project is modified, deployed, or offered as a network service
-* The core system cannot be incorporated into closed-source or proprietary products without authorization
+Earlier blanket AGPL and maintainer-ownership claims are void for Mark Qvist's
+RNS/LXMF-derived material, including in earlier revisions and releases.
+[LICENSING.md](LICENSING.md) records the correction, component scope and
+distribution requirements. Valid prior grants made with authority are preserved.
 
-### Commercial Licensing
-
-A separate **commercial license** may be provided for the following use cases:
-
-* Commercial or closed-source products
-* Hardware vendors integrating or pre-installing the firmware
-* Commercial applications unable or unwilling to comply with AGPLv3
-
-For such use cases, please contact the project author to discuss licensing terms.
-Publication of this repository does **not** grant any default commercial rights.
-
-See the [LICENSE](LICENSE) file for details.
+**Affected releases remain paused pending LXST authorization and resolution of
+combined-license compatibility.** The maintainer can offer services or permissions
+only for rights they hold. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for
+upstream attribution.
 
 ---
 
 ## 🔐 Project Scope
 
-This repository contains Trail Mate's open-source edge-device implementations, including:
+This repository contains Trail Mate's edge-device implementations under the licenses described above, including:
 
 * Embedded firmware for ESP32-, nRF52-, and related targets
 * Linux portable-terminal applications and shared UI/business capabilities
@@ -928,7 +944,12 @@ Trail Mate's embedded product boundary is now defined. Contributions focus on ma
 
 ### Contribution & Copyright
 
-Unless explicitly stated otherwise, all contributions to this repository are released under the **AGPLv3 license**.
+New original contributions intended for the MIT-covered portion should be offered
+under MIT by a contributor with the necessary rights. Changes derived from an
+upstream work must preserve its applicable license and notices. Identify the source
+and license of imported or generated material; do not apply a blanket MIT or AGPL
+label to it. Existing contributions by other authors are not relicensed by this
+documentation change without the necessary permission. See [LICENSING.md](LICENSING.md).
 
 The project is currently author-driven and does not accept contributions that alter core architecture or licensing terms.
 For commercial collaboration or deep involvement, please contact the author directly.
@@ -1107,7 +1128,7 @@ You may contact me for:
 * Hardware adaptation or porting
 * Protocol clarification
 * Integration into existing radio systems
-* Commercial licensing discussions
+* Commercial services and permissions for maintainer-owned material
 * Collaboration or joint development
 * Field deployment guidance
 * Bug reports that are difficult to describe via Issues
@@ -1130,11 +1151,16 @@ Customization, hardware adaptation guidance, and technical consulting are availa
 
 ## Licensing Reminder
 
-This project is open-source and distributed under the terms specified in the LICENSE file.
+This repository contains material under multiple licenses. [LICENSE](LICENSE)
+limits the MIT grant to eligible original material, and
+[LICENSING.md](LICENSING.md) records third-party terms and unresolved permissions.
 
-If you are using the code in a network service, device firmware distribution, or any redistributable system, please ensure that your usage complies with the license requirements.
+Review the terms applicable to each component and the complete combined work before
+using it in a network service, firmware distribution or other redistributable system.
+Publication of affected releases remains paused; these notices do not clear combined
+builds or LXST derivatives for redistribution.
 
-If you are unsure, please contact the author before deployment.
+The maintainer can clarify provenance and permissions for rights they hold.
 
 ---
 

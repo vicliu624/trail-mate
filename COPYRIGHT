@@ -1,13 +1,26 @@
-Copyright (C) 2026 Liu Weikai
+Trail Mate copyright and license scope
 
-This project is licensed under the GNU Affero General Public License v3.0
-(AGPLv3).
+Copyright (c) 2026 Liu Weikai (Vic Liu), for original contributions in which
+the maintainer holds copyright. Eligible maintainer-owned material is offered
+under LICENSES/MIT.txt. Third-party and upstream-derived material retains its
+original copyright and applicable terms; there is no blanket project license.
 
-Commercial licenses are available for manufacturers, integrators, and
-commercial applications that do not wish to comply with the terms of
-the AGPLv3.
+Trail Mate's RNS and LXMF implementations are derived from Mark Qvist's works:
+https://github.com/markqvist/Reticulum
+Copyright (c) 2016-2026 Mark Qvist, unless otherwise noted.
+https://github.com/markqvist/LXMF
+Copyright (c) 2020-2026 Mark Qvist, unless otherwise noted.
 
-For commercial use, hardware integration, pre-installed firmware, or
-closed-source products, please contact the author.
+All RNS/LXMF-derived portions, including generated and regenerated derivatives,
+retain the Reticulum License and original copyright. The complete derivative
+notice is in LICENSES/Reticulum-Derivatives.txt; the original upstream notices
+are in LICENSES/Reticulum-RNS.txt and LICENSES/Reticulum-LXMF.txt.
 
-No commercial rights are granted by default.
+Earlier blanket AGPL descriptions and claims of maintainer copyright in those
+portions were mistakes and are void, including for earlier revisions and
+releases. No MIT, GPL or AGPL alternative is granted for those portions.
+Valid grants for material a licensor had authority to license are preserved.
+
+LXST-derived material requires separate authorization, which is not supplied
+by these notices. Affected releases remain paused. See LICENSE, LICENSING.md,
+NOTICE.md and THIRD_PARTY_NOTICES.md for scope and distribution restrictions.

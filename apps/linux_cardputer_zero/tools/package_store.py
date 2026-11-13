@@ -83,12 +83,27 @@ with tempfile.TemporaryDirectory(prefix="trailmate-store-") as temporary:
     license_path = root / "usr/share/doc/trailmate/COPYING"
     license_path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(repo / "LICENSE", license_path)
+    for notice in ("LICENSE", "COPYRIGHT", "LICENSING.md", "NOTICE.md", "THIRD_PARTY_NOTICES.md"):
+        shutil.copyfile(repo / notice, license_path.parent / notice)
+    shutil.copytree(repo / "LICENSES", license_path.parent / "LICENSES", dirs_exist_ok=True)
+    shutil.copytree(repo / "docs/licensing", license_path.parent / "docs/licensing", dirs_exist_ok=True)
+    notice_sources = [repo / name for name in ("LICENSE", "COPYRIGHT", "LICENSING.md", "NOTICE.md", "THIRD_PARTY_NOTICES.md")]
+    notice_sources.extend(path for directory in ("LICENSES", "docs/licensing")
+                          for path in (repo / directory).rglob("*") if path.is_file())
+    updated_notice_paths = {str((license_path.parent / path.relative_to(repo)).relative_to(root))
+                            for path in notice_sources}
+    updated_notice_paths.add(str(license_path.relative_to(root)))
 
     retained = 0
+    corrected_notices = 0
     for relative, digest in original.items():
         if relative in removed:
             continue
-        assert hashlib.sha256((root / relative).read_bytes()).hexdigest() == digest, relative
+        actual = hashlib.sha256((root / relative).read_bytes()).hexdigest()
+        if relative in updated_notice_paths and actual != digest:
+            corrected_notices += 1
+            continue
+        assert actual == digest, relative
         retained += 1
     files = sorted(p for p in root.rglob("*") if p.is_file() and "DEBIAN" not in p.relative_to(root).parts)
     installed_size = (sum(p.stat().st_size for p in files) + 1023) // 1024
@@ -105,6 +120,7 @@ report = {"input_sha256": args.sha256.lower(), "package": "trailmate", "version"
           "sha256": hashlib.sha256(output.read_bytes()).hexdigest(),
           "size": output.stat().st_size, "source_date_epoch": source_epoch,
           "unchanged_runtime_files": retained,
+          "corrected_notice_files": corrected_notices,
           "removed_development_and_udev_files": len(removed)}
 output.with_suffix(".verification.json").write_text(json.dumps(report, indent=2) + "\n")
 print(json.dumps(report, indent=2))

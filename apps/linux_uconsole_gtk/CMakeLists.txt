@@ -8,6 +8,7 @@ set(TRAIL_MATE_REPO_ROOT
     "${CMAKE_CURRENT_LIST_DIR}/../.."
     CACHE PATH "Trail Mate repository root")
 
+include("${TRAIL_MATE_REPO_ROOT}/cmake/TrailMateLicenseNotices.cmake")
 include("${TRAIL_MATE_REPO_ROOT}/cmake/TrailMateUxPacks.cmake")
 trailmate_add_ui_lvgl_ux_packs(trailmate_ui_lvgl_ux_packs)
 

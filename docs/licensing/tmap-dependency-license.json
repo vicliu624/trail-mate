@@ -1,0 +1,27 @@
+{
+  "recorded_date": "2026-11-13",
+  "component": "tmap",
+  "source_repository": "https://github.com/vicliu624/tmap",
+  "version": "0.2.0",
+  "commit": "d74b084acb61653149dec1ac161df58a92278cff",
+  "git_dependency": "https://github.com/vicliu624/tmap.git#d74b084acb61653149dec1ac161df58a92278cff",
+  "archive_url": "https://github.com/vicliu624/tmap/releases/download/v0.2.0/tmap-0.2.0-source.tar.gz",
+  "archive_sha256": "50cda6657a184587a1901aba965b885b335d7bc332793fcbd90cbab2bcfce371",
+  "immutable_source_changed": false,
+  "historical_package_manifest_license": "AGPL-3.0-only",
+  "additional_owner_grant": {
+    "license": "MIT",
+    "copyright_holder": "Liu Weikai (Vic Liu)",
+    "effective_date": "2026-11-13",
+    "scope": "Original TMAP material for which the owner holds necessary rights, including eligible originals at the pinned commit; excludes third-party works and rights held by others.",
+    "license_path": "LICENSES/TMAP-MIT.txt",
+    "license_sha256": "5f284001a32b898e6a60630154b4fb9f0fdbf8e70aabf81ac7db3b51a1e0b053",
+    "scope_path": "docs/licensing/TMAP_RELICENSING.md",
+    "valid_prior_agpl_grants_revoked": false,
+    "third_party_notices_retained": true,
+    "distribution_notice_requirement": "Include both the additional MIT text and scope record alongside the dependency's original copyright, provenance and applicable third-party notices."
+  },
+  "local_tmap_source_checkpoint": "4e8297d11bc48cb0f427b7c58395cda00f9349ef",
+  "combined_release_cleared": false,
+  "publication_hold": true
+}

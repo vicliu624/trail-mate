@@ -7,6 +7,7 @@ set(CMAKE_INSTALL_DEFAULT_DIRECTORY_PERMISSIONS
     OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 set(TRAIL_MATE_DATA_PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ)
 get_filename_component(TRAIL_MATE_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
+include("${TRAIL_MATE_REPO_ROOT}/cmake/TrailMateLicenseNotices.cmake")
 include("${TRAIL_MATE_REPO_ROOT}/cmake/TrailMateProjectVersion.cmake")
 
 # UX is selected by the composition; hardware dimensions and window policy are

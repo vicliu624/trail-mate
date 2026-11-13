@@ -1,3 +1,16 @@
+/*
+ * Reticulum License - RNS/LXMF-derived portions.
+ * Derived from https://github.com/markqvist/Reticulum
+ * Copyright (c) 2016-2026 Mark Qvist (Reticulum-derived portions).
+ * Derived from https://github.com/markqvist/LXMF
+ * Copyright (c) 2020-2026 Mark Qvist (LXMF-derived portions).
+ * Full license: LICENSES/Reticulum-Derivatives.txt.
+ * Original notices: LICENSES/Reticulum-RNS.txt and LICENSES/Reticulum-LXMF.txt.
+ * Other contributions retain their applicable terms; see LICENSE.
+ * Component scope: docs/licensing/reticulum-sources.csv.
+ * LXST/call portions require separate authorization.
+ */
+
 #include "chat/linux_reticulum_links.h"
 #include "chat/infra/lxmf/lxmf_delivery_runtime.h"
 #include "chat/infra/lxmf/lxmf_incoming_envelope.h"

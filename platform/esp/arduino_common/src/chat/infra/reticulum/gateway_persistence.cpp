@@ -1,3 +1,13 @@
+/*
+ * Reticulum License - RNS/LXMF-derived portions.
+ * Derived from https://github.com/markqvist/Reticulum
+ * Copyright (c) 2016-2026 Mark Qvist (Reticulum-derived portions).
+ * Full license: LICENSES/Reticulum-Derivatives.txt.
+ * Original notices: LICENSES/Reticulum-RNS.txt and LICENSES/Reticulum-LXMF.txt.
+ * Other contributions retain their applicable terms; see LICENSE.
+ * Component scope: docs/licensing/reticulum-sources.csv.
+ */
+
 #include "platform/esp/arduino_common/chat/infra/reticulum/gateway_persistence.h"
 #include "platform/esp/arduino_common/storage/sd_card_runtime.h"
 #include "sys/crc32.h"

@@ -17,7 +17,12 @@ as a second copy under `modules/core_tmap`.
 - Commit: `d74b084acb61653149dec1ac161df58a92278cff`.
 - Published source archive SHA-256:
   `50cda6657a184587a1901aba965b885b335d7bc332793fcbd90cbab2bcfce371`.
-- License/provenance: upstream AGPL-3.0-only, LICENSE, COPYRIGHT and NOTICE.
+- License/provenance: the pinned historical package declares AGPL-3.0-only and
+  retains its LICENSE, COPYRIGHT and NOTICE. Eligible Liu Weikai (Vic Liu)-owned
+  originals also have the [additional MIT grant](../../LICENSES/TMAP-MIT.txt)
+  recorded in the [relicensing scope](../licensing/TMAP_RELICENSING.md).
+  Third-party terms and valid prior grants remain applicable; the package pin
+  and its original metadata are unchanged.
 
 PlatformIO declares the immutable Git dependency in `platformio.ini` and
 `modules/ui_map_runtime/library.json`. CMake's `cmake/TrailMateTmap.cmake`
